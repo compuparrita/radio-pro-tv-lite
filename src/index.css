@@ -1,0 +1,244 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --primary-color: #8b5cf6;
+  /* Modern Violet */
+  --secondary-color: #6366f1;
+  /* Indigo */
+  --accent-color: #ec4899;
+  /* Pink */
+  --success-color: #10b981;
+  --warning-color: #f59e0b;
+  --danger-color: #ef4444;
+  --dark-bg: #030712;
+  /* Deeper Black */
+  --dark-surface: #111827;
+  --dark-border: rgba(255, 255, 255, 0.1);
+  --light-bg: #f9fafb;
+  --light-surface: #ffffff;
+  --light-border: #e5e7eb;
+  --text-primary: #f9fafb;
+  --text-secondary: #9ca3af;
+  --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+  --shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+  --shadow-xl: 0 25px 50px -12px rgb(0 0 0 / 0.25);
+  --glass-bg: rgba(255, 255, 255, 0.03);
+  --glass-border: rgba(255, 255, 255, 0.08);
+}
+
+body {
+  font-family: 'Outfit', 'Inter', sans-serif;
+  background: var(--dark-bg);
+  color: var(--text-primary);
+  line-height: 1.6;
+  transition: background-color 0.3s ease;
+}
+
+body.light-mode {
+  --dark-bg: #f9fafb;
+  --dark-surface: #ffffff;
+  --dark-border: rgba(0, 0, 0, 0.05);
+  --text-primary: #111827;
+  --text-secondary: #4b5563;
+  --glass-bg: rgba(255, 255, 255, 0.7);
+  --glass-border: rgba(0, 0, 0, 0.05);
+}
+
+body.youth-mode {
+  --primary-color: #146B4A;
+  /* 00ff9d */
+  --secondary-color: #00b8ff;
+  --accent-color: #ff00ff;
+  --dark-bg: #050505;
+  --dark-surface: #121212;
+  --dark-border: #333333;
+  --text-primary: #ffffff;
+  --text-secondary: #a3a3a3;
+}
+
+.animated-bg {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  opacity: 0.1;
+  z-index: -1;
+}
+
+.glass {
+  background: var(--glass-bg);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid var(--glass-border);
+  border-radius: 0;
+  box-shadow: var(--shadow);
+  transition: all 0.3s ease;
+}
+
+.glass:hover {
+  border-color: rgba(255, 255, 255, 0.15);
+  box-shadow: var(--shadow-xl);
+}
+
+body.light-mode .glass {
+  background: var(--glass-bg);
+  backdrop-filter: blur(12px);
+  border: 1px solid var(--glass-border);
+}
+
+/* Custom scrollbar for station list */
+::-webkit-scrollbar {
+  width: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--primary-color);
+  border-radius: 3px;
+}
+
+/* Animations */
+@keyframes rotate-logo {
+  from {
+    transform: rotate(0deg);
+  }
+
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.animate-rotate-logo {
+  animation: rotate-logo 10s linear infinite;
+  will-change: transform;
+}
+
+@keyframes slide-in-right {
+  from {
+    transform: translateX(30px);
+    opacity: 0;
+  }
+
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+.animate-slide-in-right {
+  animation: slide-in-right 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  will-change: transform, opacity;
+}
+
+/* Custom scrollbar for chat */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 6px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 3px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: var(--primary-color);
+  border-radius: 3px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: var(--secondary-color);
+}
+
+/* Hiding the Big Play Button without affecting the control bar */
+.vjs-big-play-button {
+  display: none !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+
+/* Allow controls to hide on inactivity */
+.video-js.vjs-user-inactive .vjs-control-bar {
+  opacity: 0 !important;
+  visibility: hidden !important;
+}
+
+/* Auto-hide Quality Selector when inactive */
+.video-js.vjs-user-inactive .quality-selector-trigger {
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* Christmas Animations */
+.christmas-light {
+  filter: drop-shadow(0 0 5px currentColor);
+}
+
+.light-1 {
+  animation: christmas-blink 1s infinite alternate;
+}
+
+.light-2 {
+  animation: christmas-blink 1.2s infinite alternate 0.2s;
+}
+
+.light-3 {
+  animation: christmas-blink 1.5s infinite alternate 0.4s;
+}
+
+.light-4 {
+  animation: christmas-blink 1.8s infinite alternate 0.6s;
+}
+
+.light-5 {
+  animation: christmas-blink 1.3s infinite alternate 0.8s;
+}
+
+@keyframes christmas-blink {
+  from {
+    opacity: 0.4;
+    filter: brightness(0.5) drop-shadow(0 0 2px currentColor);
+  }
+
+  to {
+    opacity: 1;
+    filter: brightness(1.2) drop-shadow(0 0 10px currentColor);
+  }
+}
+
+.animate-wreath-float {
+  animation: wreath-float 10s ease-in-out infinite;
+}
+
+@keyframes wreath-float {
+
+  0%,
+  100% {
+    transform: translateY(0) rotate(-2deg);
+  }
+
+  50% {
+    transform: translateY(5px) rotate(2deg);
+  }
+}
+
+@media (min-width: 768px) {
+  @keyframes wreath-float {
+
+    0%,
+    100% {
+      transform: translateY(0) rotate(-3deg);
+    }
+
+    50% {
+      transform: translateY(12px) rotate(3deg);
+    }
+  }
+}

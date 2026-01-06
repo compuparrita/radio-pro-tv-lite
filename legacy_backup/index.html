@@ -1,0 +1,2347 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Radio Streaming Pro - Versión Definitiva</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        :root {
+            --primary-color: #6366f1;
+            --secondary-color: #8b5cf6;
+            --accent-color: #ec4899;
+            --success-color: #10b981;
+            --warning-color: #f59e0b;
+            --danger-color: #ef4444;
+            --dark-bg: #0f172a;
+            --dark-surface: #1e293b;
+            --dark-border: #334155;
+            --light-bg: #f1f5f9;
+            --light-surface: #ffffff;
+            --light-border: #cbd5e1;
+            --text-primary: #f1f5f9;
+            --text-secondary: #94a3b8;
+            --shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+        }
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: var(--dark-bg);
+            color: var(--text-primary);
+            line-height: 1.6;
+            overflow-x: hidden;
+            transition: all 0.3s ease;
+        }
+        body.light-mode {
+            --dark-bg: #f1f5f9;
+            --dark-surface: #ffffff;
+            --dark-border: #cbd5e1;
+            --text-primary: #1e293b;
+            --text-secondary: #64748b;
+        }
+        .animated-bg {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            opacity: 0.1;
+            z-index: -1;
+        }
+        .glass {
+            background: rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 20px;
+            box-shadow: var(--shadow);
+        }
+        body.light-mode .glass {
+            background: rgba(255, 255, 255, 0.8);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(0, 0, 0, 0.1);
+        }
+        .header {
+            position: relative;
+            padding: 2rem 0;
+            text-align: center;
+            margin-bottom: 2rem;
+        }
+        .header h1 {
+            font-size: 3rem;
+            font-weight: 800;
+            background: linear-gradient(135deg, var(--primary-color), var(--accent-color));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-bottom: 1rem;
+        }
+        .time-display {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 1rem;
+            flex-wrap: wrap;
+        }
+        .clock-widget {
+            background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+            padding: 1rem 2rem;
+            border-radius: 50px;
+            font-family: 'Courier New', monospace;
+            font-size: 1.2rem;
+            font-weight: bold;
+            box-shadow: 0 10px 25px rgba(99, 102, 241, 0.3);
+        }
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 0 1rem;
+        }
+        .main-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 2rem;
+            margin-bottom: 2rem;
+        }
+        @media (max-width: 1024px) {
+            .main-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+        .player-section {
+            position: relative;
+            overflow: hidden;
+        }
+        .player-content {
+            position: relative;
+            z-index: 2;
+            padding: 2rem;
+        }
+        .station-selector select {
+            width: 100%;
+            padding: 1rem;
+            border: 2px solid var(--dark-border);
+            border-radius: 15px;
+            background: var(--dark-surface);
+            color: var(--text-primary);
+            font-size: 1.1rem;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        body.light-mode .station-selector select {
+            background: #ffffff;
+            border-color: #cbd5e1;
+            color: #1e293b;
+        }
+        .current-station {
+            text-align: center;
+            margin-bottom: 2rem;
+        }
+        .station-logo {
+            width: 150px;
+            height: 150px;
+            border-radius: 50%;
+            object-fit: cover;
+            border: 4px solid var(--primary-color);
+            box-shadow: 0 10px 30px rgba(99, 102, 241, 0.3);
+            margin: 0 auto 1.5rem;
+            display: block;
+        }
+        .station-logo.playing {
+            animation: rotate-logo 10s linear infinite;
+        }
+        @keyframes rotate-logo {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .station-name {
+            font-size: 1.8rem;
+            font-weight: 700;
+            margin-bottom: 0.5rem;
+            background: linear-gradient(135deg, var(--primary-color), var(--accent-color));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        .station-country {
+            color: var(--text-secondary);
+            font-size: 1rem;
+        }
+        /* Metadatos de la canción */
+        .song-info {
+            background: rgba(0, 0, 0, 0.2);
+            padding: 1rem;
+            border-radius: 12px;
+            margin-bottom: 1.5rem;
+            text-align: center;
+            font-size: 1.1rem;
+            font-weight: 500;
+            min-height: 2rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+        }
+        .song-title {
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            max-width: 80%;
+        }
+        /* Loading Indicator */
+        .loading-indicator {
+            display: none;
+            text-align: center;
+            padding: 1rem;
+            color: var(--primary-color);
+            font-weight: 500;
+            margin-bottom: 1.5rem;
+        }
+        .loading-indicator.show {
+            display: block;
+        }
+        .controls {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 1rem;
+            margin-bottom: 2rem;
+            flex-wrap: wrap;
+        }
+        .control-btn {
+            width: 60px;
+            height: 60px;
+            border: none;
+            border-radius: 50%;
+            background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+            color: white;
+            font-size: 1.5rem;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 5px 15px rgba(99, 102, 241, 0.3);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .control-btn:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 10px 25px rgba(99, 102, 241, 0.4);
+        }
+        .control-btn.play-pause {
+            width: 80px;
+            height: 80px;
+            font-size: 2rem;
+        }
+        .control-btn.favorite {
+            background: linear-gradient(135deg, var(--danger-color), var(--warning-color));
+        }
+        .control-btn.favorite.active {
+            background: linear-gradient(135deg, var(--warning-color), var(--success-color));
+        }
+        .volume-control {
+            margin-bottom: 2rem;
+        }
+        .volume-label {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1rem;
+        }
+        .volume-slider {
+            width: 100%;
+            height: 8px;
+            border-radius: 4px;
+            background: var(--dark-border);
+            outline: none;
+            cursor: pointer;
+            -webkit-appearance: none;
+        }
+        body.light-mode .volume-slider {
+            background: var(--light-border);
+        }
+        .volume-slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+            cursor: pointer;
+            box-shadow: 0 5px 15px rgba(99, 102, 241, 0.3);
+        }
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 1rem;
+            margin-bottom: 2rem;
+        }
+        .stat-card {
+            text-align: center;
+            padding: 1.5rem;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 15px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        .stat-value {
+            font-size: 2rem;
+            font-weight: 700;
+            background: linear-gradient(135deg, var(--primary-color), var(--accent-color));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        .stat-label {
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+            margin-top: 0.5rem;
+        }
+        .sidebar {
+            display: flex;
+            flex-direction: column;
+            gap: 2rem;
+        }
+        .section {
+            padding: 2rem;
+        }
+        .section-title {
+            font-size: 1.5rem;
+            font-weight: 700;
+            margin-bottom: 1.5rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        .section-title i {
+            color: var(--primary-color);
+        }
+        .station-list {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+            max-height: 300px;
+            overflow-y: auto;
+            padding-right: 0.5rem;
+        }
+        .station-list::-webkit-scrollbar {
+            width: 6px;
+        }
+        .station-list::-webkit-scrollbar-track {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 3px;
+        }
+        .station-list::-webkit-scrollbar-thumb {
+            background: var(--primary-color);
+            border-radius: 3px;
+        }
+        .station-item {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            padding: 1rem;
+            border-radius: 12px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            border: 1px solid transparent;
+        }
+        .station-item:hover {
+            background: rgba(255, 255, 255, 0.1);
+            border-color: var(--primary-color);
+            transform: translateX(5px);
+        }
+        .station-item img {
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            object-fit: cover;
+            border: 2px solid var(--primary-color);
+        }
+        .station-item-info {
+            flex: 1;
+        }
+        .station-item-name {
+            font-weight: 600;
+            margin-bottom: 0.25rem;
+        }
+        .station-item-country {
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+        }
+        .action-buttons {
+            display: flex;
+            gap: 1rem;
+            flex-wrap: wrap;
+        }
+        .action-btn {
+            flex: 1;
+            padding: 1rem;
+            border: none;
+            border-radius: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+            min-width: 150px;
+        }
+        .whatsapp-btn {
+            background: linear-gradient(135deg, #25d366, #128c7e);
+            color: white;
+        }
+        .whatsapp-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 25px rgba(37, 211, 102, 0.3);
+        }
+        .notification-btn {
+            background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+            color: white;
+        }
+        .notification-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 25px rgba(99, 102, 241, 0.3);
+        }
+        .theme-toggle {
+            position: fixed;
+            top: 2rem;
+            right: 2rem;
+            z-index: 1000;
+            width: 60px;
+            height: 60px;
+            border: none;
+            border-radius: 50%;
+            background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+            color: white;
+            font-size: 1.5rem;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 10px 25px rgba(99, 102, 241, 0.3);
+        }
+        .theme-toggle:hover {
+            transform: scale(1.1);
+            box-shadow: 0 15px 35px rgba(99, 102, 241, 0.4);
+        }
+        @media (max-width: 768px) {
+            .theme-toggle {
+                top: 1rem;
+                right: 1rem;
+                width: 50px;
+                height: 50px;
+                font-size: 1.2rem;
+            }
+        }
+        .notification {
+            position: fixed;
+            top: 8rem;
+            left: 50%;
+            transform: translateX(-50%) translateY(-100px);
+            background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+            color: white;
+            padding: 1rem 2rem;
+            border-radius: 50px;
+            box-shadow: 0 10px 25px rgba(99, 102, 241, 0.3);
+            z-index: 1001;
+            opacity: 0;
+            transition: all 0.3s ease;
+            font-weight: 600;
+            max-width: 90%;
+            text-align: center;
+        }
+        .notification.show {
+            transform: translateX(-50%) translateY(0);
+            opacity: 1;
+        }
+        .stream-error {
+            position: fixed;
+            top: 12rem;
+            left: 50%;
+            transform: translateX(-50%) translateY(-100px);
+            background: linear-gradient(135deg, var(--danger-color), var(--warning-color));
+            color: white;
+            padding: 1rem 2rem;
+            border-radius: 50px;
+            box-shadow: 0 10px 25px rgba(239, 68, 68, 0.3);
+            z-index: 1001;
+            opacity: 0;
+            transition: all 0.3s ease;
+            font-weight: 600;
+            max-width: 90%;
+            text-align: center;
+        }
+        .stream-error.show {
+            transform: translateX(-50%) translateY(0);
+            opacity: 1;
+        }
+        @media (max-width: 768px) {
+            .notification {
+                top: 6rem;
+                padding: 0.8rem 1.5rem;
+                font-size: 0.9rem;
+            }
+            .stream-error {
+                top: 10rem;
+                padding: 0.8rem 1.5rem;
+                font-size: 0.9rem;
+            }
+        }
+        @media (max-width: 768px) {
+            .header h1 {
+                font-size: 2rem;
+            }
+            .controls {
+                gap: 0.5rem;
+            }
+            .control-btn {
+                width: 50px;
+                height: 50px;
+                font-size: 1.2rem;
+            }
+            .control-btn.play-pause {
+                width: 70px;
+                height: 70px;
+                font-size: 1.8rem;
+            }
+            .action-buttons {
+                flex-direction: column;
+            }
+            .action-btn {
+                min-width: auto;
+            }
+        }
+        /* Station Manager Modal */
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 2000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            overflow: auto;
+            background-color: rgba(0,0,0,0.7);
+        }
+        .modal-content {
+            background-color: var(--dark-surface);
+            margin: 2% auto;
+            padding: 2rem;
+            border-radius: 20px;
+            box-shadow: var(--shadow);
+            max-width: 95%;
+            max-height: 95vh;
+            overflow-y: auto;
+        }
+        .close {
+            color: #aaa;
+            float: right;
+            font-size: 28px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+        .close:hover {
+            color: #fff;
+        }
+        /* Tabla de emisoras */
+        .stations-table {
+            width: 100%;
+            margin: 1rem 0;
+        }
+        .table-header, .table-row {
+            display: grid;
+            grid-template-columns: 1fr 2fr 1fr 1fr;
+            gap: 1rem;
+            margin-bottom: 0.5rem;
+            align-items: center;
+        }
+        .table-header div {
+            font-weight: 600;
+            padding: 0.5rem;
+            background: rgba(99, 102, 241, 0.1);
+            border-radius: 8px;
+            text-align: center;
+        }
+        .table-input {
+            width: 100%;
+            padding: 0.75rem;
+            border: 1px solid var(--dark-border);
+            border-radius: 8px;
+            background: var(--dark-surface);
+            color: var(--text-primary);
+            font-size: 0.9rem;
+        }
+        body.light-mode .table-input {
+            background: #ffffff;
+            border-color: #cbd5e1;
+            color: #1e293b;
+        }
+        .table-input:focus {
+            outline: none;
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.2);
+        }
+        .modal-actions {
+            margin-top: 2rem;
+            display: flex;
+            gap: 1rem;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+        .modal-actions button {
+            padding: 0.75rem 1.5rem;
+            font-size: 0.9rem;
+        }
+        .danger-btn {
+            background: linear-gradient(135deg, var(--danger-color), var(--warning-color));
+        }
+        .danger-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 25px rgba(239, 68, 68, 0.3);
+        }
+        .file-upload-btn {
+            position: relative;
+            overflow: hidden;
+            cursor: pointer;
+        }
+        .file-upload-btn input[type=file] {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            opacity: 0;
+            cursor: pointer;
+        }
+        /* Custom Confirm Modal */
+        .confirm-modal {
+            display: none;
+            position: fixed;
+            z-index: 3000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.7);
+        }
+        .confirm-content {
+            background-color: var(--dark-surface);
+            margin: 15% auto;
+            padding: 2rem;
+            border-radius: 20px;
+            box-shadow: var(--shadow);
+            max-width: 500px;
+            text-align: center;
+        }
+        .confirm-title {
+            font-size: 1.5rem;
+            font-weight: 700;
+            margin-bottom: 1.5rem;
+            color: var(--danger-color);
+        }
+        .confirm-message {
+            margin-bottom: 2rem;
+            font-size: 1.1rem;
+        }
+        .confirm-buttons {
+            display: flex;
+            gap: 1rem;
+            justify-content: center;
+        }
+        .confirm-btn {
+            padding: 0.75rem 1.5rem;
+            border: none;
+            border-radius: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        .confirm-cancel {
+            background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+            color: white;
+        }
+        .confirm-confirm {
+            background: linear-gradient(135deg, var(--danger-color), var(--warning-color));
+            color: white;
+        }
+
+        /* Reproductor HLS con controles nativos + botón de calidad */
+        #videoPlayerContainer {
+            position: relative;
+            margin: 20px 0;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+            background: #000;
+            display: none;
+        }
+        #videoPlayer {
+            width: 100%;
+            height: auto;
+            display: block;
+            background: #000;
+            aspect-ratio: 16/9;
+        }
+        /* Botón de calidad */
+        #qualityButton {
+            position: absolute;
+            bottom: 10px;
+            right: 10px;
+            background: rgba(0, 0, 0, 0.7);
+            color: white;
+            border: none;
+            border-radius: 4px;
+            padding: 6px 10px;
+            font-size: 0.85rem;
+            cursor: pointer;
+            z-index: 10;
+            display: none;
+        }
+        #qualityButton:hover {
+            background: rgba(0, 0, 0, 0.9);
+        }
+
+        /* Botón de edición más pequeño */
+        .edit-stations-btn {
+            background: none;
+            border: none;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.4rem;
+            color: var(--primary-color);
+            font-size: 0.85rem;
+            padding: 0.4rem 0.8rem;
+            border-radius: 8px;
+            transition: background 0.2s;
+        }
+        .edit-stations-btn:hover {
+            background: rgba(99, 102, 241, 0.1);
+        }
+        @media (max-width: 480px) {
+            .edit-stations-btn {
+                font-size: 0.8rem;
+                padding: 0.3rem 0.6rem;
+            }
+        }
+
+        /* Ocultar logo en modo video */
+        .logo-video-hidden {
+            opacity: 0;
+            height: 0;
+            margin: 0;
+            padding: 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="animated-bg"></div>
+    <div class="container">
+        <!-- Theme Toggle -->
+        <button class="theme-toggle" onclick="toggleTheme()" title="Cambiar tema">
+            <i class="fas fa-moon" id="theme-icon"></i>
+        </button>
+        <!-- Header -->
+        <header class="header">
+            <h1><i class="fas fa-broadcast-tower"></i> Radio Streaming Pro</h1>
+            <div class="time-display">
+                <span id="greeting">Buenos días</span>
+                <div class="clock-widget" id="clock">
+                    <i class="fas fa-clock"></i> <span id="clock-time">12:00:00 PM</span>
+                </div>
+            </div>
+        </header>
+        <!-- Main Grid -->
+        <div class="main-grid">
+            <!-- Player Section -->
+            <div class="player-section glass">
+                <div class="player-content">
+                    <!-- Station Selector -->
+                    <div class="station-selector">
+                        <select id="stationSelect" onchange="changeStation(this.value)">
+                            <option value="">Selecciona una emisora...</option>
+                        </select>
+                    </div>
+                    <!-- Current Station -->
+                    <div class="current-station">
+                        <img id="currentLogo" src="https://picsum.photos/seed/radio1/150/150.jpg" alt="Logo" class="station-logo">
+                        <div class="station-name" id="currentName">Selecciona una emisora</div>
+                        <div class="station-country" id="currentCountry">Costa Rica</div>
+                        <!-- Metadatos de la canción -->
+                        <div class="song-info" id="songInfo" style="display: none;">
+                            <i class="fas fa-music"></i>
+                            <span class="song-title" id="songTitle">Cargando información de la canción...</span>
+                        </div>
+                        <!-- Loading Indicator -->
+                        <div class="loading-indicator" id="loadingIndicator">
+                            <i class="fas fa-spinner fa-spin"></i> Cargando emisora...
+                        </div>
+                        <!-- Contenedor para el reproductor de video con controles nativos -->
+                        <div id="videoPlayerContainer">
+                            <video id="videoPlayer" controls></video>
+                            <button id="qualityButton" onclick="showQualityMenu()">
+                                <i class="fas fa-cog"></i> Calidad
+                            </button>
+                        </div>
+                        <!-- Controls -->
+                        <div class="controls">
+                            <button class="control-btn" onclick="previousStation()" title="Anterior">
+                                <i class="fas fa-step-backward"></i>
+                            </button>
+                            <button class="control-btn play-pause" id="playPauseBtn" onclick="togglePlayPause()" title="Reproducir/Pausar">
+                                <i class="fas fa-play" id="playIcon"></i>
+                            </button>
+                            <button class="control-btn" onclick="nextStation()" title="Siguiente">
+                                <i class="fas fa-step-forward"></i>
+                            </button>
+                            <button class="control-btn favorite" id="favoriteBtn" onclick="toggleFavorite()" title="Favorito">
+                                <i class="fas fa-heart" id="favoriteIcon"></i>
+                            </button>
+                        </div>
+                        <!-- Volume Control -->
+                        <div class="volume-control">
+                            <div class="volume-label">
+                                <span><i class="fas fa-volume-up"></i> Volumen</span>
+                                <span id="volumeValue">70%</span>
+                            </div>
+                            <input type="range" id="volumeSlider" class="volume-slider" min="0" max="1" step="0.1" value="0.7" onchange="changeVolume(this.value)">
+                        </div>
+                        <!-- Stats -->
+                        <div class="stats-grid">
+                            <div class="stat-card">
+                                <div class="stat-value" id="listenerCount">0</div>
+                                <div class="stat-label">Oyentes</div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-value" id="totalStations">0</div>
+                                <div class="stat-label">Emisoras</div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-value" id="favoriteCount">0</div>
+                                <div class="stat-label">Favoritos</div>
+                            </div>
+                        </div>
+                        <!-- Action Buttons -->
+                        <div class="action-buttons">
+                            <button class="action-btn whatsapp-btn" onclick="shareOnWhatsApp()">
+                                <i class="fab fa-whatsapp"></i> Compartir
+                            </button>
+                            <button class="action-btn notification-btn" onclick="requestNotificationPermission()">
+                                <i class="fas fa-bell"></i> Notificaciones
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <!-- Sidebar -->
+            <div class="sidebar">
+                <!-- Favorites -->
+                <div class="section glass">
+                    <h3 class="section-title">
+                        <i class="fas fa-star"></i> Favoritos
+                    </h3>
+                    <div class="station-list" id="favoritesList">
+                        <div style="text-align: center; opacity: 0.7; padding: 2rem;">
+                            <i class="fas fa-heart" style="font-size: 2rem; margin-bottom: 1rem; display: block;"></i>
+                            No tienes favoritos aún
+                        </div>
+                    </div>
+                </div>
+                <!-- Recent Stations -->
+                <div class="section glass">
+                    <h3 class="section-title">
+                        <i class="fas fa-history"></i> Recientes
+                    </h3>
+                    <div class="station-list" id="recentList">
+                        <div style="text-align: center; opacity: 0.7; padding: 2rem;">
+                            <i class="fas fa-clock" style="font-size: 2rem; margin-bottom: 1rem; display: block;"></i>
+                            No hay emisoras recientes
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <!-- Footer con botón de edición -->
+        <div style="text-align: right; margin-top: 2rem; padding: 1rem; font-size: 0.9rem; color: var(--text-secondary);">
+            <button class="edit-stations-btn" onclick="openStationManager()">
+                <i class="fas fa-cog"></i> Editar lista de emisoras
+            </button>
+            <div>© 2025 Radio Streaming Pro - Óscar C</div>
+        </div>
+    </div>
+    <!-- Hidden Audio Player -->
+    <audio id="audioPlayer" preload="metadata"></audio>
+    <!-- Notification -->
+    <div id="notification" class="notification">
+        <i class="fas fa-info-circle"></i> <span id="notificationText"></span>
+    </div>
+    <!-- Stream Error Notification -->
+    <div id="streamError" class="stream-error">
+        <i class="fas fa-exclamation-triangle"></i> <span id="streamErrorText"></span>
+    </div>
+    <!-- Quality Menu (Dropdown) -->
+    <div id="qualityMenu" style="display: none; position: absolute; bottom: 50px; right: 10px; background: rgba(0,0,0,0.9); color: white; border-radius: 4px; padding: 8px; z-index: 20;">
+        <div id="qualityOptions"></div>
+    </div>
+    <!-- Station Manager Modal -->
+    <div id="stationManagerModal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeStationManager()">&times;</span>
+            <h2><i class="fas fa-cog"></i> Gestor de Emisoras</h2>
+            <p>Administra tus emisoras de radio. Elimina una emisora dejando el campo "Nombre" vacío.</p>
+            <div id="stationsList"></div>
+            <div class="modal-actions">
+                <button class="action-btn notification-btn" onclick="addNewStation()">
+                    <i class="fas fa-plus"></i> Agregar Nueva Emisora
+                </button>
+                <button class="action-btn whatsapp-btn" onclick="saveAllAndClose()">
+                    <i class="fas fa-save"></i> Guardar Todo y Salir
+                </button>
+                <button class="action-btn whatsapp-btn" onclick="downloadStations()">
+                    <i class="fas fa-download"></i> Descargar Lista (.txt)
+                </button>
+                <div class="file-upload-btn">
+                    <button class="action-btn notification-btn">
+                        <i class="fas fa-upload"></i> Cargar Lista (.txt)
+                    </button>
+                    <input type="file" accept=".txt,.json" onchange="loadStationsFromFile(this)">
+                </div>
+                <button class="action-btn danger-btn" onclick="showClearLocalStorageConfirm()">
+                    <i class="fas fa-trash"></i> Limpiar LocalStorage
+                </button>
+                <button class="action-btn" onclick="closeStationManager()">
+                    <i class="fas fa-times"></i> Cancelar
+                </button>
+            </div>
+        </div>
+    </div>
+    <!-- Custom Confirm Modal -->
+    <div id="confirmModal" class="confirm-modal">
+        <div class="confirm-content">
+            <h3 class="confirm-title">⚠️ ¡ADVERTENCIA!</h3>
+            <p class="confirm-message">Esto borrará TODOS tus datos: favoritos, emisoras personalizadas, tema, volumen, etc. ¿Estás seguro que deseas continuar?</p>
+            <div class="confirm-buttons">
+                <button class="confirm-btn confirm-cancel" onclick="hideConfirmModal()">Cancelar</button>
+                <button class="confirm-btn confirm-confirm" onclick="executeClearLocalStorage()">Sí, Limpiar Todo</button>
+            </div>
+        </div>
+    </div>
+    <script>
+        // Función para obtener lista por defecto
+        function getDefaultStations() {
+            return [
+  {
+    "id": "1",
+    "name": "Unción 106.7 FM",
+    "url": "https://centova.hostingtico.com:7016/;stream.mp3",
+    "logo": "https://cdn-radiotime-logos.tunein.com/s25054d.png",
+    "country": "Costa Rica"
+  },
+  {
+    "id": "2",
+    "name": "Oldies Hits Español",
+    "url": "https://centova01.logicahost.com.br:20038/autodj",
+    "logo": "https://cdn-profiles.tunein.com/s232911/images/logod.png",
+    "country": "España"
+  },
+  {
+    "id": "3",
+    "name": "Oldies Hits 70´s y 80´s",
+    "url": "https://centova01.logicahost.com.br:20037/autodj",
+    "logo": "https://cdn-profiles.tunein.com/s123079/images/logod.png",
+    "country": "España"
+  },
+  {
+    "id": "4",
+    "name": "Amor FM 93.9",
+    "url": "https://player.hostingtico.com/proxy/8094",
+    "logo": "https://static.mytuner.mobi/media/tvos_radios/440/amor-fm-939.07d03e3b.jpg",
+    "country": "Costa Rica"
+  },
+  {
+    "id": "5",
+    "name": "La Caliente 90.7FM",
+    "url": "https://18863.live.streamtheworld.com/LA_CALIENTE_CR.mp3",
+    "logo": "https://static.mytuner.mobi/media/tvos_radios/166/la-caliente-907-fm.7524ad1c.png",
+    "country": "Costa Rica"
+  },
+  {
+    "id": "6",
+    "name": "IQ, La Radio Inteligente 93.9 fm",
+    "url": "https://centova.hostingtico.com:7002/stream/",
+    "logo": "https://static.mytuner.mobi/media/tvos_radios/y2z6ngbnd4ml.png",
+    "country": "Costa Rica"
+  },
+  {
+    "id": "7",
+    "name": "Onda Brava Radio",
+    "url": "http://cast4.my-control-panel.com/proxy/ondabra3/stream",
+    "logo": "https://static.mytuner.mobi/media/tvos_radios/842/onda-brava.6e844700.png",
+    "country": "Costa Rica"
+  },
+  {
+    "id": "8",
+    "name": "Azul 99.9 Lo mejor de tu vida",
+    "url": "https://playerservices.streamtheworld.com/api/livestream-redirect/CRC_999AAC_SC",
+    "logo": "https://static.mytuner.mobi/media/tvos_radios/154/azul-999-fm.c964f3b8.jpg",
+    "country": "Costa Rica"
+  },
+  {
+    "id": "9",
+    "name": "Radio Omega",
+    "url": "https://centova.hostingtico.com:7008/stream/1/",
+    "logo": "https://static.mytuner.mobi/media/tvos_radios/CwACYSkeK6.png",
+    "country": "Costa Rica"
+  },
+  {
+    "id": "10",
+    "name": "La Tropical Online",
+    "url": "https://radio.grscr.com/listen/la_tropical/radio.mp3",
+    "logo": "https://latropical.online/wp-content/uploads/2021/10/logo-plateado.png",
+    "country": "Costa Rica"
+  },
+  {
+    "id": "11",
+    "name": "Orotina Online Radio",
+    "url": "https://stream.zeno.fm/wq6egm5ywrquv",
+    "logo": "https://picsum.photos/seed/orotina/150/150.jpg",
+    "country": "Costa Rica"
+  },
+  {
+    "id": "12",
+    "name": "Radio Nosara",
+    "url": "https://sonicpanel.zonaradio.net/8038/stream",
+    "logo": "https://static.mytuner.mobi/media/tvos_radios/848/radio-nosara.2ab18d0e.jpg",
+    "country": "Costa Rica"
+  },
+  {
+    "id": "13",
+    "name": "Columbia 98.7 FM / CR",
+    "url": "https://s2.radio.co/s83b86382e/listen",
+    "logo": "https://static.mytuner.mobi/media/tvos_radios/EYDaxpE6Q4.png",
+    "country": "Costa Rica"
+  },
+  {
+    "id": "14",
+    "name": "Conexión Urbana / CR",
+    "url": "http://stream.zeno.fm/q4g3r414ztzuv",
+    "logo": "https://static.mytuner.mobi/media/tvos_radios/160/conexion-urbana.da9a3caa.png",
+    "country": "Costa Rica"
+  },
+  {
+    "id": "15",
+    "name": "Guanacaste FM 80s 90s y más",
+    "url": "https://stream10.usastreams.com/8008/guanacastefm",
+    "logo": "https://static.mytuner.mobi/media/tvos_radios/100/guanacaste-fm.c638f92a.jpg",
+    "country": "Costa Rica"
+  },
+  {
+    "id": "16",
+    "name": "15 Radio Musical 97.5FM",
+    "url": "https://live.turadio.stream:7005/stream",
+    "logo": "https://static.mytuner.mobi/media/tvos_radios/DwhGDNNVvb.jpg",
+    "country": "Costa Rica"
+  },
+  {
+    "id": "17",
+    "name": "Radio Sinfonola 90.3 FM",
+    "url": "https://live.turadio.stream:9972/;",
+    "logo": "https://static.mytuner.mobi/media/tvos_radios/415/radio-sinfonola.79d5c3e6.png",
+    "country": "Costa Rica"
+  },
+  {
+    "id": "18",
+    "name": "Radio 2, 99.5 fm",
+    "url": "https://s5.radio.co/sd515b7b34/listen",
+    "logo": "https://cdn-radiotime-logos.tunein.com/s13187d.png",
+    "country": "Costa Rica"
+  },
+  {
+    "id": "19",
+    "name": "Radio Sinaí / Pz.",
+    "url": "https://centova12.instainternet.com/proxy/sinaicr/stream",
+    "logo": "https://static.mytuner.mobi/media/tvos_radios/174/radio-sinai.5f89bfcb.png",
+    "country": "Costa Rica"
+  },
+  {
+    "id": "20",
+    "name": "Bésame 89.9 FM",
+    "url": "https://playerservices.streamtheworld.com/api/livestream-redirect/BESAME_CR.mp3",
+    "logo": "https://static.mytuner.mobi/media/tvos_radios/N4GCpM7GT7.png",
+    "country": "San José, Costa Rica"
+  },
+  {
+    "id": "21",
+    "name": "M.R.O.C, Aerop Int SJO",
+    "url": "http://d.liveatc.net/mroc",
+    "logo": "https://is1-ssl.mzstatic.com/image/thumb/Purple221/v4/77/30/90/773090a1-2d1f-e8cc-1d7f-f697cb476782/AppIcon-0-0-1x_U007emarketing-0-7-0-85-220.png/230x0w.webp",
+    "country": "Costa Rica"
+  },
+  {
+    "id": "22",
+    "name": "Radio Corporación / Ni",
+    "url": "https://stream.zeno.fm/gwkd66k0a7duv",
+    "logo": "https://static.mytuner.mobi/media/tvos_radios/JVf3FrARwB.jpg",
+    "country": "Nicaragua"
+  },
+  {
+    "id": "23",
+    "name": "Radio La Sandino / Ni",
+    "url": "http://streaming.lasandino.com.ni:8020/lasandino.mp3",
+    "logo": "https://cdn-profiles.tunein.com/s13259/images/logod.png",
+    "country": "Nicaragua"
+  },
+  {
+    "id": "24",
+    "name": "La Nueva Radio Ya!",
+    "url": "https://stream.zenolive.com/6nwu9a6uwz4tv.aac",
+    "logo": "https://static.mytuner.mobi/media/tvos_radios/amgybJM7u7.png",
+    "country": "Nicaragua"
+  },
+  {
+    "id": "25",
+    "name": "Radio La Tuani en vivo",
+    "url": "http://server.multimediamb.com/9300/stream",
+    "logo": "https://static.mytuner.mobi/media/tvos_radios/KArdnuqZLu.png",
+    "country": "Nicaragua"
+  },
+  {
+    "id": "26",
+    "name": "Siuna La Poderosa",
+    "url": "https://polaris.hostingnica.net/8012/stream/1/",
+    "logo": "https://cdn-profiles.tunein.com/s239858/images/logod.png",
+    "country": "Nicaragua"
+  },
+  {
+    "id": "27",
+    "name": "Radio Bonanza",
+    "url": "https://stream.zeno.fm/hj27louo82ptv",
+    "logo": "https://cdn.instant.audio/images/logos/radios-co-ni/bonanza.png",
+    "country": "Nicaragua"
+  },
+  {
+    "id": "28",
+    "name": "Omega Stereo Panamá",
+    "url": "https://www.streaming507.net:8048/stream",
+    "logo": "https://radios-panama.com/uploads/img/omega-stereo.jpg",
+    "country": "Panamá"
+  },
+  {
+    "id": "29",
+    "name": "Actualidad 90.3 FM",
+    "url": "https://acp4.lorini.net/proxy/ur2080?mp=/stream",
+    "logo": "https://liveonlineradio.net/wp-content/uploads/2015/03/Actualidad-90.3-FM.jpg",
+    "country": "Venezuela"
+  },
+  {
+    "id": "30",
+    "name": "Caracol Radio 100.9 FM",
+    "url": "https://27373.live.streamtheworld.com/CARACOL_RADIOAAC.aac?dist=onlineradiobox",
+    "logo": "https://cdn.onlineradiobox.com/img/l/0/21440.v18.png",
+    "country": "Venezuela"
+  },
+  {
+    "id": "31",
+    "name": "Radio La Voz de Carabobo 1040 AM",
+    "url": "https://guri.tepuyserver.net/8086/stream",
+    "logo": "https://cdn.onlineradiobox.com/img/l/7/120377.v1.png",
+    "country": "Venezuela"
+  },
+  {
+    "id": "32",
+    "name": "34 Tamá Stereo 103.9 FM / San Cristóbal",
+    "url": "https://guri.tepuyserver.net/8457/stream;",
+    "logo": "https://cdn.onlineradiobox.com/img/l/2/60312.v9.png",
+    "country": "Venezuela"
+  },
+  {
+    "id": "33",
+    "name": "106.3FM - Pura Vida FM",
+    "url": "http://live.turadio.stream:9986/;",
+    "logo": "https://cdn-radiotime-logos.tunein.com/s161703d.png",
+    "country": "CR."
+  },
+  {
+    "id": "34",
+    "name": "Radio Disney Costa Rica",
+    "url": "https://ic.streann.com/disneycostarica",
+    "logo": "https://cdn-profiles.tunein.com/s309674/images/logod.png",
+    "country": "cr."
+  },
+  {
+    "id": "35",
+    "name": "Radio BestMusic 90.1 FM",
+    "url": "https://app.sonicpanelradio.com/8148/stream",
+    "logo": "https://cdn-profiles.tunein.com/s196714/images/logod.png",
+    "country": "CR."
+  },
+  {
+    "id": "37",
+    "name": "Nova Hits Radio",
+    "url": "https://centova.hostingtico.com:7006/stream",
+    "logo": "https://cdn-profiles.tunein.com/s153977/images/logod.jpg",
+    "country": "cr."
+  },
+  {
+    "id": "38",
+    "name": "Radio 24 Cr live",
+    "url": "https://stream-176.zeno.fm/2v6pv5qqb78uv",
+    "logo": "https://static2.mytuner.mobi/media/tvos_radios/zxjmpx6h7vaq.jpg",
+    "country": "cr"
+  },
+  {
+    "id": "39",
+    "name": "Radio Live Power live",
+    "url": "http://163.172.209.91:7149/stream",
+    "logo": "https://static2.mytuner.mobi/media/tvos_radios/2d5jq6rwf8sw.png",
+    "country": "cr"
+  },
+  {
+    "id": "40",
+    "name": "Recuerdos del Ayer live",
+    "url": "https://recuerdosdelayer-rowrigos.radioca.st/stream",
+    "logo": "https://static2.mytuner.mobi/media/tvos_radios/424/recuerdos-del-ayer.67186b71.png",
+    "country": "País"
+  },
+  {
+    "id": "41",
+    "name": "DJX Discomovil Radio live",
+    "url": "https://stream.zeno.fm/yusz0tdwey8uv",
+    "logo": "https://static2.mytuner.mobi/media/tvos_radios/c5tPLgbVqp.png",
+    "country": "cr"
+  },
+  {
+    "id": "42",
+    "name": "Radio 94.7 FM live",
+    "url": "https://playerservices.streamtheworld.com/api/livestream-redirect/CRC_947AAC_SC",
+    "logo": "https://static2.mytuner.mobi/media/tvos_radios/nAwNLxJbnm.png",
+    "country": "cr"
+  },
+  {
+    "id": "43",
+    "name": "Nuevecinconueve live",
+    "url": "https://playerservices.streamtheworld.com/api/livestream-redirect/CRC_959AAC_SC",
+    "logo": "https://static2.mytuner.mobi/media/tvos_radios/tGfHBjeka9.jpg",
+    "country": "cr"
+  },
+  {
+    "id": "44",
+    "name": "Radio Centro 96.3 FM live",
+    "url": "https://radio.standishco.com:8200/stream",
+    "logo": "https://static2.mytuner.mobi/media/tvos_radios/105/radio-centro-963-fm.f713bdb2.png",
+    "country": "cr"
+  },
+  {
+    "id": "45",
+    "name": "Super Radio FM live",
+    "url": "http://superradio.rtvhd.net:8010/stream",
+    "logo": "https://static2.mytuner.mobi/media/tvos_radios/gvujczqzwusy.png",
+    "country": "cr"
+  },
+  {
+    "id": "46",
+    "name": "Radio Zona Latina live",
+    "url": "https://guri.tepuyserver.net/8068/stream",
+    "logo": "https://static2.mytuner.mobi/media/tvos_radios/257/zona-latina.f13d6f56.jpg",
+    "country": "País"
+  },
+  {
+    "id": "47",
+    "name": "Onda Retro live",
+    "url": "https://stream.zeno.fm/evybcf5vd48uv",
+    "logo": "https://static2.mytuner.mobi/media/tvos_radios/8qcE8pSZcP.png",
+    "country": "País"
+  },
+  {
+    "id": "48",
+    "name": "Radio La Clásica 87.7 FM live",
+    "url": "https://stream.zeno.fm/k72vnp94q98uv",
+    "logo": "https://static2.mytuner.mobi/media/tvos_radios/250/radio-la-clasica-881-fm.a35a2b1f.png",
+    "country": "cr"
+  },
+  {
+    "id": "49",
+    "name": "Radio Bahía Puntarenas live",
+    "url": "https://s40.myradiostream.com/20178/;",
+    "logo": "https://static2.mytuner.mobi/media/tvos_radios/w3xggtrfsb45.jpeg",
+    "country": "Puntarenas"
+  },
+  {
+    "id": "50",
+    "name": "Radio Mix CR live",
+    "url": "https://stream.zeno.fm/2fsr81wybg0uv",
+    "logo": "https://static2.mytuner.mobi/media/tvos_radios/238/radio-mix-cr.44613224.png",
+    "country": "País"
+  },
+  {
+    "id": "51",
+    "name": "Radio Hits 80s 90s live",
+    "url": "https://app.sonicpanelradio.com/8194/stream",
+    "logo": "https://static2.mytuner.mobi/media/tvos_radios/XQJYPpyCPu.jpg",
+    "country": "cr"
+  },
+  {
+    "id": "52",
+    "name": "Radio Cultural De Puriscal live",
+    "url": "https://stream.zeno.fm/ucos1vhzikbtv/",
+    "logo": "https://static2.mytuner.mobi/media/tvos_radios/365/radio-cultural-de-puriscal.e7695ff1.jpg",
+    "country": "País"
+  },
+  {
+    "id": "53",
+    "name": "Planet 107.5 FM live",
+    "url": "http://k2.usastreams.com/yeah1075",
+    "logo": "https://static2.mytuner.mobi/media/tvos_radios/dunrcgprysl4.jpeg",
+    "country": "País"
+  },
+  {
+    "id": "1758674915341",
+    "name": "RT",
+    "url": "https://5f700d5b2c46f.streamlock.net/tvan24/tvan24/playlist.m3u8",
+    "logo": "https://picsum.photos/seed/new/150/150.jpg",
+    "country": "Rusia"
+  },
+  {
+    "id": "1758674990005",
+    "name": "Telesur",
+    "url": "http://stream-gtlc.telecentro.net.ar/hls/tierramiahls/main.m3u8",
+    "logo": "https://picsum.photos/seed/new/150/150.jpg",
+    "country": "Venezuela"
+  },
+  {
+    "id": "1758675000001",
+    "name": "Teletica Radio",
+    "url": "https://g2qd375ol7an-hls-live.5centscdn.com/Radio/eae835e83c0494a376229f254f7d3392.sdp/playlist.m3u8",
+    "logo": "https://www.teleticaradio.com/wp-content/uploads/2021/03/logo-teletica-radio.png",
+    "country": "Costa Rica"
+  },
+  {
+  "id": "1758675000002",
+  "name": "Telenoticias",
+  "url": "https://6zklxk9bdw9b-hls-live.5centscdn.com/TeleticaLiveStream/d072c3a8dde8622c607ecd258fd628e8.sdp/playlist_dvr.m3u8",
+  "logo": "https://www.teletica.com/wp-content/uploads/2021/03/logo-telenoticias.png",
+  "country": "Costa Rica"
+},
+  {
+    "id": "1758675000003",
+    "name": "En vivo Canal 6",
+    "url": "https://alba-cr-repretel-c6.stream.mediatiquestream.com/index.m3u8",
+    "logo": "https://www.repretel.com/wp-content/uploads/2021/03/logo-canal6.png",
+    "country": "Costa Rica"
+  },
+  {
+    "id": "1758710048098",
+    "name": "La 1",
+    "url": "https://live-01-02-eltrece.vodgc.net:443/eltrecetv/tracks-v3a1/mono.m3u8",
+    "logo": "https://picsum.photos/seed/new/150/150.jpg",
+    "country": "País"
+  },
+  {
+    "id": "1758710153729",
+    "name": "La 2",
+    "url": "http://stream-gtlc.telecentro.net.ar/hls/telemaxhls/main.m3u8",
+    "logo": "https://picsum.photos/seed/new/150/150.jpg",
+    "country": "País"
+  },
+  {
+    "id": "1758710155321",
+    "name": "DW",
+    "url": "http://stream-gtlc.telecentro.net.ar/hls/musictophls/main.m3u8",
+    "logo": "https://picsum.photos/seed/new/150/150.jpg",
+    "country": "País"
+  }
+];
+        }
+        // Radio stations data
+        let stations = getDefaultStations();
+        // App state
+        let currentStation = null;
+        let isPlaying = false;
+        let volume = 0.7;
+        let darkMode = true;
+        let favorites = [];
+        let recentStations = [];
+        let listenerCount = 0;
+        let browserInfo = {
+            isEdgeMobile: false
+        };
+        // Variables para manejar cambios rápidos de emisora
+        let currentRequest = null;
+        let isChangingStation = false;
+        let hls = null;
+        let metadataInterval = null;
+        let metadataAttempts = 0;
+        let MAX_METADATA_ATTEMPTS = 2;
+        let currentMetadataUrl = null;
+        let streamRefreshInterval = null;
+        let lastStreamRefresh = 0;
+        const STREAM_REFRESH_THRESHOLD = 5 * 60 * 1000; // 5 minutos en milisegundos
+        let hlsRetryCount = 0;
+        const MAX_HLS_RETRIES = 3;
+        // DOM elements
+        const audioPlayer = document.getElementById('audioPlayer');
+        const videoPlayer = document.getElementById('videoPlayer');
+        const videoPlayerContainer = document.getElementById('videoPlayerContainer');
+        const stationSelect = document.getElementById('stationSelect');
+        const currentLogo = document.getElementById('currentLogo');
+        const currentName = document.getElementById('currentName');
+        const currentCountry = document.getElementById('currentCountry');
+        const playPauseBtn = document.getElementById('playPauseBtn');
+        const playIcon = document.getElementById('playIcon');
+        const favoriteBtn = document.getElementById('favoriteBtn');
+        const favoriteIcon = document.getElementById('favoriteIcon');
+        const volumeSlider = document.getElementById('volumeSlider');
+        const volumeValue = document.getElementById('volumeValue');
+        const listenerCountEl = document.getElementById('listenerCount');
+        const totalStationsEl = document.getElementById('totalStations');
+        const favoriteCountEl = document.getElementById('favoriteCount');
+        const favoritesList = document.getElementById('favoritesList');
+        const recentList = document.getElementById('recentList');
+        const clockTime = document.getElementById('clock-time');
+        const greeting = document.getElementById('greeting');
+        const notification = document.getElementById('notification');
+        const notificationText = document.getElementById('notificationText');
+        const streamError = document.getElementById('streamError');
+        const streamErrorText = document.getElementById('streamErrorText');
+        const confirmModal = document.getElementById('confirmModal');
+        const songTitle = document.getElementById('songTitle');
+        const songInfo = document.getElementById('songInfo');
+        const loadingIndicator = document.getElementById('loadingIndicator');
+        const qualityButton = document.getElementById('qualityButton');
+        const qualityMenu = document.getElementById('qualityMenu');
+        const qualityOptions = document.getElementById('qualityOptions');
+        
+        // ✅ NUEVA FUNCIÓN: Actualizar contador de emisoras
+        function updateTotalStationsCount() {
+            totalStationsEl.textContent = stations.length;
+        }
+
+        // Initialize app
+        function initApp() {
+            console.log('✅ ¡Hola Óscar! App de radio ESTABLE y FUNCIONAL.');
+            detectBrowserCapabilities();
+            loadPreferences();
+            // ✅ Cargar lista de emisoras desde localStorage si existe y es válida
+            const savedStations = localStorage.getItem('radioStations');
+            if (savedStations) {
+                try {
+                    const parsed = JSON.parse(savedStations);
+                    if (Array.isArray(parsed) && parsed.length > 0) {
+                        stations = parsed;
+                        console.log('📻 Lista de emisoras cargada desde localStorage');
+                    } else {
+                        throw new Error('Lista vacía o inválida');
+                    }
+                } catch (e) {
+                    console.warn('⚠️ Usando lista por defecto:', e.message);
+                    stations = getDefaultStations();
+                    localStorage.setItem('radioStations', JSON.stringify(stations));
+                }
+            } else {
+                // Guardar lista por defecto en localStorage
+                localStorage.setItem('radioStations', JSON.stringify(stations));
+                console.log('💾 Lista por defecto guardada en localStorage');
+            }
+            populateStationSelector();
+            updateTotalStationsCount(); // ✅ Actualizar contador al iniciar
+            setupPlayers();
+            updateClock();
+            setInterval(updateClock, 1000);
+            updateListenerCount();
+            setInterval(updateListenerCount, 30000);
+            setupKeyboardControls();
+            // ✅ Cargar "Unción 106.7 FM" al iniciar (sin reproducir)
+            const uncionStation = stations.find(s => s.name.includes("Unción"));
+            if (uncionStation) {
+                currentStation = uncionStation;
+                currentLogo.src = uncionStation.logo;
+                currentName.textContent = uncionStation.name;
+                currentCountry.textContent = uncionStation.country;
+                stationSelect.value = uncionStation.id;
+                setupPlayerForStation(uncionStation, true); // true = primera carga, no reproducir automáticamente
+                updateFavoriteButton();
+                showNotification('📻 ¡Listo para reproducir! Presiona ▶ para comenzar');
+            }
+        }
+        // Detect browser capabilities
+        function detectBrowserCapabilities() {
+            const userAgent = navigator.userAgent;
+            const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(userAgent);
+            const isEdge = userAgent.indexOf('Edg') > -1;
+            browserInfo.isEdgeMobile = isEdge && isMobile;
+        }
+        // Load preferences from localStorage
+        function loadPreferences() {
+            const savedDarkMode = localStorage.getItem('darkMode');
+            const savedFavorites = localStorage.getItem('favorites');
+            const savedRecentStations = localStorage.getItem('recentStations');
+            const savedVolume = localStorage.getItem('volume');
+            // Tema
+            if (savedDarkMode !== null) {
+                darkMode = savedDarkMode === 'true';
+                updateTheme();
+            }
+            // Favoritos (siempre array)
+            if (savedFavorites) {
+                try {
+                    favorites = JSON.parse(savedFavorites);
+                    if (!Array.isArray(favorites)) throw new Error('Invalid format');
+                } catch (e) {
+                    favorites = [];
+                    console.warn('⚠️ Favoritos reseteados:', e.message);
+                }
+            } else {
+                favorites = [];
+            }
+            updateFavoritesList();
+            updateFavoriteCount();
+            // Recientes (siempre array)
+            if (savedRecentStations) {
+                try {
+                    recentStations = JSON.parse(savedRecentStations);
+                    if (!Array.isArray(recentStations)) throw new Error('Invalid format');
+                } catch (e) {
+                    recentStations = [];
+                    console.warn('⚠️ Recientes reseteados:', e.message);
+                }
+            } else {
+                recentStations = [];
+            }
+            updateRecentList();
+            // Volumen
+            if (savedVolume) {
+                volume = parseFloat(savedVolume);
+                volumeSlider.value = volume;
+                volumeValue.textContent = Math.round(volume * 100) + '%';
+            }
+        }
+        // Populate station selector
+        function populateStationSelector() {
+            stationSelect.innerHTML = '<option value="">Selecciona una emisora...</option>';
+            stations.forEach(station => {
+                const option = document.createElement('option');
+                option.value = station.id;
+                option.textContent = `${station.name} (${station.country})`;
+                stationSelect.appendChild(option);
+            });
+        }
+        // Setup players
+        function setupPlayers() {
+            // Setup audio player
+            audioPlayer.addEventListener('play', () => {
+                isPlaying = true;
+                updatePlayButton();
+                hideStreamError();
+                hideLoadingIndicator();
+            });
+            audioPlayer.addEventListener('pause', () => {
+                isPlaying = false;
+                updatePlayButton();
+            });
+            audioPlayer.addEventListener('error', () => {
+                if (!isChangingStation) {
+                    showStreamError('❌ Error al reproducir. Intenta otra emisora.');
+                }
+                isPlaying = false;
+                updatePlayButton();
+                stopMetadataPolling();
+            });
+            audioPlayer.addEventListener('canplay', () => {
+                hideStreamError();
+                hideLoadingIndicator();
+            });
+            audioPlayer.addEventListener('loadstart', () => {
+                showLoadingIndicator();
+                console.log('Cargando stream:', currentStation ? currentStation.url : 'N/A');
+            });
+            audioPlayer.addEventListener('stalled', () => {
+                console.warn('Stream stalled');
+            });
+            // Setup video player
+            videoPlayer.addEventListener('play', () => {
+                isPlaying = true;
+                updatePlayButton();
+                hideStreamError();
+                hideLoadingIndicator();
+            });
+            videoPlayer.addEventListener('pause', () => {
+                isPlaying = false;
+                updatePlayButton();
+            });
+            videoPlayer.addEventListener('error', () => {
+                if (!isChangingStation) {
+                    showStreamError('❌ Error al reproducir. Intenta otra emisora.');
+                }
+                isPlaying = false;
+                updatePlayButton();
+                stopMetadataPolling();
+            });
+            videoPlayer.addEventListener('canplay', () => {
+                hideStreamError();
+                hideLoadingIndicator();
+            });
+            videoPlayer.addEventListener('loadstart', () => {
+                showLoadingIndicator();
+                console.log('Cargando stream:', currentStation ? currentStation.url : 'N/A');
+            });
+            videoPlayer.addEventListener('stalled', () => {
+                console.warn('Stream stalled');
+            });
+        }
+        // ✅ NUEVA FUNCIÓN: Verificar si el stream necesita renovación
+        function needsStreamRefresh(stationUrl) {
+            const now = Date.now();
+            // Verificar si ha pasado más de 5 minutos desde la última renovación
+            return (now - lastStreamRefresh) > STREAM_REFRESH_THRESHOLD;
+        }
+        // ✅ NUEVA FUNCIÓN: Renovar URL del stream (para tokens expirados)
+        async function refreshStreamUrl(stationUrl) {
+            try {
+                // Para streams HLS con tokens en la URL, intentamos renovar
+                if (stationUrl.includes('.m3u8')) {
+                    // Verificar si la URL ya tiene parámetros de query
+                    const hasQuery = stationUrl.includes('?');
+                    const separator = hasQuery ? '&' : '?';
+                    const refreshedUrl = `${stationUrl}${separator}t=${Date.now()}`;
+                    lastStreamRefresh = Date.now();
+                    console.log('🔄 URL del stream renovada:', refreshedUrl);
+                    return refreshedUrl;
+                }
+                // Para streams de audio, generalmente no necesitan renovación
+                lastStreamRefresh = Date.now();
+                return stationUrl;
+            } catch (error) {
+                console.warn('⚠️ No se pudo renovar la URL del stream:', error);
+                return stationUrl;
+            }
+        }
+        // ✅ NUEVA FUNCIÓN: Configuración robusta de HLS con calidad adaptativa
+        function setupHLSPlayer(streamUrl) {
+            if (hls) {
+                hls.destroy();
+                hls = null;
+            }
+            // Resetear contador de reintentos
+            hlsRetryCount = 0;
+            // ✅ Configuración para calidad adaptativa INTELIGENTE
+            const hlsConfig = {
+                debug: false,
+                enableWorker: true,
+                lowLatencyMode: true,
+                abrEwmaDefaultEstimate: 500000, // Estimación inicial (500 kbps)
+                abrEwmaSlowLive: 3,             // Sensibilidad en vivo
+                abrEwmaFastLive: 1,             // Reacción rápida a cambios
+                abrBandWidthFactor: 0.8,        // Usa 80% del ancho de banda detectado
+                abrBandWidthUpFactor: 0.7,      // Sube calidad solo si hay margen
+                maxBufferLength: 30,
+                maxMaxBufferLength: 60,
+                fragLoadingTimeOut: 10000,
+                manifestLoadingTimeOut: 10000
+            };
+            hls = new Hls(hlsConfig);
+            hls.loadSource(streamUrl);
+            hls.attachMedia(videoPlayer);
+            hls.on(Hls.Events.MANIFEST_PARSED, function() {
+                console.log('✅ HLS manifest parsed successfully');
+                lastStreamRefresh = Date.now();
+                // Mostrar botón de calidad solo si hay múltiples niveles
+                if (hls.levels && hls.levels.length > 1) {
+                    qualityButton.style.display = 'block';
+                } else {
+                    qualityButton.style.display = 'none';
+                }
+                if (!isFirstLoad) {
+                    setTimeout(() => {
+                        if (!isPlaying) {
+                            togglePlayPause(); // Usa TU función de control
+                        }
+                    }, 500);
+                }
+            });
+            // Manejo mejorado de errores
+            hls.on(Hls.Events.ERROR, function(event, data) {
+                console.error('❌ HLS Error:', data.type, data.details);
+                if (data.fatal) {
+                    switch(data.type) {
+                        case Hls.ErrorTypes.NETWORK_ERROR:
+                            if (hlsRetryCount < MAX_HLS_RETRIES) {
+                                hlsRetryCount++;
+                                showStreamError(`❌ Error de red en stream HLS. Intento ${hlsRetryCount}/${MAX_HLS_RETRIES}`);
+                                setTimeout(() => {
+                                    if (hls) {
+                                        hls.startLoad();
+                                    }
+                                }, 3000 * hlsRetryCount);
+                            } else {
+                                showStreamError('❌ Error de red persistente en stream HLS. Verifica la conexión.');
+                            }
+                            break;
+                        case Hls.ErrorTypes.MEDIA_ERROR:
+                            if (hlsRetryCount < MAX_HLS_RETRIES) {
+                                hlsRetryCount++;
+                                showStreamError(`❌ Error de medios en stream HLS. Intento ${hlsRetryCount}/${MAX_HLS_RETRIES}`);
+                                setTimeout(() => {
+                                    if (hls) {
+                                        hls.recoverMediaError();
+                                    }
+                                }, 2000 * hlsRetryCount);
+                            } else {
+                                showStreamError('❌ Error de medios persistente en stream HLS.');
+                            }
+                            break;
+                        default:
+                            showStreamError('❌ Error fatal en stream HLS');
+                            if (hls) {
+                                hls.destroy();
+                                hls = null;
+                            }
+                            break;
+                    }
+                } else {
+                    // Errores no fatales - la mayoría se manejan automáticamente
+                    switch(data.details) {
+                        case Hls.ErrorDetails.BUFFER_STALLED_ERROR:
+                            console.warn('⚠️ Buffer stalled - HLS intentará recuperarse automáticamente');
+                            break;
+                        case Hls.ErrorDetails.BUFFER_SEEK_OVER_HOLE:
+                            console.warn('⚠️ Buffer seek over hole - continuando reproducción');
+                            break;
+                        case Hls.ErrorDetails.FRAG_LOAD_ERROR:
+                            console.warn('⚠️ Error al cargar fragmento - reintentando...');
+                            break;
+                    }
+                }
+            });
+            // Eventos adicionales para mejor experiencia
+            hls.on(Hls.Events.BUFFER_CREATED, function() {
+                console.log('✅ Buffer creado exitosamente');
+            });
+            hls.on(Hls.Events.LEVEL_SWITCHED, function(event, data) {
+                console.log('🔄 Cambio de nivel de calidad:', data.level);
+            });
+        }
+        // ✅ NUEVA FUNCIÓN: Obtener metadatos con límite de intentos - SOLO PARA PROVEEDORES CONOCIDOS
+        function fetchMetadataWithLimit(metadataUrl) {
+            if (metadataAttempts >= MAX_METADATA_ATTEMPTS) {
+                console.log('⚠️ Límite de intentos de metadatos alcanzado');
+                songTitle.textContent = 'Metadatos no disponibles para este stream';
+                return;
+            }
+            metadataAttempts++;
+            console.log(`📡 Intento ${metadataAttempts}/${MAX_METADATA_ATTEMPTS} de obtener metadatos`);
+            // ✅ NUEVO: Añadir headers para evitar problemas CORS
+            const headers = new Headers();
+            headers.append('Accept', 'application/json');
+            headers.append('Cache-Control', 'no-cache');
+            fetch(metadataUrl, {
+                method: 'GET',
+                headers: headers,
+                mode: 'cors',
+                cache: 'no-cache'
+            })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('HTTP error ' + response.status);
+                }
+                return response.json();
+            })
+            .then(data => {
+                if (data && data.title) {
+                    songTitle.textContent = data.title;
+                } else if (data && data.song) {
+                    songTitle.textContent = data.song;
+                } else if (data && data.streamTitle) {
+                    songTitle.textContent = data.streamTitle;
+                } else {
+                    songTitle.textContent = 'Información no disponible';
+                }
+                // Reiniciar intentos si se obtienen metadatos exitosamente
+                metadataAttempts = 0;
+            })
+            .catch(error => {
+                console.error('Error al obtener metadatos:', error);
+                if (metadataAttempts >= MAX_METADATA_ATTEMPTS) {
+                    songTitle.textContent = 'Metadatos no disponibles para este stream';
+                }
+            });
+        }
+        // ✅ NUEVA FUNCIÓN: Iniciar polling de metadatos con límite de intentos - SOLO PARA PROVEEDORES CONOCIDOS
+        function startMetadataPolling(streamUrl) {
+            stopMetadataPolling();
+            metadataAttempts = 0;
+            // Mostrar el contenedor de metadatos
+            songInfo.style.display = 'flex';
+            songTitle.textContent = 'Cargando información de la canción...';
+
+            let metadataUrl = null;
+
+            // ✅ SOLO para proveedores conocidos
+            if (streamUrl.includes('streamtheworld.com')) {
+                metadataUrl = streamUrl.replace(/\.mp3$|\.aac$/, '/metadata');
+            } else if (
+                streamUrl.includes('shoutcast') || 
+                streamUrl.includes('icecast') || 
+                streamUrl.includes('.mp3') || 
+                streamUrl.includes('.aac')
+            ) {
+                // Intentar endpoint de metadatos Icecast/Shoutcast
+                const baseUrl = streamUrl.split(/\/stream/)[0];
+                metadataUrl = baseUrl + '/7.html';
+            }
+
+            if (!metadataUrl) {
+                songTitle.textContent = 'Metadatos no disponibles';
+                return;
+            }
+
+            currentMetadataUrl = metadataUrl;
+            fetchMetadataWithLimit(metadataUrl);
+            metadataInterval = setInterval(() => {
+                if (metadataAttempts < MAX_METADATA_ATTEMPTS) {
+                    fetchMetadataWithLimit(metadataUrl);
+                } else {
+                    stopMetadataPolling();
+                }
+            }, 10000);
+        }
+        // ✅ NUEVA FUNCIÓN: Detener polling de metadatos
+        function stopMetadataPolling() {
+            if (metadataInterval) {
+                clearInterval(metadataInterval);
+                metadataInterval = null;
+            }
+            currentMetadataUrl = null;
+            metadataAttempts = 0;
+        }
+        // Setup player for station
+        async function setupPlayerForStation(station, isFirstLoad = false) {
+            // ✅ NUEVO: Verificar si el stream necesita renovación
+            let streamUrl = station.url;
+            if (needsStreamRefresh(station.url)) {
+                streamUrl = await refreshStreamUrl(station.url);
+                console.log('🔄 URL del stream renovada:', streamUrl !== station.url);
+            }
+            // ✅ NUEVO: Determinar si es un stream HLS (.m3u8)
+            const isHls = streamUrl.includes('.m3u8');
+            if (isHls && Hls.isSupported()) {
+                // ✅ NUEVO: Mostrar el reproductor de video y ocultar el de audio
+                videoPlayerContainer.style.display = 'block';
+                audioPlayer.style.display = 'none';
+                // ✅ NUEVO: Ocultar el logo en modo video
+                currentLogo.classList.add('logo-video-hidden');
+                // Ocultar metadatos para streams HLS (video)
+                songInfo.style.display = 'none';
+                // Configurar el reproductor HLS
+                setupHLSPlayer(streamUrl);
+            } else {
+                // ✅ NUEVO: Mostrar el reproductor de audio y ocultar el de video
+                videoPlayerContainer.style.display = 'none';
+                audioPlayer.style.display = 'block';
+                // ✅ NUEVO: Mostrar el logo en modo audio
+                currentLogo.classList.remove('logo-video-hidden');
+                // Usar el reproductor nativo para streams de audio
+                audioPlayer.src = streamUrl;
+                // Iniciar la obtención de metadatos - SOLO SI ES PROVEEDOR CONOCIDO
+                startMetadataPolling(station.url);
+                if (browserInfo.isEdgeMobile || isFirstLoad) {
+                    // No reproducir automáticamente en la primera carga o en Edge Mobile
+                    isPlaying = false;
+                    updatePlayButton();
+                    showNotification('▶ Haz clic en Play para comenzar');
+                } else {
+                    // Intentar reproducir con manejo de errores
+                    audioPlayer.play().catch(e => {
+                        if (e.name === 'NotAllowedError') {
+                            console.warn('⚠️ Reproducción automática bloqueada - requiere interacción del usuario');
+                            showNotification('▶ Haz clic en Play para comenzar');
+                        } else {
+                            console.error("Error al reproducir:", e);
+                            showStreamError('❌ Error al cargar la emisora. URL inválida o sin conexión.');
+                        }
+                    });
+                }
+            }
+        }
+        // Change station - ¡MEJORADA PARA CAMBIOS RÁPIDOS Y SOPORTE HLS!
+        async function changeStation(stationId) {
+            const station = stations.find(s => s.id === stationId);
+            if (!station) return;
+            // Cancelar cualquier cambio anterior
+            if (currentRequest) {
+                clearTimeout(currentRequest);
+            }
+            // Indicar que estamos cambiando de estación
+            isChangingStation = true;
+            showLoadingIndicator();
+            // Establecer un retraso mínimo para evitar errores por cambios rápidos
+            currentRequest = setTimeout(async () => {
+                // Pausar ambos reproductores
+                audioPlayer.pause();
+                videoPlayer.pause();
+                // Detener cualquier instancia de HLS existente
+                if (hls) {
+                    hls.destroy();
+                    hls = null;
+                }
+                // Detener polling de metadatos
+                stopMetadataPolling();
+                currentStation = station;
+                currentLogo.src = station.logo;
+                currentName.textContent = station.name;
+                currentCountry.textContent = station.country;
+                stationSelect.value = stationId;
+                updateRecentStations(station);
+                showNotification(`📻 ${station.name}`);
+                // Configurar el reproductor adecuado para esta estación
+                await setupPlayerForStation(station, false); // false = no es primera carga
+                updateFavoriteButton();
+                // Permitir que se muestren errores después de este cambio
+                setTimeout(() => {
+                    isChangingStation = false;
+                }, 2000);
+            }, 300); // Retraso de 300ms para cambios rápidos
+        }
+        // Toggle play/pause
+        function togglePlayPause() {
+            if (!currentStation) {
+                showStreamError('⚠️ Selecciona una emisora primero');
+                return;
+            }
+            // ✅ NUEVO: Determinar si es un stream HLS (.m3u8)
+            const isHls = currentStation.url.includes('.m3u8');
+            if (isHls && Hls.isSupported()) {
+                if (isPlaying) {
+                    videoPlayer.pause();
+                } else {
+                    videoPlayer.play().catch(e => {
+                        if (e.name === 'NotAllowedError') {
+                            console.warn('⚠️ Reproducción automática bloqueada - requiere interacción del usuario');
+                            showNotification('▶ Haz clic en Play para comenzar');
+                        } else {
+                            console.error("Error al reproducir:", e);
+                            showStreamError('❌ Error al reproducir. Intenta otra emisora.');
+                        }
+                    });
+                }
+            } else {
+                if (isPlaying) {
+                    audioPlayer.pause();
+                } else {
+                    audioPlayer.play().catch(e => {
+                        if (e.name === 'NotAllowedError') {
+                            console.warn('⚠️ Reproducción automática bloqueada - requiere interacción del usuario');
+                            showNotification('▶ Haz clic en Play para comenzar');
+                        } else {
+                            console.error("Error al reproducir:", e);
+                            showStreamError('❌ Error al reproducir. Intenta otra emisora.');
+                        }
+                    });
+                }
+            }
+        }
+        // Update play button
+        function updatePlayButton() {
+            playIcon.className = isPlaying ? 'fas fa-pause' : 'fas fa-play';
+            currentLogo.classList.toggle('playing', isPlaying);
+        }
+        // Previous station
+        function previousStation() {
+            if (!currentStation) return;
+            const currentIndex = stations.findIndex(s => s.id === currentStation.id);
+            const previousIndex = currentIndex > 0 ? currentIndex - 1 : stations.length - 1;
+            changeStation(stations[previousIndex].id);
+        }
+        // Next station
+        function nextStation() {
+            if (!currentStation) return;
+            const currentIndex = stations.findIndex(s => s.id === currentStation.id);
+            const nextIndex = currentIndex < stations.length - 1 ? currentIndex + 1 : 0;
+            changeStation(stations[nextIndex].id);
+        }
+        // Change volume
+        function changeVolume(value) {
+            volume = parseFloat(value);
+            audioPlayer.volume = volume;
+            videoPlayer.volume = volume;
+            volumeValue.textContent = Math.round(volume * 100) + '%';
+            localStorage.setItem('volume', volume.toString());
+        }
+        // Toggle theme
+        function toggleTheme() {
+            darkMode = !darkMode;
+            updateTheme();
+            localStorage.setItem('darkMode', darkMode.toString());
+        }
+        // Update theme
+        function updateTheme() {
+            document.body.classList.toggle('light-mode', !darkMode);
+            document.getElementById('theme-icon').className = darkMode ? 'fas fa-moon' : 'fas fa-sun';
+        }
+        // Toggle favorite
+        function toggleFavorite() {
+            if (!currentStation) return;
+            const stationId = currentStation.id;
+            if (favorites.includes(stationId)) {
+                favorites = favorites.filter(id => id !== stationId);
+                showNotification('❌ Eliminado de favoritos');
+            } else {
+                favorites.push(stationId);
+                showNotification('⭐ Agregado a favoritos');
+            }
+            localStorage.setItem('favorites', JSON.stringify(favorites));
+            updateFavoritesList();
+            updateFavoriteButton();
+            updateFavoriteCount();
+        }
+        // Update favorite button
+        function updateFavoriteButton() {
+            if (!currentStation) return;
+            const isFavorite = favorites.includes(currentStation.id);
+            favoriteBtn.classList.toggle('active', isFavorite);
+            favoriteIcon.className = isFavorite ? 'fas fa-heart' : 'far fa-heart';
+        }
+        // Update favorite count
+        function updateFavoriteCount() {
+            favoriteCountEl.textContent = favorites.length;
+        }
+        // Update favorites list
+        function updateFavoritesList() {
+            const favoriteStations = stations.filter(s => favorites.includes(s.id));
+            if (favoriteStations.length === 0) {
+                favoritesList.innerHTML = `
+                    <div style="text-align: center; opacity: 0.7; padding: 2rem;">
+                        <i class="fas fa-heart" style="font-size: 2rem; margin-bottom: 1rem; display: block;"></i>
+                        No tienes favoritos aún
+                    </div>
+                `;
+                return;
+            }
+            favoritesList.innerHTML = favoriteStations.map(station => `
+                <div class="station-item" onclick="changeStation('${station.id}')">
+                    <img src="${station.logo}" alt="${station.name}">
+                    <div class="station-item-info">
+                        <div class="station-item-name">${station.name}</div>
+                        <div class="station-item-country">${station.country}</div>
+                    </div>
+                </div>
+            `).join('');
+        }
+        // Update recent stations
+        function updateRecentStations(station) {
+            recentStations = [station, ...recentStations.filter(s => s.id !== station.id)].slice(0, 5);
+            localStorage.setItem('recentStations', JSON.stringify(recentStations));
+            updateRecentList();
+        }
+        // Update recent list
+        function updateRecentList() {
+            if (recentStations.length === 0) {
+                recentList.innerHTML = `
+                    <div style="text-align: center; opacity: 0.7; padding: 2rem;">
+                        <i class="fas fa-clock" style="font-size: 2rem; margin-bottom: 1rem; display: block;"></i>
+                        No hay emisoras recientes
+                    </div>
+                `;
+                return;
+            }
+            recentList.innerHTML = recentStations.map(station => `
+                <div class="station-item" onclick="changeStation('${station.id}')">
+                    <img src="${station.logo}" alt="${station.name}">
+                    <div class="station-item-info">
+                        <div class="station-item-name">${station.name}</div>
+                        <div class="station-item-country">${station.country}</div>
+                    </div>
+                </div>
+            `).join('');
+        }
+        // Share on WhatsApp
+        function shareOnWhatsApp() {
+            if (!currentStation) return;
+            const text = `🎵 Escuchando ${currentStation.name} en Radio Streaming Pro. ¡Únete! 📻`;
+            const url = window.location.href;
+            const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(`${text} ${url}`)}`;
+            window.open(whatsappUrl, '_blank');
+        }
+        // Request notification permission
+        function requestNotificationPermission() {
+            if ('Notification' in window) {
+                if (Notification.permission === 'default') {
+                    Notification.requestPermission().then(permission => {
+                        showNotification(permission === 'granted' ? '🔔 Notificaciones activadas' : '🔕 Notificaciones denegadas');
+                    });
+                } else {
+                    showNotification(Notification.permission === 'granted' ? '🔔 Notificaciones ya están activadas' : '🔕 Notificaciones bloqueadas');
+                }
+            } else {
+                showNotification('❌ Notificaciones no disponibles');
+            }
+        }
+        // Show notification
+        function showNotification(message) {
+            notificationText.textContent = message;
+            notification.classList.add('show');
+            setTimeout(() => notification.classList.remove('show'), 3000);
+        }
+        // Show stream error
+        function showStreamError(message) {
+            streamErrorText.textContent = message;
+            streamError.classList.add('show');
+            setTimeout(() => {
+                streamError.classList.remove('show');
+            }, 8000);
+        }
+        // Hide stream error
+        function hideStreamError() {
+            streamError.classList.remove('show');
+        }
+        // Show loading indicator
+        function showLoadingIndicator() {
+            loadingIndicator.classList.add('show');
+        }
+        // Hide loading indicator
+        function hideLoadingIndicator() {
+            loadingIndicator.classList.remove('show');
+        }
+        // Update clock
+        function updateClock() {
+            const now = new Date();
+            const costaRicaTime = new Date(now.toLocaleString("en-US", {timeZone: "America/Costa_Rica"}));
+            const hours = costaRicaTime.getHours();
+            const minutes = costaRicaTime.getMinutes();
+            const seconds = costaRicaTime.getSeconds();
+            const ampm = hours >= 12 ? 'PM' : 'AM';
+            const displayHours = hours % 12 || 12;
+            clockTime.textContent = `${displayHours}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')} ${ampm}`;
+            greeting.textContent = hours < 12 ? 'Buenos días' : hours < 18 ? 'Buenas tardes' : 'Buenas noches';
+        }
+        // Update listener count
+        function updateListenerCount() {
+            listenerCount = (Math.floor(Math.random() * 100) + 50) * 10;
+            listenerCountEl.textContent = listenerCount.toLocaleString();
+        }
+        // Setup keyboard controls
+        function setupKeyboardControls() {
+            document.addEventListener('keydown', (e) => {
+                // ✅ Permitir escribir en el modal
+                if (document.getElementById('stationManagerModal').style.display === 'block' && 
+                    (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA')) {
+                    return;
+                }
+                e.preventDefault();
+                if (e.key === 'ArrowLeft') {
+                    previousStation();
+                } else if (e.key === 'ArrowRight') {
+                    nextStation();
+                } else if (e.key === 'ArrowUp') {
+                    window.scrollBy({ top: -80, behavior: 'smooth' });
+                } else if (e.key === 'ArrowDown') {
+                    window.scrollBy({ top: 80, behavior: 'smooth' });
+                } else if (e.key === 'Enter' || e.key === ' ') {
+                    togglePlayPause();
+                } else if (e.key === 'f' || e.key === 'F') {
+                    toggleFavorite();
+                } else if (e.key === 'm' || e.key === 'M') {
+                    toggleTheme();
+                } else if (e.key === 'ArrowUp' && e.ctrlKey) {
+                    const newVolume = Math.min(1, volume + 0.1);
+                    volumeSlider.value = newVolume;
+                    changeVolume(newVolume);
+                } else if (e.key === 'ArrowDown' && e.ctrlKey) {
+                    const newVolume = Math.max(0, volume - 0.1);
+                    volumeSlider.value = newVolume;
+                    changeVolume(newVolume);
+                }
+            });
+        }
+        // Station Manager Functions
+        function openStationManager() {
+            document.getElementById('stationManagerModal').style.display = 'block';
+            renderStationsList();
+            console.log('🔧 Editor de emisoras abierto');
+        }
+        function closeStationManager() {
+            document.getElementById('stationManagerModal').style.display = 'none';
+        }
+        function renderStationsList() {
+            const container = document.getElementById('stationsList');
+            container.innerHTML = `
+                <h3>Lista de Emisoras</h3>
+                <p>Elimina una emisora dejando el campo "Nombre" vacío.</p>
+                <div class="stations-table">
+                    <div class="table-header">
+                        <div>Nombre de la Emisora</div>
+                        <div>URL de la Emisora</div>
+                        <div>URL del Logo</div>
+                        <div>País</div>
+                    </div>
+                    <div id="stationsTableBody"></div>
+                </div>
+            `;
+            const tableBody = document.getElementById('stationsTableBody');
+            stations.forEach((station, index) => {
+                const row = document.createElement('div');
+                row.className = 'table-row';
+                row.innerHTML = `
+                    <input type="text" placeholder="Nombre" value="${station.name}" data-field="name" data-index="${index}" class="table-input">
+                    <input type="text" placeholder="URL" value="${station.url}" data-field="url" data-index="${index}" class="table-input">
+                    <input type="text" placeholder="Logo URL" value="${station.logo}" data-field="logo" data-index="${index}" class="table-input">
+                    <input type="text" placeholder="País" value="${station.country}" data-field="country" data-index="${index}" class="table-input">
+                `;
+                tableBody.appendChild(row);
+            });
+        }
+        function addNewStation() {
+            const newStation = {
+                id: Date.now().toString(),
+                name: 'Nueva Emisora',
+                url: '',
+                logo: 'https://picsum.photos/seed/new/150/150.jpg',
+                country: 'País'
+            };
+            stations.push(newStation);
+            renderStationsList();
+            showNotification('✅ Nueva emisora añadida');
+        }
+        function saveAllAndClose() {
+            const inputs = document.querySelectorAll('.table-input');
+            const newStations = [];
+            let hasChanges = false;
+            for (let i = 0; i < stations.length; i++) {
+                const nameInput = document.querySelector(`[data-index="${i}"][data-field="name"]`);
+                const urlInput = document.querySelector(`[data-index="${i}"][data-field="url"]`);
+                const logoInput = document.querySelector(`[data-index="${i}"][data-field="logo"]`);
+                const countryInput = document.querySelector(`[data-index="${i}"][data-field="country"]`);
+                if (nameInput && nameInput.value.trim() !== '') {
+                    newStations.push({
+                        id: stations[i].id,
+                        name: nameInput.value.trim(),
+                        url: urlInput.value.trim(),
+                        logo: logoInput.value.trim(),
+                        country: countryInput.value.trim()
+                    });
+                    hasChanges = true;
+                } else {
+                    showNotification(`🗑️ Emisora eliminada: ${stations[i].name}`);
+                    hasChanges = true;
+                }
+            }
+            if (hasChanges) {
+                stations = newStations;
+                // ✅ Guardar en localStorage
+                localStorage.setItem('radioStations', JSON.stringify(stations));
+                populateStationSelector();
+                updateTotalStationsCount(); // ✅ Actualizar contador al guardar
+                showNotification('✅ Cambios guardados');
+            }
+            closeStationManager();
+        }
+        // ✅ Función de descarga corregida (usando Blob)
+        function downloadStations() {
+            const data = JSON.stringify(stations, null, 2);
+            const blob = new Blob([data], { type: 'text/plain;charset=utf-8' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'radio-stations.txt';
+            document.body.appendChild(a);
+            a.click();
+            setTimeout(() => {
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+            }, 100);
+            showNotification('✅ Lista descargada como radio-stations.txt');
+        }
+        // ✅ Función para cargar lista desde archivo
+        function loadStationsFromFile(input) {
+            const file = input.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = function(event) {
+                try {
+                    const loadedStations = JSON.parse(event.target.result);
+                    if (Array.isArray(loadedStations) && loadedStations.length > 0) {
+                        stations = loadedStations;
+                        // ✅ Guardar en localStorage
+                        localStorage.setItem('radioStations', JSON.stringify(stations));
+                        renderStationsList();
+                        populateStationSelector();
+                        updateTotalStationsCount(); // ✅ Actualizar contador al cargar
+                        showNotification('✅ Lista cargada y guardada exitosamente');
+                        // Resetear el input para que se pueda cargar el mismo archivo nuevamente
+                        input.value = '';
+                    } else {
+                        throw new Error('Formato inválido');
+                    }
+                } catch (error) {
+                    showNotification('❌ Error al cargar el archivo');
+                    console.error(error);
+                    input.value = '';
+                }
+            };
+            reader.readAsText(file);
+        }
+        // ✅ NUEVA FUNCIÓN: Mostrar confirmación personalizada para limpiar LocalStorage
+        function showClearLocalStorageConfirm() {
+            confirmModal.style.display = 'block';
+        }
+        // ✅ NUEVA FUNCIÓN: Ocultar modal de confirmación
+        function hideConfirmModal() {
+            confirmModal.style.display = 'none';
+        }
+        // ✅ NUEVA FUNCIÓN: Ejecutar limpieza de LocalStorage
+        function executeClearLocalStorage() {
+            localStorage.clear();
+            showNotification('🧹 LocalStorage limpiado. Recargando página...');
+            hideConfirmModal();
+            // Recargar la página para reiniciar todo con valores por defecto
+            setTimeout(() => {
+                location.reload();
+            }, 1500);
+        }
+        // ✅ NUEVA FUNCIÓN: Mostrar menú de calidad
+        function showQualityMenu() {
+            if (!hls || !hls.levels || hls.levels.length <= 1) return;
+            
+            qualityOptions.innerHTML = '';
+            
+            hls.levels.forEach((level, index) => {
+                const bitrate = (level.bitrate / 1000).toFixed(0);
+                const option = document.createElement('div');
+                option.style.padding = '4px';
+                option.style.cursor = 'pointer';
+                option.textContent = `${bitrate} kbps`;
+                option.onclick = () => {
+                    hls.currentLevel = index;
+                    qualityMenu.style.display = 'none';
+                };
+                qualityOptions.appendChild(option);
+            });
+            
+            // Agregar opción "Auto"
+            const autoOption = document.createElement('div');
+            autoOption.style.padding = '4px';
+            autoOption.style.cursor = 'pointer';
+            autoOption.textContent = 'Auto';
+            autoOption.onclick = () => {
+                hls.currentLevel = -1; // Auto
+                qualityMenu.style.display = 'none';
+            };
+            qualityOptions.appendChild(autoOption);
+            
+            qualityMenu.style.display = 'block';
+        }
+
+        // Cerrar menú al hacer clic fuera
+        document.addEventListener('click', (e) => {
+            if (!e.target.closest('#qualityButton') && !e.target.closest('#qualityMenu')) {
+                qualityMenu.style.display = 'none';
+            }
+        });
+
+        // Variable para controlar la primera carga
+        let isFirstLoad = true;
+        // Initialize app
+        document.addEventListener('DOMContentLoaded', initApp);
+    </script>
+</body>
+</html>
