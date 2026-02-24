@@ -1,7 +1,10 @@
 name: Build TV Lite APK
 
 on:
-  workflow_dispatch: # Permite ejecutarlo manualmente desde la pestaña Actions en GitHub
+  workflow_dispatch:
+
+permissions:
+  contents: write
 
 jobs:
   build:
