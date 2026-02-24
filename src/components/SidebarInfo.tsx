@@ -21,20 +21,20 @@ export const SidebarInfo: React.FC = () => {
     }, [time]);
 
     return (
-        <div className="flex flex-col gap-3 p-4 bg-white/5 rounded-none border border-white/10 mb-4">
-            <div className="flex items-center justify-between">
-                <span className="text-sm font-medium text-green-400">{greeting}</span>
-                <div className="flex items-center gap-2 text-8 font-mono text-[var(--text-secondary)]">
-                    <Clock size={25} />
+        <div className="flex flex-col gap-2 p-2 bg-white/5 rounded-none border border-white/10 mb-4">
+            <div className="flex items-center justify-between px-1">
+                <span className="text-[12px] font-medium text-green-400">{greeting}</span>
+                <div className="flex items-center gap-1.5 font-mono text-[var(--text-secondary)] text-[16px]">
+                    <Clock size={16} />
                     <span>{format(time, 'hh:mm a')}</span>
                 </div>
             </div>
-            <div className="flex items-center justify-between bg-black/30 p-2 rounded-none">
-                <div className="flex items-center gap-2 text-8">
-                    <Users size={22} className="text-green-400" />
-                    <span className="text-[var(--text-secondary)]">En Línea</span>
+            <div className="flex items-center justify-between bg-black/30 p-1.5 rounded-none">
+                <div className="flex items-center gap-1.5 text-[10px]">
+                    <Users size={18} className="text-green-400" />
+                    <span className="text-[var(--text-secondary)] uppercase font-bold tracking-wider">En Línea</span>
                 </div>
-                <span className="text-green-400 font-bold px-2 py-0.5 rounded-none bg-green-400/10 text-8">
+                <span className="text-green-400 font-bold px-1.5 py-0.5 rounded-none bg-green-400/10 text-[10px]">
                     {onlineListeners}
                 </span>
             </div>

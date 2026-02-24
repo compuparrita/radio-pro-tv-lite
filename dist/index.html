@@ -1,16 +1,55 @@
 <!doctype html>
 <html lang="es">
-  <head>
-    <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Radio Streaming Pro</title>
-    <script type="module" crossorigin src="/assets/index-CbMGtdNo.js"></script>
-    <link rel="modulepreload" crossorigin href="/assets/vendor-DVPi_D0H.js">
-    <link rel="modulepreload" crossorigin href="/assets/socket-TjCxX7sJ.js">
-    <link rel="stylesheet" crossorigin href="/assets/index-CmBSW_Hk.css">
-  </head>
-  <body>
-    <div id="root"></div>
-  </body>
+
+<head>
+  <meta charset="UTF-8" />
+  <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Radio Streaming Pro - Escucha en Vivo</title>
+  <meta name="description"
+    content="Radio Streaming Pro: La mejor plataforma para sintonizar tus emisoras de radio y canales de TV favoritos en vivo." />
+  <meta name="referrer" content="strict-origin-when-cross-origin" />
+
+  <!-- Open Graph / Facebook -->
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="/" />
+  <meta property="og:title" content="Radio Streaming Pro - Escucha en Vivo" />
+  <meta property="og:description"
+    content="Sintoniza emisoras de todo el mundo con audio de alta calidad y chat en vivo." />
+  <meta property="og:image" content="/og-image.png" />
+
+  <!-- Twitter -->
+  <meta property="twitter:card" content="summary_large_image" />
+  <meta property="twitter:url" content="/" />
+  <meta property="twitter:title" content="Radio Streaming Pro - Escucha en Vivo" />
+  <meta property="twitter:description"
+    content="Sintoniza emisoras de todo el mundo con audio de alta calidad y chat en vivo." />
+  <meta property="twitter:image" content="/og-image.png" />
+
+  <link rel="manifest" href="/manifest.json" />
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+  <meta name="theme-color" content="#8b5cf6" />
+  <script type="module" crossorigin src="/assets/index-CXSLqboZ.js"></script>
+  <link rel="modulepreload" crossorigin href="/assets/vendor-zq6P3Ky3.js">
+  <link rel="modulepreload" crossorigin href="/assets/socket-Ds9AOPLi.js">
+  <link rel="stylesheet" crossorigin href="/assets/index-q5bgQOaz.css">
+</head>
+
+<body>
+  <div id="root"></div>
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/sw.js')
+          .then(registration => {
+            console.log('SW registered: ', registration);
+          })
+          .catch(registrationError => {
+            console.log('SW registration failed: ', registrationError);
+          });
+      });
+    }
+  </script>
+</body>
+
 </html>

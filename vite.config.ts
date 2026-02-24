@@ -7,7 +7,35 @@ export default defineConfig({
   server: {
     host: '0.0.0.0',  // Listen on all network interfaces (LAN access)
     port: 3000,
-    strictPort: false
+    strictPort: false,
+    proxy: {
+      '/repretel-stream': {
+        target: 'https://d2qsan2ut81n2k.cloudfront.net',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/repretel-stream/, ''),
+        configure: (proxy, _options) => {
+          (proxy as any).on('proxyReq', (proxyReq: any) => {
+            proxyReq.removeHeader('origin');
+            proxyReq.removeHeader('referer');
+          });
+        }
+      },
+      '/repretel-c6': {
+        target: 'https://alba-cr-repretel-c6.stream.mediatiquestream.com',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/repretel-c6/, ''),
+        configure: (proxy, _options) => {
+          (proxy as any).on('proxyReq', (proxyReq: any) => {
+            proxyReq.removeHeader('origin');
+            proxyReq.removeHeader('referer');
+          });
+        }
+      },
+      '/proxy-stream': {
+        target: 'http://localhost:3001',
+        changeOrigin: true
+      }
+    }
   },
   build: {
     sourcemap: false,

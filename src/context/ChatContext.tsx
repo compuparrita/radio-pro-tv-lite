@@ -11,6 +11,7 @@ interface ChatContextType {
     identify: (identity: UserIdentity) => void;
     isIdentified: boolean;
     clearMessages: () => void;
+    deleteMessage: (messageId: string) => void;
     logout: () => void;
     error: string | null;
     unreadCount: number;
@@ -39,6 +40,9 @@ export const ChatProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const logout = () => {
         setUserIdentity(null);
         localStorage.removeItem('chatIdentity');
+        localStorage.removeItem('chatClearedAt');
+        localStorage.removeItem('chatDeletedIds');
+        setMessages([]);
         socketService.disconnect();
         socketService.connect();
     };
@@ -160,13 +164,34 @@ export const ChatProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     };
 
     const clearMessages = () => {
+        const now = Date.now();
+        localStorage.setItem('chatClearedAt', now.toString());
+        localStorage.removeItem('chatDeletedIds'); // Clear individual deletes when history is wiped
         setMessages([]);
     };
+
+    const deleteMessage = (messageId: string) => {
+        // Add to persistent deleted list
+        const deletedIds = JSON.parse(localStorage.getItem('chatDeletedIds') || '[]');
+        if (!deletedIds.includes(messageId)) {
+            deletedIds.push(messageId);
+            localStorage.setItem('chatDeletedIds', JSON.stringify(deletedIds));
+        }
+        // Filter locally
+        setMessages(prev => prev.filter(m => m.id !== messageId));
+    };
+
+    // Filter messages based on persistent clear and individual deletes
+    const filteredMessages = React.useMemo(() => {
+        const clearedAt = parseInt(localStorage.getItem('chatClearedAt') || '0');
+        const deletedIds = JSON.parse(localStorage.getItem('chatDeletedIds') || '[]');
+        return messages.filter(m => m.timestamp > clearedAt && !deletedIds.includes(m.id));
+    }, [messages]);
 
     return (
         <ChatContext.Provider
             value={{
-                messages,
+                messages: filteredMessages,
                 onlineListeners,
                 connectionStatus,
                 userIdentity,
@@ -174,6 +199,7 @@ export const ChatProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 identify,
                 isIdentified: !!userIdentity,
                 clearMessages,
+                deleteMessage,
                 logout,
                 error,
                 unreadCount,

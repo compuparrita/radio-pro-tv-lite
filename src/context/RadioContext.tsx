@@ -1,6 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { Station, RadioContextType } from '../types';
-import { DEFAULT_STATIONS } from '../data/defaultStations';
 
 const RadioContext = createContext<RadioContextType | undefined>(undefined);
 
@@ -13,21 +12,87 @@ export const useRadio = () => {
 };
 
 export const RadioProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-    // Initialize stations from localStorage or use defaults
-    const [stations, setStations] = useState<Station[]>(() => {
-        const saved = localStorage.getItem('radioStations');
-        if (saved) {
-            try {
-                return JSON.parse(saved);
-            } catch (e) {
-                console.error('Failed to parse stations', e);
+    const [stations, setStations] = useState<Station[]>([]);
+    const [isInitialLoad, setIsInitialLoad] = useState(true);
+
+    // Bootstrap stations
+    useEffect(() => {
+        const initStations = async () => {
+            const saved = localStorage.getItem('radioStations');
+            const CURRENT_MIGRATION_VERSION = 15;
+            const savedVersion = parseInt(localStorage.getItem('migrationVersion') || '0');
+
+            if (saved) {
+                try {
+                    let currentStations = JSON.parse(saved);
+
+                    // --- MIGRATION LOGIC (ONLY IF NEEDED FOR EXISTING USERS) ---
+                    if (savedVersion < CURRENT_MIGRATION_VERSION) {
+                        console.log(`[RadioContext] Applying migration v${CURRENT_MIGRATION_VERSION}`);
+                        // Apply any specific migration rules if necessary
+                        // For now, we'll just update the version
+                        localStorage.setItem('migrationVersion', CURRENT_MIGRATION_VERSION.toString());
+                    }
+
+                    setStations(currentStations);
+                } catch (e) {
+                    console.error('Failed to parse saved stations', e);
+                    await fetchDefaultStations();
+                }
+            } else {
+                await fetchDefaultStations();
+                localStorage.setItem('migrationVersion', CURRENT_MIGRATION_VERSION.toString());
             }
-        }
-        return DEFAULT_STATIONS;
-    });
+            setIsInitialLoad(false);
+        };
+
+        const fetchDefaultStations = async () => {
+            try {
+                const response = await fetch('/stations.json', {
+                    headers: {
+                        'ngrok-skip-browser-warning': 'true'
+                    }
+                });
+                if (!response.ok) throw new Error('Failed to fetch stations.json');
+                const data = await response.json();
+                setStations(data);
+                localStorage.setItem('radioStations', JSON.stringify(data));
+            } catch (error) {
+                console.error('Error fetching default stations:', error);
+                // Fallback to empty array or some basic error handling
+                setStations([]);
+            }
+        };
+
+        initStations();
+    }, []);
 
     const [currentStation, setCurrentStation] = useState<Station | null>(null);
     const [isPlaying, setIsPlaying] = useState(false);
+
+    // Initialize activeTab and selectedCategory from localStorage
+    const [activeTab, setActiveTab] = useState<'all' | 'favorites' | 'tv'>(() => {
+        const saved = localStorage.getItem('activeTab');
+        return (saved as 'all' | 'favorites' | 'tv') || 'all';
+    });
+
+    const [selectedCategory, setSelectedCategory] = useState(() => {
+        return localStorage.getItem('selectedCategory') || 'Todas';
+    });
+
+    const radioCategories = ['Noticias', 'Música', 'Deportes', 'Religión', 'Cultura', 'Relax', 'Otros'];
+    const tvCategories = ['Noticias', 'Música tv', 'Cine & Series', 'Documentales', 'Infantil', 'Deportes', 'Relax', 'Otros'];
+
+    const categories = activeTab === 'tv' ? tvCategories : radioCategories;
+
+    // Save activeTab and selectedCategory to localStorage
+    useEffect(() => {
+        localStorage.setItem('activeTab', activeTab);
+    }, [activeTab]);
+
+    useEffect(() => {
+        localStorage.setItem('selectedCategory', selectedCategory);
+    }, [selectedCategory]);
 
     // Initialize volume from localStorage
     const [volume, setVolume] = useState(() => {
@@ -48,18 +113,19 @@ export const RadioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         return [];
     });
 
-    const [recentStations, setRecentStations] = useState<Station[]>([]);
     const [isLoading] = useState(false);
     const [error] = useState<string | null>(null);
 
-    // Initial setup effect (run once)
+    // Initial setup effect (run once after stations are loaded)
     useEffect(() => {
+        if (isInitialLoad || stations.length === 0) return;
+
         const isInitialized = localStorage.getItem('radioInitialized');
 
         if (!isInitialized) {
             localStorage.setItem('radioInitialized', 'true');
             // Default station logic if not initialized
-            const defaultStation = DEFAULT_STATIONS.find(s => s.name === 'DJX Discomovil Radio live') || DEFAULT_STATIONS[0];
+            const defaultStation = stations.find(s => s.name === 'DJX Discomovil Radio live') || stations[0];
             setCurrentStation(defaultStation);
         } else {
             // Recover last station
@@ -75,12 +141,41 @@ export const RadioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
                 setCurrentStation(defaultStation);
             }
         }
-    }, [stations]);
+    }, [stations, isInitialLoad]);
+
+    // Robustness: Handle station deletion if they were current
+    useEffect(() => {
+        if (!isInitialLoad && stations.length > 0 && currentStation) {
+            // Ignore temporary YouTube stations from chat
+            if (currentStation.id.startsWith('yt-')) return;
+
+            const stillExists = stations.find(s => s.id === currentStation.id);
+            if (!stillExists) {
+                // Current station was deleted, fallback to first available or default
+                const fallback = stations.find(s => s.name === 'DJX Discomovil Radio live') || stations[0];
+                setCurrentStation(fallback);
+                localStorage.setItem('lastStationId', fallback.id);
+            }
+        }
+        // If stations were cleared (length 0), we wait for initial load or manual reload
+    }, [stations, currentStation, isInitialLoad]);
+
+    // Robustness: Validate selectedCategory when activeTab changes
+    useEffect(() => {
+        if (!isInitialLoad) {
+            const currentCategories = activeTab === 'tv' ? tvCategories : radioCategories;
+            if (selectedCategory !== 'Todas' && !currentCategories.includes(selectedCategory)) {
+                setSelectedCategory('Todas');
+            }
+        }
+    }, [activeTab, isInitialLoad]);
 
     // Save to localStorage
     useEffect(() => {
-        localStorage.setItem('radioStations', JSON.stringify(stations));
-    }, [stations]);
+        if (!isInitialLoad && stations.length > 0) {
+            localStorage.setItem('radioStations', JSON.stringify(stations));
+        }
+    }, [stations, isInitialLoad]);
 
     // Save favorites to localStorage
     useEffect(() => {
@@ -91,52 +186,36 @@ export const RadioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         }
     }, [favorites]);
 
-    // Save volume to localStorage
+    // Save volume to localStorage (Debounced)
     useEffect(() => {
-        try {
-            localStorage.setItem('volume', volume.toString());
-        } catch (e) {
-            console.error('Failed to save volume', e);
-        }
+        const timer = setTimeout(() => {
+            try {
+                localStorage.setItem('volume', volume.toString());
+            } catch (e) {
+                console.error('Failed to save volume', e);
+            }
+        }, 500);
+        return () => clearTimeout(timer);
     }, [volume]);
 
     const playStation = (station: Station) => {
         setCurrentStation(station);
         setIsPlaying(true);
-
-        // Guardar última emisora escuchada
         localStorage.setItem('lastStationId', station.id);
-
-        // Add to recent
-        setRecentStations(prev => {
-            const filtered = prev.filter(s => s.id !== station.id);
-            return [station, ...filtered].slice(0, 10);
-        });
     };
 
-    const togglePlay = () => {
-        setIsPlaying(!isPlaying);
-    };
+    const togglePlay = () => setIsPlaying(!isPlaying);
 
     const toggleFavorite = (stationId: string) => {
-        setFavorites(prev => {
-            return prev.includes(stationId)
-                ? prev.filter(id => id !== stationId)
-                : [...prev, stationId];
-        });
+        setFavorites(prev => prev.includes(stationId)
+            ? prev.filter(id => id !== stationId)
+            : [...prev, stationId]
+        );
     };
 
-    const addStation = (station: Station) => {
-        setStations(prev => [...prev, station]);
-    };
-
-    const removeStation = (stationId: string) => {
-        setStations(prev => prev.filter(s => s.id !== stationId));
-    };
-
-    const updateStation = (updatedStation: Station) => {
-        setStations(prev => prev.map(s => s.id === updatedStation.id ? updatedStation : s));
-    };
+    const addStation = (station: Station) => setStations(prev => [...prev, station]);
+    const removeStation = (stationId: string) => setStations(prev => prev.filter(s => s.id !== stationId));
+    const updateStation = (updatedStation: Station) => setStations(prev => prev.map(s => s.id === updatedStation.id ? updatedStation : s));
 
     const nextStation = () => {
         if (!currentStation) return;
@@ -152,26 +231,57 @@ export const RadioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         playStation(stations[prevIndex]);
     };
 
+    const importStations = (importedStations: Station[]) => {
+        setStations(prev => {
+            const newStations = [...prev];
+            importedStations.forEach(s => {
+                if (s.name && (s.url || s.iframeUrl)) {
+                    newStations.push({
+                        ...s,
+                        id: Date.now().toString() + Math.random(),
+                        type: s.type || 'audio'
+                    });
+                }
+            });
+            return newStations;
+        });
+    };
+
+    const reorderStations = (reorderedStations: Station[]) => {
+        setStations(reorderedStations);
+    };
+
+    const contextValue = React.useMemo(() => ({
+        stations,
+        currentStation,
+        isPlaying,
+        volume,
+        favorites,
+        isLoading,
+        error,
+        playStation,
+        togglePlay,
+        setVolume,
+        toggleFavorite,
+        addStation,
+        removeStation,
+        updateStation,
+        reorderStations,
+        nextStation,
+        prevStation,
+        setCurrentStation,
+        importStations,
+        activeTab,
+        setActiveTab,
+        selectedCategory,
+        setSelectedCategory,
+        categories,
+        radioCategories,
+        tvCategories
+    }), [stations, currentStation, isPlaying, volume, favorites, isLoading, error, activeTab, selectedCategory, radioCategories, tvCategories, categories]);
+
     return (
-        <RadioContext.Provider value={{
-            stations,
-            currentStation,
-            isPlaying,
-            volume,
-            favorites,
-            recentStations,
-            isLoading,
-            error,
-            playStation,
-            togglePlay,
-            setVolume,
-            toggleFavorite,
-            addStation,
-            removeStation,
-            updateStation,
-            nextStation,
-            prevStation
-        }}>
+        <RadioContext.Provider value={contextValue}>
             {children}
         </RadioContext.Provider>
     );

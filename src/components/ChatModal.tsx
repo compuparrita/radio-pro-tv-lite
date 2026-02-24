@@ -1,11 +1,126 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { MessageCircle, X, Send, Users, Wifi, WifiOff, Trash2, LogOut } from 'lucide-react';
+import { MessageCircle, X, Send, Users, Wifi, WifiOff, Trash2, LogOut, HelpCircle } from 'lucide-react';
 import { useChat } from '../context/ChatContext';
+import { useRadio } from '../context/RadioContext';
+import HelpModal from './HelpModal';
 
 interface ChatModalProps {
     externalOpen?: boolean;
     onOpenChange?: (open: boolean) => void;
 }
+
+const MessageText = ({ text, stations, playStation, setIsOpen, isOwnMessage }: {
+    text: string;
+    stations: any[];
+    playStation: (s: any) => void;
+    setIsOpen: (o: boolean) => void;
+    isOwnMessage: boolean;
+}) => {
+    // Build a regex for station names (memoized for performance)
+    const stationRegex = React.useMemo(() => {
+        if (!stations.length) return null;
+        // Sort by length descending to match longer names first ("Radio FM Pro" before "Radio")
+        const names = [...stations]
+            .sort((a, b) => b.name.length - a.name.length)
+            .map(s => s.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+        // Use non-capturing group (?:...) to prevent duplicates in split()
+        // Removed \b to allow matching names with special characters like parentheses
+        return new RegExp(`(?:${names.join('|')})`, 'gi');
+    }, [stations]);
+
+    // Regex for URLs
+    const urlRegex = /(https?:\/\/[^\s]+)/g;
+    const parts = text.split(urlRegex);
+
+    return (
+        <div className="break-words">
+            {parts.map((part, i) => {
+                if (part.match(urlRegex)) {
+                    const isYouTube = part.includes('youtube.com/watch') || part.includes('youtu.be/');
+                    let ytId = '';
+                    if (isYouTube) {
+                        const match = part.match(/(?:v=|\/)([0-9A-Za-z_-]{11})/);
+                        if (match) ytId = match[1];
+                    }
+
+                    return (
+                        <React.Fragment key={i}>
+                            <a
+                                href={part}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className={`${isOwnMessage ? 'text-sky-200' : 'text-cyan-300'} hover:underline break-all font-bold shadow-sm decoration-2 transition-all`}
+                            >
+                                {part}
+                            </a>
+                            {ytId && (
+                                <div className="mt-2 mb-2 rounded-lg overflow-hidden border-2 border-[var(--primary-color)]/30 shadow-xl max-w-[260px] relative group cursor-pointer"
+                                    onClick={() => {
+                                        const ytStation = {
+                                            id: `yt-${ytId}`,
+                                            name: `YouTube: ${ytId}`,
+                                            url: `https://www.youtube.com/embed/${ytId}`,
+                                            iframeUrl: `https://www.youtube.com/embed/${ytId}`,
+                                            logo: `https://img.youtube.com/vi/${ytId}/mqdefault.jpg`,
+                                            country: 'YouTube',
+                                            type: 'video'
+                                        };
+                                        playStation(ytStation);
+                                        setIsOpen(false);
+                                    }}
+                                >
+                                    <img
+                                        src={`https://img.youtube.com/vi/${ytId}/mqdefault.jpg`}
+                                        alt="YouTube Preview"
+                                        className="w-full h-auto block group-hover:scale-105 transition-transform duration-300"
+                                    />
+                                    <div className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity">
+                                        <div className="bg-[var(--primary-color)] text-white px-3 py-1 rounded-full text-xs font-bold flex items-center gap-1">
+                                            <Send size={12} className="rotate-90" /> Reproducir en App
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+                        </React.Fragment>
+                    );
+                }
+
+                // For non-URL parts, look for station names
+                if (!stationRegex) return <span key={i}>{part}</span>;
+
+                const subParts = part.split(stationRegex);
+                const matches = part.match(stationRegex);
+
+                return (
+                    <React.Fragment key={i}>
+                        {subParts.map((sp, j) => (
+                            <React.Fragment key={j}>
+                                {sp}
+                                {matches && matches[j] && (() => {
+                                    const station = stations.find(s => s.name.toLowerCase() === matches[j].toLowerCase());
+                                    return (
+                                        <button
+                                            onClick={() => {
+                                                if (station) {
+                                                    playStation(station);
+                                                    setIsOpen(false);
+                                                }
+                                            }}
+                                            className={`${isOwnMessage ? 'text-sky-100' : 'text-[var(--primary-color)]'} font-extrabold hover:underline transition-all active:scale-95 decoration-2`}
+                                            title={`Click para escuchar ${matches[j]}`}
+                                        >
+                                            {matches[j]}
+                                        </button>
+                                    );
+                                })()}
+                            </React.Fragment>
+                        ))}
+                    </React.Fragment>
+                );
+            })}
+        </div>
+    );
+};
 
 export const ChatModal: React.FC<ChatModalProps> = ({ externalOpen, onOpenChange }) => {
     const {
@@ -17,24 +132,63 @@ export const ChatModal: React.FC<ChatModalProps> = ({ externalOpen, onOpenChange
         identify,
         isIdentified,
         clearMessages,
+        deleteMessage,
         logout,
         error: contextError,
-        unreadCount,
         setModalOpen
     } = useChat();
+
+    const { stations, playStation } = useRadio();
 
     const [isOpen, setIsOpen] = useState(false);
     const [currentMessage, setCurrentMessage] = useState('');
     const [name, setName] = useState('');
     const [phone, setPhone] = useState('');
     const [error, setError] = useState('');
+    const [isHelpOpen, setIsHelpOpen] = useState(false);
     const messagesEndRef = useRef<HTMLDivElement>(null);
+    const inputRef = useRef<HTMLInputElement>(null);
     const [canSend, setCanSend] = useState(true);
+    const [suggestions, setSuggestions] = useState<any[]>([]);
+    const [selectedIndex, setSelectedIndex] = useState(0);
+    const [showSuggestions, setShowSuggestions] = useState(false);
 
-    // Auto-scroll to bottom when new messages arrive
+    // Auto-scroll to bottom when new messages arrive or modal opens
     useEffect(() => {
-        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-    }, [messages]);
+        if (isOpen) {
+            const scrollToBottom = (instant = false) => {
+                if (messagesEndRef.current) {
+                    messagesEndRef.current.scrollIntoView({
+                        behavior: instant ? 'auto' : 'smooth',
+                        block: 'end'
+                    });
+                }
+            };
+
+            // 1. Instant scroll attempt
+            scrollToBottom(true);
+
+            // 2. Delayed scroll for animations/rendering stabilization
+            const timerScroll = setTimeout(() => scrollToBottom(), 100);
+
+            // Lock body scroll
+            document.body.style.overflow = 'hidden';
+
+            // 3. Focus and secondary scroll
+            const timerFocus = setTimeout(() => {
+                inputRef.current?.focus();
+                scrollToBottom();
+            }, 300);
+
+            return () => {
+                clearTimeout(timerScroll);
+                clearTimeout(timerFocus);
+                document.body.style.overflow = '';
+            };
+        } else {
+            document.body.style.overflow = '';
+        }
+    }, [messages, isOpen]);
 
     // Sync with external control
     useEffect(() => {
@@ -103,6 +257,52 @@ export const ChatModal: React.FC<ChatModalProps> = ({ externalOpen, onOpenChange
         }, 6000);
     };
 
+    // Autocomplete logic
+    useEffect(() => {
+        const words = currentMessage.split(/\s+/);
+        const lastWord = words[words.length - 1].toLowerCase();
+
+        if (lastWord.length >= 3) {
+            const filtered = stations
+                .filter(s => s.name.toLowerCase().includes(lastWord))
+                .slice(0, 5); // Limit to top 5 suggestions
+
+            if (filtered.length > 0) {
+                setSuggestions(filtered);
+                setShowSuggestions(true);
+                setSelectedIndex(0);
+            } else {
+                setShowSuggestions(false);
+            }
+        } else {
+            setShowSuggestions(false);
+        }
+    }, [currentMessage, stations]);
+
+    const handleSelectSuggestion = (suggestion: any) => {
+        const words = currentMessage.split(/\s+/);
+        words[words.length - 1] = suggestion.name;
+        setCurrentMessage(words.join(' ') + ' ');
+        setShowSuggestions(false);
+    };
+
+    const handleKeyDown = (e: React.KeyboardEvent) => {
+        if (showSuggestions) {
+            if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                setSelectedIndex((prev: number) => (prev + 1) % suggestions.length);
+            } else if (e.key === 'ArrowUp') {
+                e.preventDefault();
+                setSelectedIndex((prev: number) => (prev - 1 + suggestions.length) % suggestions.length);
+            } else if (e.key === 'Enter' || e.key === 'Tab') {
+                e.preventDefault();
+                handleSelectSuggestion(suggestions[selectedIndex]);
+            } else if (e.key === 'Escape') {
+                setShowSuggestions(false);
+            }
+        }
+    };
+
     const formatTime = (timestamp: number) => {
         const date = new Date(timestamp);
         return date.toLocaleTimeString('es-ES', {
@@ -113,25 +313,10 @@ export const ChatModal: React.FC<ChatModalProps> = ({ externalOpen, onOpenChange
 
     return (
         <>
-            {/* Floating Chat Button - Desktop Only */}
-            {!isOpen && (
-                <button
-                    onClick={() => setIsOpen(true)}
-                    className="hidden md:flex fixed bottom-6 right-6 z-40 w-16 h-10 rounded-full bg-gradient-to-br from-[var(--primary-color)] to-[var(--secondary-color)] text-white shadow-2xl hover:scale-110 transition-transform items-center justify-center"
-                    title="Abrir chat"
-                >
-                    <MessageCircle size={28} />
-                    {unreadCount > 0 && (
-                        <span className="absolute -top-2 -right-2 bg-red-500 text-white text-xs font-bold rounded-full w-6 h-6 flex items-center justify-center">
-                            {unreadCount > 99 ? '99+' : unreadCount}
-                        </span>
-                    )}
-                </button>
-            )}
 
             {/* Chat Modal */}
             {isOpen && (
-                <div className="fixed inset-0 z-[999] flex items-end md:items-center justify-end md:justify-end p-0 md:p-6">
+                <div className="fixed inset-0 z-[99999] flex items-start md:items-end justify-end p-0 md:p-1 md:pr-6">
                     {/* Backdrop (mobile only) */}
                     <div
                         className="absolute inset-0 bg-black/50"
@@ -139,13 +324,13 @@ export const ChatModal: React.FC<ChatModalProps> = ({ externalOpen, onOpenChange
                     />
 
                     {/* Modal Content */}
-                    <div className="relative w-full md:w-96 h-full md:h-[600px] bg-[var(--dark-surface)] rounded-t-2xl md:rounded-2xl shadow-2xl flex flex-col animate-slide-in-right">
+                    <div className="relative w-full md:w-96 h-full md:h-[calc(min(1000px,100vh-var(--header-final-height,70px)-30px))] bg-[var(--dark-surface)] rounded-none md:rounded-lg shadow-2xl flex flex-col animate-slide-in-right">
                         {/* Header */}
-                        <div className="p-4 border-b border-[var(--dark-border)] flex items-center justify-between bg-gradient-to-r from-[var(--primary-color)] to-[var(--secondary-color)] rounded-t-2xl">
-                            <div className="flex items-center gap-3">
-                                <MessageCircle size={24} className="text-white" />
+                        <div className="p-2 border-b border-[var(--dark-border)] flex items-center justify-between bg-gradient-to-r from-[var(--primary-color)] to-[var(--secondary-color)] rounded-none">
+                            <div className="flex items-center gap-2">
+                                <MessageCircle size={20} className="text-white" />
                                 <div>
-                                    <h3 className="text-white font-bold text-lg drop-shadow-md">
+                                    <h3 className="text-white font-bold text-sm drop-shadow-md">
                                         {isIdentified && userIdentity ? userIdentity.name : 'Chat en Vivo'}
                                     </h3>
                                     <div className="flex items-center gap-2 text-xs text-white/90 drop-shadow-md">
@@ -167,6 +352,13 @@ export const ChatModal: React.FC<ChatModalProps> = ({ externalOpen, onOpenChange
                                 </div>
                             </div>
                             <div className="flex items-center">
+                                <button
+                                    onClick={() => setIsHelpOpen(true)}
+                                    className="text-white hover:bg-white/20 p-2 rounded-lg transition-colors mr-1"
+                                    title="Ayuda"
+                                >
+                                    <HelpCircle size={20} />
+                                </button>
                                 {isIdentified && (
                                     <button
                                         onClick={logout}
@@ -251,7 +443,7 @@ export const ChatModal: React.FC<ChatModalProps> = ({ externalOpen, onOpenChange
                         {/* Chat Messages */}
                         {isIdentified && (
                             <>
-                                <div className="flex-1 overflow-y-auto p-4 space-y-3 custom-scrollbar">
+                                <div className="flex-1 overflow-y-auto p-2 space-y-2 custom-scrollbar">
                                     {messages.length === 0 ? (
                                         <div className="text-center text-[var(--text-secondary)] py-12">
                                             <MessageCircle size={48} className="mx-auto mb-3 opacity-50" />
@@ -264,7 +456,7 @@ export const ChatModal: React.FC<ChatModalProps> = ({ externalOpen, onOpenChange
                                             return (
                                                 <div
                                                     key={msg.id}
-                                                    className={`flex ${isOwnMessage ? 'justify-end' : 'justify-start'}`}
+                                                    className={`flex group ${isOwnMessage ? 'justify-end' : 'justify-start'}`}
                                                 >
                                                     <div
                                                         className={`max-w-[80%] rounded-2xl px-4 py-2 ${isOwnMessage
@@ -277,9 +469,24 @@ export const ChatModal: React.FC<ChatModalProps> = ({ externalOpen, onOpenChange
                                                                 {msg.userName}
                                                             </div>
                                                         )}
-                                                        <div className="break-words">{msg.message}</div>
-                                                        <div className="text-xs opacity-70 mt-1 text-right">
-                                                            {formatTime(msg.timestamp)}
+                                                        <MessageText
+                                                            text={msg.message}
+                                                            stations={stations}
+                                                            playStation={playStation}
+                                                            setIsOpen={setIsOpen}
+                                                            isOwnMessage={isOwnMessage}
+                                                        />
+                                                        <div className="flex items-center justify-between mt-1 gap-2">
+                                                            <button
+                                                                onClick={() => deleteMessage(msg.id)}
+                                                                className="opacity-0 group-hover:opacity-40 hover:!opacity-90 transition-opacity p-0.5 text-[var(--text-primary)]"
+                                                                title="Eliminar mensaje"
+                                                            >
+                                                                <X size={12} />
+                                                            </button>
+                                                            <div className="text-xs opacity-70">
+                                                                {formatTime(msg.timestamp)}
+                                                            </div>
                                                         </div>
                                                     </div>
                                                 </div>
@@ -289,10 +496,29 @@ export const ChatModal: React.FC<ChatModalProps> = ({ externalOpen, onOpenChange
                                     <div ref={messagesEndRef} />
                                 </div>
 
+                                {showSuggestions && (
+                                    <div className="mx-2 mb-2 bg-[var(--dark-surface)] border border-[var(--dark-border)] shadow-xl overflow-hidden rounded-none">
+                                        {suggestions.map((s: any, idx: number) => (
+                                            <button
+                                                key={s.id}
+                                                type="button"
+                                                onClick={() => handleSelectSuggestion(s)}
+                                                className={`w-full text-left px-4 py-2 text-sm transition-colors flex items-center gap-2 ${idx === selectedIndex ? 'bg-[var(--primary-color)] text-white' : 'hover:bg-white/5 text-[var(--text-primary)]'
+                                                    }`}
+                                            >
+                                                <Wifi size={14} className="opacity-50" />
+                                                <span className="truncate flex-1">{s.name}</span>
+                                                <span className="text-[10px] opacity-50 uppercase">{s.country}</span>
+                                            </button>
+                                        ))}
+                                    </div>
+                                )}
+
                                 {/* Message Input */}
                                 <form
                                     onSubmit={handleSendMessage}
-                                    className="p-4 border-t border-[var(--dark-border)] bg-[var(--dark-surface)]"
+                                    onKeyDown={handleKeyDown}
+                                    className="p-2 border-t border-[var(--dark-border)] bg-[var(--dark-surface)]"
                                 >
                                     {(error || contextError) && (
                                         <div className="text-red-400 text-xs mb-2 text-center">
@@ -301,6 +527,7 @@ export const ChatModal: React.FC<ChatModalProps> = ({ externalOpen, onOpenChange
                                     )}
                                     <div className="flex gap-2">
                                         <input
+                                            ref={inputRef}
                                             type="text"
                                             value={currentMessage}
                                             onChange={(e) => setCurrentMessage(e.target.value)}
@@ -326,6 +553,11 @@ export const ChatModal: React.FC<ChatModalProps> = ({ externalOpen, onOpenChange
                     </div>
                 </div>
             )}
+
+            <HelpModal
+                isOpen={isHelpOpen}
+                onClose={() => setIsHelpOpen(false)}
+            />
         </>
     );
 };

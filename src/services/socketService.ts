@@ -2,8 +2,10 @@ import { io, Socket } from 'socket.io-client';
 import { ChatMessage, UserIdentity } from '../types/chat';
 
 // In production (when served from the same backend), undefined lets socket.io connect to the same origin.
-// In development, we default to localhost:3001.
-const SERVER_URL = import.meta.env.PROD ? undefined : (import.meta.env.VITE_SOCKET_URL || 'http://localhost:3001');
+// In development, we use the current hostname to support LAN and tunnel access (Ngrok).
+const SERVER_URL = import.meta.env.PROD
+    ? undefined
+    : (import.meta.env.VITE_SOCKET_URL || `http://${window.location.hostname}:3001`);
 
 class SocketService {
     private socket: Socket | null = null;
@@ -16,7 +18,10 @@ class SocketService {
             transports: ['websocket', 'polling'],
             reconnection: true,
             reconnectionDelay: 3000, // 3 seconds between attempts
-            reconnectionAttempts: 3  // Only try 3 times
+            reconnectionAttempts: 3,  // Only try 3 times
+            extraHeaders: {
+                "ngrok-skip-browser-warning": "true"
+            }
         });
 
         // Setup event forwarding

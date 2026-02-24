@@ -13,7 +13,7 @@ export const MobileNav: React.FC<MobileNavProps> = ({ onChatClick, onThemeClick 
     const { unreadCount } = useChat();
 
     return (
-        <div className="md:hidden fixed bottom-0 left-0 right-0 z-30 bg-[var(--dark-surface)] border-t border-[var(--dark-border)] shadow-lg">
+        <div className="lg:hidden fixed bottom-0 left-0 right-0 z-30 bg-[var(--dark-surface)] border-t border-[var(--dark-border)]">
             <div className="flex items-center justify-between py-3 px-2">
                 {/* Theme Toggle - Left Side */}
                 <button

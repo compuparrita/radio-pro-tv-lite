@@ -2,12 +2,83 @@ const express = require('express');
 const { createServer } = require('http');
 const { Server } = require('socket.io');
 const cors = require('cors');
-const bcrypt = require('bcrypt');
+// const bcrypt = require('bcrypt');
+const bcrypt = require('bcryptjs');
+const { createProxyMiddleware } = require('http-proxy-middleware');
 const DOMPurify = require('isomorphic-dompurify');
 require('dotenv').config();
 
 const app = express();
 const httpServer = createServer(app);
+
+// Proxy configuration for Repretel (CORS workaround)
+const repretelProxy = createProxyMiddleware({
+    target: 'https://d2qsan2ut81n2k.cloudfront.net',
+    changeOrigin: true,
+    pathRewrite: {
+        '^/repretel-stream': '',
+    },
+    on: {
+        proxyReq: (proxyReq, req, res) => {
+            proxyReq.removeHeader('origin');
+            proxyReq.removeHeader('referer');
+            proxyReq.setHeader('ngrok-skip-browser-warning', 'true');
+        },
+    },
+});
+
+const repretelC6Proxy = createProxyMiddleware({
+    target: 'https://alba-cr-repretel-c6.stream.mediatiquestream.com',
+    changeOrigin: true,
+    pathRewrite: {
+        '^/repretel-c6': '',
+    },
+    on: {
+        proxyReq: (proxyReq, req, res) => {
+            proxyReq.removeHeader('origin');
+            proxyReq.removeHeader('referer');
+            proxyReq.setHeader('ngrok-skip-browser-warning', 'true');
+        },
+    },
+});
+
+app.use('/repretel-stream', repretelProxy);
+app.use('/repretel-c6', repretelC6Proxy);
+
+// Dynamic Proxy for any stream (useful for user-added stations)
+app.use('/proxy-stream', (req, res, next) => {
+    const targetUrl = req.query.url;
+    if (!targetUrl) return res.status(400).send('Falta el parámetro url');
+
+    try {
+        const url = new URL(targetUrl);
+        const dynamicProxy = createProxyMiddleware({
+            target: url.origin,
+            changeOrigin: true,
+            pathRewrite: (path, req) => {
+                const search = new URL(req.url, `http://${req.headers.host}`).searchParams.get('url');
+                return new URL(search).pathname + new URL(search).search;
+            },
+            on: {
+                proxyReq: (proxyReq) => {
+                    proxyReq.removeHeader('origin');
+                    proxyReq.removeHeader('referer');
+                    proxyReq.removeHeader('cookie');
+                    proxyReq.setHeader('ngrok-skip-browser-warning', 'true');
+                },
+                error: (err, req, res) => {
+                    console.error('Proxy Error for URL:', targetUrl, err);
+                    if (!res.headersSent) {
+                        res.status(502).send('Error de comunicación con el origen');
+                    }
+                }
+            },
+        });
+        return dynamicProxy(req, res, next);
+    } catch (error) {
+        return res.status(400).send('URL inválida');
+    }
+});
 
 // CORS configuration
 app.use(cors({

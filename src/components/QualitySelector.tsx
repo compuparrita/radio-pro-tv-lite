@@ -49,39 +49,44 @@ export const QualitySelector: React.FC<QualitySelectorProps> = ({
     };
 
     return (
-        <div ref={dropdownRef} className="relative">
+        <div ref={dropdownRef} className="relative group/quality">
             <button
                 onClick={(e) => {
                     e.stopPropagation();
                     setIsOpen(!isOpen);
                 }}
-                className="quality-selector-trigger p-2 rounded-full transition-transform hover:scale-110 active:scale-95 shadow-lg flex items-center justify-center translate-y-[-2px] z-50"
+                className={`
+                    quality-selector-trigger p-2.5 rounded-none transition-all duration-300
+                    hover:scale-110 active:scale-95 shadow-lg flex items-center justify-center 
+                    z-[60] relative
+                    ${isOpen ? 'bg-red-600 text-white is-open' : 'bg-black/70 text-white hover:bg-black/90'}
+                `}
                 style={{
-                    backgroundColor: 'rgba(0, 0, 0, 0.7)',
-                    color: 'white',
                     border: 'none',
                     outline: 'none',
-                    display: 'flex'
                 }}
                 title={`Quality: ${getCurrentLabel()}`}
             >
-                <Settings size={22} className={isOpen ? 'rotate-90 transition-transform' : 'transition-transform'} />
+                <Settings size={24} className={`transition-transform duration-300 ${isOpen ? 'rotate-90' : ''}`} />
             </button>
 
             {isOpen && (
                 <div
-                    className="absolute top-0 right-10 md:top-10 md:right-0 min-w-[140px] bg-red-600/95 backdrop-blur-md rounded-lg shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200 z-50 max-h-[60vh] overflow-y-auto custom-scrollbar ring-1 ring-white/10"
+                    className="absolute top-11 right-0 min-w-[105px] bg-red-600/95 backdrop-blur-xl rounded-none shadow-[0_10px_30px_rgba(0,0,0,0.5)] z-[100] border border-white/10"
+                    style={{
+                        padding: '3px 0'
+                    }}
                 >
-                    <div className="flex flex-col py-1">
+                    <div className="flex flex-col">
                         {qualityLevels.map((level) => {
                             const isSelected = isAutoMode ? level.index === -1 : level.index === currentLevel;
 
                             let label = level.label;
                             if (level.index === -1 && isAutoMode) {
                                 const currentRes = qualityLevels.find(l => l.index === currentLevel);
-                                if (currentRes) {
-                                    label = `Auto (${currentRes.label})`;
-                                }
+                                label = currentRes ? `Auto (${currentRes.label})` : 'Auto';
+                            } else if (level.index === -1) {
+                                label = 'Auto';
                             }
 
                             return (
@@ -93,21 +98,40 @@ export const QualitySelector: React.FC<QualitySelectorProps> = ({
                                         setIsOpen(false);
                                     }}
                                     className={`
-                                        relative px-3 py-3 text-white text-xs md:text-sm font-medium
-                                        transition-colors w-full text-left whitespace-nowrap
-                                        flex items-center gap-1.5
-                                        ${isSelected ? 'bg-black/20' : 'hover:bg-black/10'}
+                                        relative px-2.5 py-2 text-white transition-all duration-200 w-full text-left whitespace-nowrap
+                                        ${isSelected ? 'bg-black/30' : 'hover:bg-black/10'}
                                     `}
+                                    style={{
+                                        border: 'none',
+                                        outline: 'none',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '0',
+                                        cursor: 'pointer'
+                                    }}
                                 >
-                                    {/* Indicators Container - Now on the left */}
-                                    <span className="inline-flex items-center justify-center flex-shrink-0 min-w-[12px]">
-                                        {isSelected && (
-                                            <div className="w-2 h-2 rounded-full bg-green-400 shadow-[0_0_8px_rgba(74,222,128,0.8)]" />
-                                        )}
-                                    </span>
+                                    {/* Column for the dot */}
+                                    <div style={{ width: '18px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                                        <div
+                                            style={{
+                                                width: '6px',
+                                                height: '6px',
+                                                borderRadius: '50%',
+                                                backgroundColor: isSelected ? '#4ade80' : 'transparent',
+                                                boxShadow: isSelected ? '0 0 8px rgba(74,222,128,0.8)' : 'none'
+                                            }}
+                                        />
+                                    </div>
 
                                     {/* Text Label */}
-                                    <span>{label}</span>
+                                    <span style={{
+                                        fontWeight: isSelected ? '700' : '500',
+                                        opacity: isSelected ? 1 : 0.8,
+                                        fontSize: '0.85rem',
+                                        lineHeight: '1'
+                                    }}>
+                                        {label}
+                                    </span>
                                 </button>
                             );
                         })}

@@ -4,12 +4,13 @@
 
 :root {
   --primary-color: #8b5cf6;
-  /* Modern Violet */
+  /* Modern Violet / Paleta de colores: https://rgbacolorpicker.com/ */
   --secondary-color: #6366f1;
   /* Indigo */
   --accent-color: #ec4899;
   /* Pink */
   --success-color: #10b981;
+  --focus-ring: #ffffff;
   --warning-color: #f59e0b;
   --danger-color: #ef4444;
   --dark-bg: #030712;
@@ -34,16 +35,26 @@ body {
   color: var(--text-primary);
   line-height: 1.6;
   transition: background-color 0.3s ease;
+  overflow-x: hidden;
 }
 
 body.light-mode {
-  --dark-bg: #f9fafb;
+  --primary-color: #6366f1;
+  /* Indigo 500 - Softer */
+  --secondary-color: #818cf8;
+  /* Indigo 400 */
+  --dark-bg: #fdfcff;
+  /* Ultra white with hint of lavender */
   --dark-surface: #ffffff;
-  --dark-border: rgba(0, 0, 0, 0.05);
-  --text-primary: #111827;
-  --text-secondary: #4b5563;
-  --glass-bg: rgba(255, 255, 255, 0.7);
-  --glass-border: rgba(0, 0, 0, 0.05);
+  --dark-border: rgba(0, 0, 0, 0.04);
+  --text-primary: #1e293b;
+  /* Slate 800 */
+  --text-secondary: #64748b;
+  /* Slate 500 */
+  --glass-bg: rgba(255, 255, 255, 0.95);
+  --glass-border: rgba(0, 0, 0, 0.03);
+  background: #f8fafc;
+  /* Slate 50 */
 }
 
 body.youth-mode {
@@ -75,13 +86,11 @@ body.youth-mode {
   -webkit-backdrop-filter: blur(16px);
   border: 1px solid var(--glass-border);
   border-radius: 0;
-  box-shadow: var(--shadow);
   transition: all 0.3s ease;
 }
 
 .glass:hover {
   border-color: rgba(255, 255, 255, 0.15);
-  box-shadow: var(--shadow-xl);
 }
 
 body.light-mode .glass {
@@ -92,7 +101,7 @@ body.light-mode .glass {
 
 /* Custom scrollbar for station list */
 ::-webkit-scrollbar {
-  width: 6px;
+  width: 12px;
 }
 
 ::-webkit-scrollbar-track {
@@ -140,7 +149,7 @@ body.light-mode .glass {
 
 /* Custom scrollbar for chat */
 .custom-scrollbar::-webkit-scrollbar {
-  width: 6px;
+  width: 12px;
 }
 
 .custom-scrollbar::-webkit-scrollbar-track {
@@ -171,9 +180,16 @@ body.light-mode .glass {
 }
 
 /* Auto-hide Quality Selector when inactive */
-.video-js.vjs-user-inactive .quality-selector-trigger {
-  opacity: 0;
-  pointer-events: none;
+.video-js.vjs-user-inactive .quality-selector-trigger:not(.is-open) {
+  opacity: 0 !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
+}
+
+.video-js.vjs-user-active .quality-selector-trigger {
+  opacity: 1 !important;
+  visibility: visible !important;
+  pointer-events: auto !important;
 }
 
 /* Christmas Animations */
@@ -240,5 +256,101 @@ body.light-mode .glass {
     50% {
       transform: translateY(12px) rotate(3deg);
     }
+  }
+}
+
+/* Soporte para notch en móviles - Sticky Player */
+@media (max-width: 767px) {
+  .sticky.top-0 {
+    /* Usamos el valor del área segura si existe, de lo contrario 0 */
+    top: env(safe-area-inset-top, 0px) !important;
+  }
+}
+
+/* SMART TV FOCUS STYLES */
+button:focus-visible {
+  outline: 3px solid var(--primary-color) !important;
+  outline-offset: 2px !important;
+  background: rgba(255, 255, 255, 0.2) !important;
+  scale: 1.1;
+  box-shadow: 0 0 20px var(--primary-color);
+  transition: all 0.2s ease;
+}
+
+.tv-focus-primary:focus-visible {
+  outline: 4px solid white !important;
+  scale: 1.15;
+  box-shadow: 0 0 30px rgba(255, 255, 255, 0.5);
+}
+
+/* CINEMA MODE - Mobile Landscape Optimization */
+@media (max-width: 1023px) and (orientation: landscape) and (max-height: 700px) {
+
+  /* Hide non-essential UI */
+  .header-container,
+  .mobile-nav-container,
+  .footer-container,
+  .mobile-list-container {
+    display: none !important;
+  }
+
+  /* Remove padding from main container */
+  .min-h-screen {
+    padding-bottom: 0 !important;
+  }
+
+  body {
+    overflow: hidden !important;
+  }
+
+  /* Maximize player space */
+  .player-main-media {
+    position: fixed !important;
+    top: 0 !important;
+    left: 0 !important;
+    width: 100vw !important;
+    height: 100vh !important;
+    z-index: 9999 !important;
+    background: black !important;
+    max-height: none !important;
+    border: none !important;
+  }
+
+  /* Force internal video containers to fill the fixed viewport */
+  .player-tech-container,
+  .player-aspect-wrapper,
+  .player-aspect-wrapper>div,
+  .video-js,
+  .video-js .vjs-tech,
+  .video-js video,
+  iframe {
+    width: 100vw !important;
+    height: 100vh !important;
+    max-height: 100vh !important;
+    min-width: 100vw !important;
+    min-height: 100vh !important;
+    aspect-ratio: auto !important;
+    object-fit: contain !important;
+    /* Forces fill without cropping important parts */
+    padding: 0 !important;
+    margin: 0 !important;
+    border: none !important;
+    /* Removed 'fixed' from children to prevent stacking context issues */
+    /* Position is handled by parent .player-main-media being fixed */
+  }
+
+  /* Ensure the video-js container itself is also strictly sized */
+  .video-js {
+    position: absolute !important;
+    top: 0 !important;
+    left: 0 !important;
+  }
+
+  /* Specifically for VideoJS to remove its internal aspect ratio padding if any */
+  .video-js.vjs-16-9,
+  .video-js.vjs-4-3,
+  .video-js.vjs-fluid {
+    padding-top: 0 !important;
+    height: 100vh !important;
   }
 }
