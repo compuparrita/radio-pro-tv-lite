@@ -1,7 +1,7 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
-import { resolve } from 'path'
 
+// Usamos rutas relativas para evitar problemas de __dirname en ESM
 export default defineConfig({
     plugins: [react()],
     build: {
@@ -9,7 +9,7 @@ export default defineConfig({
         emptyOutDir: true,
         rollupOptions: {
             input: {
-                main: resolve(__dirname, 'public/tv-lite/index.html'),
+                main: './public/tv-lite/index.html',
             },
         },
     },

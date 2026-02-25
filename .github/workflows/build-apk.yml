@@ -25,9 +25,19 @@ jobs:
 
       - name: Build TV Lite web assets
         run: |
-          npm run build:tv-lite
+          npm run build:tv-lite -- --verbose
           echo "Verifying build output..."
           ls -R dist-tv-lite
+        continue-on-error: true
+
+      - name: Debug on failure
+        if: failure()
+        run: |
+          echo "Listing all files for debugging..."
+          find . -maxdepth 3 -not -path '*/.*'
+          echo "Checking package.json scripts..."
+          cat package.json | grep -A 5 "scripts"
+          exit 1
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
