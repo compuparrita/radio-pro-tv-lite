@@ -8,7 +8,7 @@ export default defineConfig({
         emptyOutDir: true,
         rollupOptions: {
             input: {
-                main: 'public/tv-lite/index.html',
+                main: './public/tv-lite/index.html',
             },
         },
     },
