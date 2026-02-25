@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
-    "build:tv-lite": "npx cap sync android --config capacitor.tv-lite.config.json",
+    "build:tv-lite": "vite build --config vite.tv-lite.config.ts && npx cap sync android --config capacitor.tv-lite.config.json",
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
     "preview": "vite preview"
   },
