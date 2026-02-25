@@ -24,7 +24,12 @@ jobs:
         run: npm install
 
       - name: Build TV Lite web assets
-        run: npm run build:tv-lite
+        run: |
+          mkdir -p dist-tv-lite
+          cp public/tv-lite/index.html dist-tv-lite/index.html
+          cp public/stations.json dist-tv-lite/stations.json
+          [ -f public/sw.js ] && cp public/sw.js dist-tv-lite/sw.js || echo "sw.js not found, skipping"
+          npm run build:tv-lite
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
