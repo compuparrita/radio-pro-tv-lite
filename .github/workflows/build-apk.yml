@@ -25,11 +25,34 @@ jobs:
 
       - name: Build TV Lite web assets
         run: |
+          echo "Checking current directory and structure..."
+          pwd
+          ls -R public
+          
           mkdir -p dist-tv-lite
-          ls -R public || echo "Public folder structure error"
-          cp $(find public -name "index.html" | grep "tv-lite") dist-tv-lite/index.html || cp public/tv-lite/index.html dist-tv-lite/index.html
-          cp $(find public -name "stations.json") dist-tv-lite/stations.json || cp public/stations.json dist-tv-lite/stations.json
-          [ -f public/sw.js ] && cp public/sw.js dist-tv-lite/sw.js || echo "sw.js not found, skipping"
+          
+          echo "Copying index.html..."
+          if [ -f public/tv-lite/index.html ]; then
+            cp public/tv-lite/index.html dist-tv-lite/index.html
+          else
+            echo "ERROR: public/tv-lite/index.html not found"
+            exit 1
+          fi
+          
+          echo "Copying stations.json..."
+          if [ -f public/stations.json ]; then
+            cp public/stations.json dist-tv-lite/stations.json
+          else
+            echo "ERROR: public/stations.json not found"
+            exit 1
+          fi
+          
+          echo "Copying sw.js (optional)..."
+          if [ -f public/sw.js ]; then
+            cp public/sw.js dist-tv-lite/sw.js
+          fi
+          
+          echo "Running build:tv-lite..."
           npm run build:tv-lite
 
       - name: Set up JDK 17
