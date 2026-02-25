@@ -25,20 +25,11 @@ jobs:
 
       - name: Build TV Lite web assets
         run: |
-          node -v
-          npm list vite || echo "Vite not found in dependencies"
-          npm run build:tv-lite -- --verbose
-          echo "Verifying build output..."
-          ls -R dist-tv-lite
+          npm run build:tv-lite
 
-      - name: Debug on failure
-        if: failure()
+      - name: Verify build output
         run: |
-          echo "DUMPING REPO STRUCTURE..."
-          find . -maxdepth 3 -not -path '*/.*'
-          echo "CHECKING package.json..."
-          cat package.json
-          exit 1
+          ls -R dist-tv-lite
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
