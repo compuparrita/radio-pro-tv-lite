@@ -25,32 +25,38 @@ jobs:
 
       - name: Build TV Lite web assets
         run: |
-          echo "Checking current directory and structure..."
-          pwd
-          ls -R public
+          echo "Full directory structure for diagnostics:"
+          find . -maxdepth 3 -not -path '*/.*'
           
           mkdir -p dist-tv-lite
           
-          echo "Copying index.html..."
-          if [ -f public/tv-lite/index.html ]; then
-            cp public/tv-lite/index.html dist-tv-lite/index.html
+          echo "Locating and copying index.html..."
+          INDEX_PATH=$(find public -name "index.html" | grep "tv-lite" | head -n 1)
+          if [ -n "$INDEX_PATH" ]; then
+            cp "$INDEX_PATH" dist-tv-lite/index.html
+            echo "Copied $INDEX_PATH to dist-tv-lite/index.html"
           else
-            echo "ERROR: public/tv-lite/index.html not found"
+            echo "ERROR: index.html not found in public/tv-lite"
+            ls -R public/tv-lite || echo "public/tv-lite folder missing"
             exit 1
           fi
           
-          echo "Copying stations.json..."
-          if [ -f public/stations.json ]; then
-            cp public/stations.json dist-tv-lite/stations.json
+          echo "Locating and copying stations.json..."
+          STATIONS_PATH=$(find public -name "stations.json" | head -n 1)
+          if [ -n "$STATIONS_PATH" ]; then
+            cp "$STATIONS_PATH" dist-tv-lite/stations.json
+            echo "Copied $STATIONS_PATH to dist-tv-lite/stations.json"
           else
-            echo "ERROR: public/stations.json not found"
+            echo "ERROR: stations.json not found anywhere in public/"
+            ls -R public || echo "public folder missing"
             exit 1
           fi
           
-          echo "Copying sw.js (optional)..."
-          if [ -f public/sw.js ]; then
-            cp public/sw.js dist-tv-lite/sw.js
-          fi
+          echo "Copying optional assets..."
+          find public -name "sw.js" -exec cp {} dist-tv-lite/sw.js \; || echo "sw.js not found"
+          
+          echo "Contents of dist-tv-lite:"
+          ls -la dist-tv-lite
           
           echo "Running build:tv-lite..."
           npm run build:tv-lite
