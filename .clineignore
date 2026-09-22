@@ -1,0 +1,19 @@
+# Evitar que toque dependencias y build
+node_modules/
+dist/
+build/
+.next/
+
+# Proteger variables de entorno y claves
+.env
+.env.local
+.env.*
+
+# Proteger historial de git
+.git/
+
+# Evitar modificar backups o archivos comprimidos
+*.bak
+*.zip
+*.tar.gz
+legacy_backup/
