@@ -9,7 +9,7 @@ interface WatchPartyModalProps {
 
 type WatchPartyTab = 'create' | 'join';
 
-const inputClassName = 'h-12 w-full rounded-xl border border-zinc-700 bg-zinc-800/70 px-4 text-sm text-white placeholder:text-zinc-500 outline-none transition focus:border-cyan-400/60 focus:ring-2 focus:ring-cyan-400/15';
+const inputClassName = 'h-12 w-full rounded-xl border border-zinc-700 bg-zinc-800/70 px-4 text-sm text-white placeholder:text-zinc-500 outline-none transition focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20';
 
 function WatchPartyModal({ isOpen, onClose }: WatchPartyModalProps) {
     const [activeTab, setActiveTab] = useState<WatchPartyTab>('create');
@@ -36,7 +36,7 @@ function WatchPartyModal({ isOpen, onClose }: WatchPartyModalProps) {
                     </div>
                     <button
                         aria-label="Cerrar"
-                        className="rounded-xl p-2 text-white/55 transition hover:bg-white/10 hover:text-white focus:outline-none focus:ring-2 focus:ring-cyan-300/60"
+                        className="flex h-10 w-10 items-center justify-center rounded-full text-white/55 transition-colors hover:bg-zinc-800 hover:text-white focus:outline-none focus:ring-2 focus:ring-cyan-300/60"
                         onClick={onClose}
                         type="button"
                     >
@@ -91,7 +91,7 @@ function WatchPartyModal({ isOpen, onClose }: WatchPartyModalProps) {
                     ) : (
                         <label className="block space-y-2 text-sm font-medium text-white/75">
                             {'C\u00f3digo de sala'}
-                            <input className={`${inputClassName} uppercase`} placeholder="A7K9P2" required />
+                            <input className={`${inputClassName} uppercase tracking-[0.2em] text-center`} placeholder="A7K9P2" required />
                         </label>
                     )}
 
