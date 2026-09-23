@@ -27,6 +27,11 @@ export const useVideoPlayer = (
     const lastStationIdRef = useRef<string | null>(null);
     const timeoutsRef = useRef<number[]>([]);
     const retryCountRef = useRef<number>(0);
+    const isPlayingRef = useRef(isPlaying);
+
+    useEffect(() => {
+        isPlayingRef.current = isPlaying;
+    }, [isPlaying]);
 
     // Internal state for non-derived values
     const [error, setError] = useState<string | null>(null);
@@ -41,15 +46,37 @@ export const useVideoPlayer = (
         return id;
     };
 
+    const extractYouTubeId = (url?: string): string | null => {
+        if (!url) return null;
+        if (url.includes('youtube.com/embed/')) {
+            return url.split('/embed/')[1]?.split('?')[0] || null;
+        }
+        if (url.includes('youtube.com/watch')) {
+            return url.split('v=')[1]?.split('&')[0] || null;
+        }
+        if (url.includes('youtu.be/')) {
+            return url.split('youtu.be/')[1]?.split('?')[0] || null;
+        }
+        return null;
+    };
+
+    const ytId = extractYouTubeId(currentStation?.iframeUrl) || extractYouTubeId(currentStation?.url) || (currentStation?.id?.startsWith('yt-') ? currentStation.id.replace('yt-', '') : null);
+    const isYouTube = !!ytId;
+
+    // Detect if iframeUrl is actually an m3u8 stream mistakenly saved in iframeUrl
+    const isM3u8Iframe = !isYouTube && (currentStation?.iframeUrl?.includes('.m3u8') ?? false) && !currentStation?.iframeUrl?.includes('bradmax.com');
+    const effectiveUrl = (isM3u8Iframe ? currentStation?.iframeUrl : currentStation?.url) || '';
+
     // Synchronous mode detection to prevent double-render unmounts
-    const isIframe = !!currentStation?.iframeUrl || !!currentStation?.embedCanal;
+    const isIframe = isYouTube || (!isM3u8Iframe && (!!currentStation?.iframeUrl || !!currentStation?.embedCanal));
     // An HLS stream is identified by .m3u8 OR if it's a known proxy route for HLS
     const isHls = !isIframe && (
-        (currentStation?.url.includes('.m3u8') ?? false) ||
-        (currentStation?.url.includes('/repretel-') ?? false)
+        effectiveUrl.includes('.m3u8') ||
+        effectiveUrl.includes('/repretel-') ||
+        isM3u8Iframe
     );
     const playerType: PlayerType = isIframe ? 'iframe' : (isHls ? 'videojs' : 'html5');
-    const hasVideo = currentStation?.type === 'video';
+    const hasVideo = currentStation?.type === 'video' || isYouTube || isHls || isIframe;
 
     // Quality levels state
     const [qualityLevels, setQualityLevels] = useState<QualityLevel[]>([]);
@@ -84,14 +111,17 @@ export const useVideoPlayer = (
         const initPlayer = () => {
             if (isCancelled) return;
 
-            if (playerType === 'html5') {
-                const el = videoEl as HTMLVideoElement;
-                el.src = currentStation.url;
-                el.volume = volume;
-                el.load();
+            if (playerType === 'html5' && videoEl instanceof HTMLMediaElement) {
+                let targetSrc = effectiveUrl;
+                if (currentStation.useProxy) {
+                    targetSrc = `/proxy-stream?url=${encodeURIComponent(effectiveUrl)}`;
+                }
+                videoEl.src = targetSrc;
+                videoEl.volume = volume;
+                videoEl.load();
 
                 if (isPlaying) {
-                    el.play().catch((err: any) => {
+                    videoEl.play().catch((err: any) => {
                         if (err.name !== 'AbortError') console.warn('[VideoPlayer] Autoplay failed:', err);
                     });
                 }
@@ -99,13 +129,12 @@ export const useVideoPlayer = (
         };
 
         // Initialize based on type
-        // Use 0ms to start as soon as possible after mount
         addTrackedTimeout(initPlayer, 0);
 
         // Listeners
         const onPlay = () => onPlayStateChange(true);
         const onPause = () => {
-            if (videoEl instanceof HTMLVideoElement && videoEl.seeking) return;
+            if (videoEl instanceof HTMLMediaElement && (videoEl as any).seeking) return;
             onPlayStateChange(false);
         };
 
@@ -117,8 +146,8 @@ export const useVideoPlayer = (
             videoEl.removeEventListener('play', onPlay);
             videoEl.removeEventListener('pause', onPause);
 
-            // SAFE CLEANUP: Only pause if it's a video element
-            if (videoEl instanceof HTMLVideoElement) {
+            // SAFE CLEANUP: Pause both video and audio elements on unmount/station switch
+            if (videoEl instanceof HTMLMediaElement) {
                 videoEl.pause();
                 videoEl.removeAttribute('src');
                 videoEl.load();
@@ -134,7 +163,7 @@ export const useVideoPlayer = (
                 videojsPlayerRef.current = null;
             }
         };
-    }, [currentStation?.id, playerType]);
+    }, [currentStation?.id, playerType, effectiveUrl]);
 
     // 2. Inicialización de Video.js (Para HLS / Video)
     useEffect(() => {
@@ -176,9 +205,9 @@ export const useVideoPlayer = (
             videojsPlayerRef.current = player;
             player.volume(volume);
 
-            let finalUrl = currentStation.url;
+            let finalUrl = effectiveUrl;
             if (currentStation.useProxy) {
-                finalUrl = `/proxy-stream?url=${encodeURIComponent(currentStation.url)}`;
+                finalUrl = `/proxy-stream?url=${encodeURIComponent(effectiveUrl)}`;
             }
 
             player.src({ src: finalUrl, type: 'application/x-mpegURL' }); // Force initial source
@@ -288,9 +317,9 @@ export const useVideoPlayer = (
                     onPlayStateChange?.(false);
                 });
 
-                // Si el usuario hace clic en el botón "Live" nativo, forzar reproducción
+                // Si el usuario hace clic en el botón "Live" nativo, forzar reproducción SOLO si está activo
                 player.on('liveedgechange', () => {
-                    if ((player as any).liveTracker?.atLiveEdge()) {
+                    if (isPlayingRef.current && (player as any).liveTracker?.atLiveEdge()) {
                         (player as any).play()?.catch?.(() => { });
                     }
                 });
@@ -352,23 +381,42 @@ export const useVideoPlayer = (
 
         // Play/Pause logic
         const handlePlayback = async () => {
-            if (!currentStation || (!currentStation.url && !currentStation.iframeUrl)) return;
+            if (!currentStation || (!currentStation.url && !currentStation.iframeUrl && !currentStation.embedCanal)) return;
 
             try {
                 if (isPlaying) {
                     if (playerType === 'videojs' && videojsPlayerRef.current) {
-                        // Ensure player is ready and has src
                         if (videojsPlayerRef.current.src()) {
                             await videojsPlayerRef.current.play();
                         }
-                    } else if (videoEl instanceof HTMLMediaElement && videoEl.paused && (videoEl as any).src) {
-                        await (videoEl as HTMLMediaElement).play();
+                    } else if (playerType === 'html5' && videoEl instanceof HTMLMediaElement) {
+                        if (!videoEl.src && effectiveUrl) {
+                            let targetSrc = effectiveUrl;
+                            if (currentStation.useProxy) {
+                                targetSrc = `/proxy-stream?url=${encodeURIComponent(effectiveUrl)}`;
+                            }
+                            videoEl.src = targetSrc;
+                            videoEl.load();
+                        }
+                        if (videoEl.paused) {
+                            await videoEl.play();
+                        }
+                    } else if (playerType === 'iframe' && isYouTube && ytPlayerRef.current) {
+                        if (typeof ytPlayerRef.current.playVideo === 'function') {
+                            ytPlayerRef.current.playVideo();
+                        }
                     }
                 } else {
                     if (playerType === 'videojs' && videojsPlayerRef.current) {
                         videojsPlayerRef.current.pause();
-                    } else if (videoEl instanceof HTMLMediaElement && !videoEl.paused) {
-                        videoEl.pause();
+                    } else if (playerType === 'html5' && videoEl instanceof HTMLMediaElement) {
+                        if (!videoEl.paused) {
+                            videoEl.pause();
+                        }
+                    } else if (playerType === 'iframe' && isYouTube && ytPlayerRef.current) {
+                        if (typeof ytPlayerRef.current.pauseVideo === 'function') {
+                            ytPlayerRef.current.pauseVideo();
+                        }
                     }
                 }
             } catch (error: any) {
@@ -379,7 +427,7 @@ export const useVideoPlayer = (
         };
 
         handlePlayback();
-    }, [isPlaying, volume, playerType]);
+    }, [isPlaying, volume, playerType, effectiveUrl, isYouTube]);
 
     /**
      * Set quality level manually
@@ -430,7 +478,7 @@ export const useVideoPlayer = (
 
     // 4. YouTube Iframe API Sync (Magic Sync)
     useEffect(() => {
-        if (playerType !== 'iframe' || !currentStation?.iframeUrl?.includes('youtube.com/embed/')) {
+        if (!currentStation || playerType !== 'iframe' || !isYouTube || !ytId) {
             if (ytPlayerRef.current) {
                 try { ytPlayerRef.current.destroy(); } catch (e) { }
             }
@@ -448,14 +496,11 @@ export const useVideoPlayer = (
             const player = ytPlayerRef.current;
             try {
                 const videoData = player.getVideoData();
-                const currentId = videoData.video_id;
-                const targetId = currentStation.id.startsWith('yt-')
-                    ? currentStation.id.replace('yt-', '')
-                    : currentStation.iframeUrl?.split('/embed/')[1]?.split('?')[0];
+                const currentId = videoData?.video_id;
 
-                if (targetId && currentId !== targetId) {
-                    console.log(`[VideoPlayer] Manual navigation: ${currentId} -> ${targetId}`);
-                    player.loadVideoById(targetId);
+                if (ytId && currentId !== ytId) {
+                    console.log(`[VideoPlayer] Manual navigation: ${currentId} -> ${ytId}`);
+                    player.loadVideoById(ytId);
                     lastReportedIdRef.current = currentStation.id;
                     return; // Early return, don't re-init
                 }
@@ -482,20 +527,41 @@ export const useVideoPlayer = (
 
             try {
                 // Use youtube-nocookie and add widget_referrer for better embedding compatibility
-                const ytBaseUrl = currentStation.iframeUrl?.replace('youtube.com/embed/', 'youtube-nocookie.com/embed/');
-                const initialUrl = `${ytBaseUrl}${ytBaseUrl?.includes('?') ? '&' : '?'}autoplay=1&enablejsapi=1&origin=${window.location.origin}&widget_referrer=${encodeURIComponent(window.location.href)}&rel=0`;
+                // Solo activamos autoplay en el src inicial si el usuario realmente está en reproducción
+                const autoPlayFlag = isPlayingRef.current ? 1 : 0;
+                const initialUrl = `https://www.youtube-nocookie.com/embed/${ytId}?autoplay=${autoPlayFlag}&enablejsapi=1&origin=${window.location.origin}&widget_referrer=${encodeURIComponent(window.location.href)}&rel=0`;
                 videoEl.src = initialUrl;
 
                 ytPlayerRef.current = new (window as any).YT.Player(videoEl, {
                     events: {
+                        onReady: (event: any) => {
+                            if (isCancelled) return;
+                            // Si al estar listo el reproductor NO debe sonar, asegurar pausa
+                            if (!isPlayingRef.current) {
+                                try {
+                                    event.target.pauseVideo();
+                                } catch (e) {}
+                            } else {
+                                try {
+                                    event.target.playVideo();
+                                } catch (e) {}
+                            }
+                        },
                         onStateChange: (event: any) => {
                             if (isCancelled) return;
                             // YT.PlayerState.PLAYING = 1
                             if (event.data === 1) {
+                                // Si empezó a sonar por error al cargar pero isPlayingRef es falso, detener de inmediato
+                                if (!isPlayingRef.current) {
+                                    try {
+                                        event.target.pauseVideo();
+                                    } catch (e) {}
+                                    return;
+                                }
                                 const player = event.target;
                                 const videoData = player.getVideoData();
-                                const realTitle = videoData.title;
-                                const currentId = videoData.video_id;
+                                const realTitle = videoData?.title;
+                                const currentId = videoData?.video_id;
 
                                 // If the name is generic (contains ID or "YouTube:"), update with real title
                                 if (realTitle && currentStation && (
@@ -547,12 +613,12 @@ export const useVideoPlayer = (
 
         return () => {
             isCancelled = true;
-            if (ytPlayerRef.current && currentStation.id !== lastReportedIdRef.current) {
+            if (ytPlayerRef.current && currentStation?.id !== lastReportedIdRef.current) {
                 try { ytPlayerRef.current.destroy(); } catch (e) { }
                 ytPlayerRef.current = null;
             }
         };
-    }, [currentStation?.id, playerType]);
+    }, [currentStation?.id, playerType, isYouTube, ytId]);
 
     return {
         videoRef,
@@ -562,6 +628,7 @@ export const useVideoPlayer = (
         qualityLevels,
         currentLevel,
         isAutoMode,
-        setQualityLevel
+        setQualityLevel,
+        isYouTube
     };
 };

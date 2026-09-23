@@ -6,7 +6,7 @@ import { useChat } from '../context/ChatContext';
 export const SidebarInfo: React.FC = () => {
     const [time, setTime] = useState(new Date());
     const [greeting, setGreeting] = useState('');
-    const { onlineListeners } = useChat();
+    const { onlineListeners, connectionStatus } = useChat();
 
     useEffect(() => {
         const timer = setInterval(() => setTime(new Date()), 1000);
@@ -31,11 +31,25 @@ export const SidebarInfo: React.FC = () => {
             </div>
             <div className="flex items-center justify-between bg-black/30 p-1.5 rounded-none">
                 <div className="flex items-center gap-1.5 text-[10px]">
-                    <Users size={18} className="text-green-400" />
-                    <span className="text-[var(--text-secondary)] uppercase font-bold tracking-wider">En Línea</span>
+                    <Users size={18} className={
+                        connectionStatus === 'connected'
+                            ? 'text-green-400'
+                            : connectionStatus === 'connecting'
+                                ? 'text-amber-400 animate-pulse'
+                                : 'text-red-400'
+                    } />
+                    <span className="text-[var(--text-secondary)] uppercase font-bold tracking-wider">
+                        {connectionStatus === 'connected' ? 'En Línea' : connectionStatus === 'connecting' ? 'Reconectando...' : 'Sin Conexión'}
+                    </span>
                 </div>
-                <span className="text-green-400 font-bold px-1.5 py-0.5 rounded-none bg-green-400/10 text-[10px]">
-                    {onlineListeners}
+                <span className={`font-bold px-1.5 py-0.5 rounded-none text-[11px] ${
+                    connectionStatus === 'connected'
+                        ? 'text-green-400 bg-green-400/10'
+                        : connectionStatus === 'connecting'
+                            ? 'text-amber-400 bg-amber-400/10 animate-pulse'
+                            : 'text-red-400 bg-red-400/10'
+                }`}>
+                    {connectionStatus === 'connected' ? onlineListeners : 0}
                 </span>
             </div>
         </div>

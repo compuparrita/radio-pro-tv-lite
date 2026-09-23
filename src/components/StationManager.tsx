@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Plus, Save, Trash2, Upload, Download, Edit2, CheckCircle, AlertTriangle, Monitor, Music, HelpCircle, Menu } from 'lucide-react';
+import { X, Plus, Save, Trash2, Upload, Download, Edit2, CheckCircle, AlertTriangle, Monitor, Music, HelpCircle, Menu, Cloud, Sparkles } from 'lucide-react';
 import { useRadio } from '../context/RadioContext';
 import { Station } from '../types';
 import {
@@ -234,48 +234,80 @@ export const StationManager: React.FC<StationManagerProps> = ({ isOpen, onClose 
         e.preventDefault();
 
         // La emisora es válida si tiene nombre y al menos una fuente (URL o Iframe/Canal)
-        if (!formData.name || (!formData.url && !formData.iframeUrl && !formData.embedCanal)) {
+        if (!formData.name?.trim() || (!formData.url?.trim() && !formData.iframeUrl?.trim() && !formData.embedCanal?.trim())) {
             showToast('Por favor completa el nombre y al menos una fuente (Stream o Iframe/Canal)', 'error');
             return;
         }
 
-        // Procesar la fuente (Iframe / Canal) Inteligente
-        let rawInput = formData.iframeUrl?.trim() || formData.embedCanal?.trim() || '';
-        let finalIframeUrl = rawInput;
+        let rawUrl = formData.url?.trim() || '';
+        let rawIframe = formData.iframeUrl?.trim() || formData.embedCanal?.trim() || '';
+        let finalType = (formData.type as 'audio' | 'video') || 'audio';
+        let finalLogo = formData.logo?.trim() || '';
         let finalEmbedCanal = undefined;
+        let finalIframeUrl = rawIframe;
 
-        if (rawInput) {
-            // 1. Si es un iframe completo, extraer el src
-            if (rawInput.includes('<iframe')) {
-                const srcMatch = rawInput.match(/src="([^"]+)"/);
+        // 1. YouTube Auto-detection
+        const checkYouTube = (str: string) => {
+            if (!str) return null;
+            if (str.includes('youtube.com/embed/')) return str.split('/embed/')[1]?.split('?')[0];
+            if (str.includes('youtube.com/watch')) return str.split('v=')[1]?.split('&')[0];
+            if (str.includes('youtu.be/')) return str.split('youtu.be/')[1]?.split('?')[0];
+            return null;
+        };
+
+        const ytIdFromUrl = checkYouTube(rawUrl);
+        const ytIdFromIframe = checkYouTube(rawIframe);
+        const ytId = ytIdFromUrl || ytIdFromIframe;
+
+        if (ytId) {
+            finalIframeUrl = `https://www.youtube.com/embed/${ytId}`;
+            rawUrl = '';
+            finalType = 'video';
+            if (!finalLogo) {
+                finalLogo = `https://img.youtube.com/vi/${ytId}/mqdefault.jpg`;
+            }
+        } else if (rawIframe) {
+            // 2. Si es un iframe completo, extraer el src
+            if (rawIframe.includes('<iframe')) {
+                const srcMatch = rawIframe.match(/src="([^"]+)"/);
                 if (srcMatch) finalIframeUrl = srcMatch[1];
             }
 
-            // 2. Determinar si es un nombre corto o una URL
-            const isShort = !finalIframeUrl.includes('://') && finalIframeUrl.length < 30 && !finalIframeUrl.includes('/');
-
-            if (isShort) {
-                // Es un nombre corto tipo 'natgeo'
-                finalEmbedCanal = finalIframeUrl.replace('.html', '').replace('.php', '').split('?')[0];
-                finalIframeUrl = `https://embed.saohgdasregions.fun/embed2/${finalEmbedCanal}.html`;
-            } else if (finalIframeUrl.includes('embed.saohgdasregions.fun')) {
-                // Es una URL de la página conocida, extraemos el canal
-                const parts = finalIframeUrl.split('/');
-                const filename = parts[parts.length - 1];
-                finalEmbedCanal = filename.split('.')[0].split('?')[0];
+            // Si es m3u8 en iframe, pasarlo a URL directa
+            if (finalIframeUrl.includes('.m3u8') && !finalIframeUrl.includes('bradmax.com')) {
+                rawUrl = finalIframeUrl;
+                finalIframeUrl = '';
+                finalType = 'video';
+            } else {
+                // Determinar si es un nombre corto o una URL
+                const isShort = !finalIframeUrl.includes('://') && finalIframeUrl.length < 30 && !finalIframeUrl.includes('/');
+                if (isShort) {
+                    finalEmbedCanal = finalIframeUrl.replace('.html', '').replace('.php', '').split('?')[0];
+                    finalIframeUrl = `https://embed.saohgdasregions.fun/embed2/${finalEmbedCanal}.html`;
+                    finalType = 'video';
+                } else if (finalIframeUrl.includes('embed.saohgdasregions.fun')) {
+                    const parts = finalIframeUrl.split('/');
+                    const filename = parts[parts.length - 1];
+                    finalEmbedCanal = filename.split('.')[0].split('?')[0];
+                    finalType = 'video';
+                }
             }
         }
 
+        const validCategory = (!formData.category || formData.category === 'Todas')
+            ? (finalType === 'video' ? 'Otros' : 'Música')
+            : formData.category;
+
         const stationData: Station = {
-            id: editingId || Date.now().toString(),
-            name: formData.name || '',
-            url: formData.url || '',
-            logo: formData.logo || 'https://images.unsplash.com/photo-1695083691065-4f77dfd0f0d5',
-            country: formData.country || 'Desconocido',
-            type: formData.type as 'audio' | 'video',
+            id: editingId || `custom-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+            name: formData.name.trim(),
+            url: rawUrl,
+            logo: finalLogo || 'https://images.unsplash.com/photo-1695083691065-4f77dfd0f0d5',
+            country: formData.country?.trim() || 'Internacional',
+            type: finalType,
             iframeUrl: finalIframeUrl || undefined,
-            useProxy: formData.useProxy,
-            category: formData.category || 'Otros',
+            useProxy: formData.useProxy || false,
+            category: validCategory,
             embedCanal: finalEmbedCanal || undefined
         };
 
@@ -377,13 +409,16 @@ export const StationManager: React.FC<StationManagerProps> = ({ isOpen, onClose 
                             </div>
                             Gestionar Emisoras
                         </h2>
+                        <span className="hidden sm:inline-flex items-center gap-1 text-[10px] text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded-full font-semibold">
+                            <Cloud size={12} /> Supabase Cloud
+                        </span>
                         <button
-                            onClick={() => setShowHelp(!showHelp)}
-                            className={`flex items-center gap-1.5 px-2 py-1 text-[10px] font-bold transition-all ${showHelp ? 'bg-[var(--primary-color)] text-white' : 'bg-white/5 text-[var(--text-secondary)] hover:bg-white/10'}`}
-                            title="Ver ayuda"
+                            onClick={() => setShowHelp(true)}
+                            className="flex items-center gap-1.5 px-2 py-1 text-[10px] font-bold transition-all bg-white/5 text-[var(--text-secondary)] hover:bg-white/10 hover:text-white rounded"
+                            title="Ver guía de gestión"
                         >
-                            <HelpCircle size={16} />
-                            <span>{showHelp ? 'Ocultar' : 'Ayuda'}</span>
+                            <HelpCircle size={15} className="text-indigo-400" />
+                            <span>Guía</span>
                         </button>
                     </div>
                     <button onClick={onClose} className="p-1.5 hover:bg-white/10 transition-colors">
@@ -391,26 +426,84 @@ export const StationManager: React.FC<StationManagerProps> = ({ isOpen, onClose 
                     </button>
                 </div>
 
+                {/* PRO MODAL DE AYUDA DE GESTOR */}
+                {showHelp && (
+                    <div className="fixed inset-0 z-[100001] flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-md animate-fade-in">
+                        <div className="absolute inset-0" onClick={() => setShowHelp(false)} />
+                        <div className="relative w-full max-w-xl bg-[var(--dark-surface)] text-[var(--text-primary)] border border-white/10 rounded-xl sm:rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh] animate-slide-in-right">
+                            <div className="p-4 border-b border-white/10 flex items-center justify-between bg-gradient-to-r from-blue-500/20 to-[var(--primary-color)]/20">
+                                <div className="flex items-center gap-2.5">
+                                    <div className="p-2 bg-blue-500/20 text-blue-400 rounded-lg border border-blue-500/30">
+                                        <Sparkles size={20} />
+                                    </div>
+                                    <div>
+                                        <h3 className="font-bold text-base text-white">Guía del Gestor de Emisoras</h3>
+                                        <p className="text-xs text-[var(--text-secondary)]">Sincronización en la nube y tipos de stream</p>
+                                    </div>
+                                </div>
+                                <button
+                                    onClick={() => setShowHelp(false)}
+                                    className="p-1.5 text-[var(--text-secondary)] hover:text-white hover:bg-white/10 rounded-lg transition-colors"
+                                >
+                                    <X size={18} />
+                                </button>
+                            </div>
+
+                            <div className="p-4 sm:p-5 overflow-y-auto space-y-3.5 custom-scrollbar flex-1 text-xs sm:text-sm">
+                                <div className="p-3.5 rounded-xl bg-white/[0.03] border border-white/5 space-y-1.5">
+                                    <div className="flex items-center gap-2 font-bold text-emerald-400 text-xs uppercase tracking-wider">
+                                        <Cloud size={14} /> Sincronización Automática
+                                    </div>
+                                    <p className="text-[var(--text-secondary)] leading-relaxed">
+                                        Cualquier emisora que agregues, edites, borres o reordenes se sincroniza de inmediato con <strong>Supabase</strong>. Todos los oyentes y dispositivos verán los cambios en tiempo real.
+                                    </p>
+                                </div>
+
+                                <div className="p-3.5 rounded-xl bg-white/[0.03] border border-white/5 space-y-1.5">
+                                    <div className="flex items-center gap-2 font-bold text-blue-400 text-xs uppercase tracking-wider">
+                                        <Music size={14} /> Emisoras de Radio (Audio)
+                                    </div>
+                                    <p className="text-[var(--text-secondary)] leading-relaxed">
+                                        Pega la URL del stream de audio (.mp3, .aac o enlace Icecast/Shoutcast). Si el stream tiene bloqueo de navegador (Mixed Content o CORS), activa la casilla <strong>"Usar Servidor Proxy"</strong>.
+                                    </p>
+                                </div>
+
+                                <div className="p-3.5 rounded-xl bg-white/[0.03] border border-white/5 space-y-1.5">
+                                    <div className="flex items-center gap-2 font-bold text-red-400 text-xs uppercase tracking-wider">
+                                        <Monitor size={14} /> Canales de Televisión (Video)
+                                    </div>
+                                    <p className="text-[var(--text-secondary)] leading-relaxed">
+                                        Puedes usar enlaces directos HLS (<strong>.m3u8</strong>), videos o transmisiones de <strong>YouTube</strong>, o reproductores web embebidos (<strong>Iframes</strong>).
+                                    </p>
+                                </div>
+
+                                <div className="p-3.5 rounded-xl bg-white/[0.03] border border-white/5 space-y-1.5">
+                                    <div className="flex items-center gap-2 font-bold text-amber-400 text-xs uppercase tracking-wider">
+                                        <Menu size={14} /> Reordenar Lista
+                                    </div>
+                                    <p className="text-[var(--text-secondary)] leading-relaxed">
+                                        Usa el icono de tres barras a la derecha de cada emisora en la lista para arrastrarla y colocarla en el orden que prefieras.
+                                    </p>
+                                </div>
+                            </div>
+
+                            <div className="p-3 border-t border-white/10 bg-black/20 flex justify-end">
+                                <button
+                                    onClick={() => setShowHelp(false)}
+                                    className="px-5 py-2 bg-[var(--primary-color)] text-white font-bold text-xs rounded-lg hover:opacity-90 active:scale-95 transition-all shadow-md"
+                                >
+                                    Entendido
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
                 {/* Main Content Area - Split View */}
                 <div className="flex flex-col flex-1 min-h-0">
 
                     {/* FIXED Top Section: Form */}
                     <div className="bg-black/20 border-b border-white/5 p-2 z-10 shadow-lg flex-shrink-0">
-                        {/* Educational Help Section */}
-                        {showHelp && (
-                            <div className="mb-4 bg-blue-500/10 border border-blue-500/20 p-3 flex gap-3 animate-in fade-in slide-in-from-top-4 duration-500">
-                                <div className="bg-blue-500/20 p-2 h-fit text-blue-400">
-                                    <AlertTriangle size={18} />
-                                </div>
-                                <div className="space-y-1">
-                                    <h4 className="font-bold text-blue-300 text-xs">Ayuda Rápida</h4>
-                                    <div className="text-[14px] text-blue-100/70 space-y-1 leading-relaxed">
-                                        <p>• <strong>Iframes:</strong> Copia solo el contenido de <code>src="..."</code>.</p>
-                                        <p>• <strong>Flexibilidad:</strong> Úsa URL Stream o Iframe según necesites.</p>
-                                    </div>
-                                </div>
-                            </div>
-                        )}
 
                         <form id="station-form" onSubmit={handleSubmit} className="bg-white/5 p-2 border border-white/5 relative overflow-hidden transition-all duration-300">
                             {/* Decorative background accent */}

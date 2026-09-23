@@ -16,6 +16,7 @@ export interface RadioContextType {
     stations: Station[];
     currentStation: Station | null;
     isPlaying: boolean;
+    setIsPlaying: (playing: boolean) => void;
     volume: number;
     favorites: string[];
     isLoading: boolean;

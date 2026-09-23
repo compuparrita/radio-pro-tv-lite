@@ -20,33 +20,45 @@ export const useTVRemote = () => {
 
             if (isInputField) return;
 
+            // Check if a modal is currently open (body overflow is set to hidden)
+            const isModalOpen = document.body.style.overflow === 'hidden';
+
+            const isButtonFocused =
+                activeElement instanceof HTMLButtonElement ||
+                activeElement instanceof HTMLAnchorElement;
+
             switch (e.key) {
                 case 'ArrowLeft':
-                    e.preventDefault();
-                    prevStation();
+                case 'MediaTrackPrevious':
+                    if (!isModalOpen) {
+                        e.preventDefault();
+                        prevStation();
+                    }
                     break;
 
                 case 'ArrowRight':
+                case 'MediaTrackNext':
+                    if (!isModalOpen) {
+                        e.preventDefault();
+                        nextStation();
+                    }
+                    break;
+
+                case 'MediaPlayPause':
+                case 'MediaPlay':
+                case 'MediaPause':
                     e.preventDefault();
-                    nextStation();
-                    break;
-
-                case 'ArrowUp':
-                    // Allow default scroll behavior
-                    break;
-
-                case 'ArrowDown':
-                    // Allow default scroll behavior
+                    togglePlay();
                     break;
 
                 case 'Enter':
                 case 'Return':
                 case ' ':
-                case 'MediaPlayPause':
-                case 'Play':
-                case 'Pause':
-                    e.preventDefault();
-                    togglePlay();
+                    // If a button or link is focused, let standard browser click happen
+                    if (!isButtonFocused && !isModalOpen) {
+                        e.preventDefault();
+                        togglePlay();
+                    }
                     break;
 
                 default:

@@ -1,5 +1,5 @@
-import React from 'react';
-import { X, HelpCircle, MessageSquare, Share2 } from 'lucide-react';
+import React, { useEffect } from 'react';
+import { X, MessageSquare, Share2, Youtube, Sparkles } from 'lucide-react';
 
 interface HelpModalProps {
     isOpen: boolean;
@@ -7,61 +7,104 @@ interface HelpModalProps {
 }
 
 const HelpModal: React.FC<HelpModalProps> = ({ isOpen, onClose }) => {
+    useEffect(() => {
+        if (isOpen) {
+            const prevOverflow = document.body.style.overflow;
+            document.body.style.overflow = 'hidden';
+            return () => {
+                document.body.style.overflow = prevOverflow;
+            };
+        }
+    }, [isOpen]);
+
     if (!isOpen) return null;
 
     const sections = [
         {
-            title: "Sintonizador Inteligente (Chat)",
-            icon: <MessageSquare className="text-violet-500" />,
-            content: "Mientras escribes en el chat, el sistema te sugerirá nombres de emisoras. Puedes navegar las sugerencias con las flechas del teclado y presionar Enter para autocompletar.",
-            tip: "Solo escribe las primeras letras como 'multi' para ver sugerencias."
+            title: "Sintonizador Inteligente en Chat",
+            icon: <MessageSquare size={22} className="text-[var(--primary-color)]" />,
+            badge: "Autocompletado con /",
+            content: "Para buscar y mencionar rápidamente una emisora de tu lista, escribe una barra inclinada '/' (ejemplo: '/tele' o solo '/'). Usa las flechas y Enter o tócala para seleccionarla.",
+            tip: "Escribe '/' para ver todas las emisoras o '/nombre' para filtrar al instante."
         },
         {
-            title: "Compartir Emisoras",
-            icon: <Share2 className="text-cyan-500" />,
-            content: "Cualquier nombre de emisora en tu lista se convierte automáticamente en un botón sintonizador cuando lo escribes en el chat.",
-            tip: "Escribe 'Telesur' y verás cómo se transforma en un botón táctil."
+            title: "Menciones y Botones Táctiles",
+            icon: <Share2 size={22} className="text-cyan-400" />,
+            badge: "Interactivo",
+            content: "Cualquier nombre de emisora de tu lista que envíes en el chat se transformará en un botón táctil interactivo para que los demás oyentes puedan sintonizarla con un solo toque.",
+            tip: "Escribe 'Telesur' o tu estación favorita y todos podrán escucharla tocando el botón."
         },
         {
-            title: "Enlaces de YouTube",
-            icon: <Share2 className="text-red-500" />,
-            content: "Al compartir enlaces de YouTube, el chat generará automáticamente una miniatura de previsualización para el resto de oyentes.",
-            tip: "Copia y pega el link directamente en el cuadro de mensaje."
+            title: "Previsualización de YouTube",
+            icon: <Youtube size={22} className="text-red-400" />,
+            badge: "Multimedia",
+            content: "Al pegar un enlace de YouTube en el chat, se generará de forma automática una miniatura de previsualización con un botón para reproducirlo directamente en la app.",
+            tip: "Copia y pega cualquier link de YouTube (video, short o en vivo) en el cuadro de texto."
         }
     ];
 
     return (
-        <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
-            <div className="bg-white text-slate-900 w-full max-w-2xl overflow-hidden shadow-2xl rounded-none md:rounded-lg">
-                <div className="p-4 border-b border-slate-100 flex items-center justify-between bg-slate-50">
-                    <div className="flex items-center gap-2">
-                        <HelpCircle size={24} className="text-violet-600" />
-                        <h2 className="text-xl font-bold">Guía de Uso</h2>
+        <div className="fixed inset-0 z-[100002] flex items-center justify-center p-3 sm:p-4 bg-black/75 backdrop-blur-md animate-fade-in">
+            {/* Backdrop click to close */}
+            <div className="absolute inset-0" onClick={onClose} />
+
+            <div className="relative w-full max-w-xl bg-[var(--dark-surface)] text-[var(--text-primary)] border border-white/10 rounded-xl sm:rounded-2xl shadow-2xl overflow-hidden animate-slide-in-right flex flex-col max-h-[90vh]">
+                {/* Header */}
+                <div className="p-4 sm:p-5 border-b border-white/10 flex items-center justify-between bg-gradient-to-r from-[var(--primary-color)]/20 via-transparent to-[var(--secondary-color)]/20">
+                    <div className="flex items-center gap-3">
+                        <div className="p-2 bg-[var(--primary-color)]/20 text-[var(--primary-color)] rounded-lg border border-[var(--primary-color)]/30">
+                            <Sparkles size={22} />
+                        </div>
+                        <div>
+                            <h2 className="text-lg sm:text-xl font-bold tracking-tight">Guía de Uso del Chat</h2>
+                            <p className="text-xs text-[var(--text-secondary)]">Aprende a sacarle el máximo provecho al chat en vivo</p>
+                        </div>
                     </div>
-                    <button onClick={onClose} className="p-2 hover:bg-slate-200 rounded-full transition-colors text-slate-500">
-                        <X size={24} />
+                    <button
+                        onClick={onClose}
+                        className="p-2 text-[var(--text-secondary)] hover:text-white hover:bg-white/10 rounded-lg transition-colors"
+                        title="Cerrar ayuda"
+                    >
+                        <X size={20} />
                     </button>
                 </div>
 
-                <div className="p-6 overflow-y-auto max-h-[70vh] space-y-6">
+                {/* Content */}
+                <div className="p-4 sm:p-6 overflow-y-auto space-y-4 custom-scrollbar flex-1">
                     {sections.map((section, idx) => (
-                        <div key={idx} className="flex gap-4 p-4 rounded-lg bg-slate-50 border border-slate-200">
-                            <div className="mt-1">{section.icon}</div>
-                            <div>
-                                <h3 className="font-bold text-lg mb-1">{section.title}</h3>
-                                <p className="text-slate-600 text-sm leading-relaxed mb-2">{section.content}</p>
-                                <div className="text-xs font-semibold text-violet-600 bg-violet-50 p-2 rounded inline-block">
-                                    TIP: {section.tip}
+                        <div
+                            key={idx}
+                            className="p-4 rounded-xl bg-white/[0.03] hover:bg-white/[0.05] border border-white/5 hover:border-white/10 transition-all group"
+                        >
+                            <div className="flex items-start gap-3.5">
+                                <div className="p-2.5 rounded-lg bg-black/30 border border-white/10 group-hover:scale-105 transition-transform flex-shrink-0">
+                                    {section.icon}
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                    <div className="flex items-center justify-between gap-2 mb-1.5 flex-wrap">
+                                        <h3 className="font-bold text-sm sm:text-base text-white">{section.title}</h3>
+                                        <span className="text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full bg-white/5 border border-white/10 text-[var(--text-secondary)]">
+                                            {section.badge}
+                                        </span>
+                                    </div>
+                                    <p className="text-xs sm:text-sm text-[var(--text-secondary)] leading-relaxed mb-3">
+                                        {section.content}
+                                    </p>
+                                    <div className="text-[11px] font-medium text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2.5 py-1.5 rounded-lg flex items-center gap-1.5">
+                                        <span className="font-bold uppercase tracking-wider text-[10px]">Tip:</span>
+                                        <span>{section.tip}</span>
+                                    </div>
                                 </div>
                             </div>
                         </div>
                     ))}
                 </div>
 
-                <div className="p-4 border-t border-slate-100 bg-slate-50 text-center">
+                {/* Footer */}
+                <div className="p-3 sm:p-4 border-t border-white/10 bg-black/20 flex items-center justify-end">
                     <button
                         onClick={onClose}
-                        className="px-6 py-2 bg-violet-600 text-white font-bold hover:bg-violet-700 transition-colors shadow-lg"
+                        className="w-full sm:w-auto px-6 py-2.5 bg-gradient-to-r from-[var(--primary-color)] to-[var(--secondary-color)] text-white font-bold text-sm rounded-lg hover:opacity-90 active:scale-95 transition-all shadow-lg"
                     >
                         Entendido
                     </button>

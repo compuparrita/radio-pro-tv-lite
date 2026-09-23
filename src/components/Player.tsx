@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { Play, Pause, SkipBack, SkipForward, Volume2, VolumeX } from 'lucide-react';
 import { useRadio } from '../context/RadioContext';
 import { useVideoPlayer } from '../hooks/useVideoPlayer';
@@ -10,6 +10,7 @@ export const Player: React.FC = () => {
     const {
         currentStation,
         isPlaying,
+        setIsPlaying,
         volume,
         togglePlay,
         setVolume,
@@ -19,10 +20,21 @@ export const Player: React.FC = () => {
     } = useRadio();
 
     const [isVolumeOpen, setIsVolumeOpen] = useState(false);
+    const [isUserActive, setIsUserActive] = useState(true);
 
     const volumeRef = useRef<HTMLDivElement>(null);
 
+    // Track isPlaying in a ref to avoid stale closures in event listener callbacks
+    const isPlayingRef = useRef(isPlaying);
+    useEffect(() => {
+        isPlayingRef.current = isPlaying;
+    }, [isPlaying]);
 
+    const handlePlayStateChange = useCallback((playing: boolean) => {
+        if (playing !== isPlayingRef.current) {
+            setIsPlaying(playing);
+        }
+    }, [setIsPlaying]);
 
     const {
         videoRef,
@@ -32,20 +44,19 @@ export const Player: React.FC = () => {
         qualityLevels,
         currentLevel,
         isAutoMode,
-        setQualityLevel
+        setQualityLevel,
+        isYouTube
     } = useVideoPlayer(
         currentStation,
         isPlaying,
         volume,
-        (playing) => {
-            if (playing !== isPlaying) togglePlay();
-        },
+        handlePlayStateChange,
         setCurrentStation
     );
 
-    // Close volume on outside click
+    // Close volume on outside click or touch
     useEffect(() => {
-        const handleClickOutside = (event: MouseEvent) => {
+        const handleClickOutside = (event: MouseEvent | TouchEvent) => {
             if (volumeRef.current && !volumeRef.current.contains(event.target as Node)) {
                 setIsVolumeOpen(false);
             }
@@ -53,9 +64,11 @@ export const Player: React.FC = () => {
 
         if (isVolumeOpen) {
             document.addEventListener('mousedown', handleClickOutside);
+            document.addEventListener('touchstart', handleClickOutside);
         }
         return () => {
             document.removeEventListener('mousedown', handleClickOutside);
+            document.removeEventListener('touchstart', handleClickOutside);
         };
     }, [isVolumeOpen]);
 
@@ -80,6 +93,25 @@ export const Player: React.FC = () => {
         };
     }, [isVolumeOpen, volume, setVolume]);
 
+    // Track the global 'user-is-active' class to toggle the mouse sensor
+    useEffect(() => {
+        const observer = new MutationObserver((mutations) => {
+            mutations.forEach((mutation) => {
+                if (mutation.attributeName === 'class') {
+                    const isActive = document.body.classList.contains('user-is-active');
+                    setIsUserActive(isActive);
+                }
+            });
+        });
+
+        observer.observe(document.body, { attributes: true });
+        
+        // Initial check
+        setIsUserActive(document.body.classList.contains('user-is-active'));
+
+        return () => observer.disconnect();
+    }, []);
+
     if (!currentStation) {
         return (
             <div className="glass p-8 text-center">
@@ -91,14 +123,25 @@ export const Player: React.FC = () => {
 
 
     return (
-        <>
-            {/* 1. Main Media Area (Video or Large Logo) - STICKY ON MOBILE ONLY */}
+        <div className="player-sticky-wrapper sticky" style={{ zIndex: 100 }}>
+            {/* 1. Main Media Area (Video or Large Logo) */}
             <div
-                className="w-[calc(100%+32px)] -mx-4 lg:w-full lg:mx-0 glass bg-[var(--dark-bg)] aspect-video max-h-[215px] md:max-h-[315px] lg:max-h-[2000px] relative group overflow-hidden rounded-none z-50 sticky top-0 lg:static player-main-media"
+                className="w-full mx-0 glass bg-[var(--dark-bg)] aspect-video max-h-[215px] md:max-h-[315px] lg:max-h-[2000px] relative group overflow-hidden rounded-none z-50 player-main-media"
                 style={{ touchAction: 'manipulation' }}
             >
+                {/* Mouse Activity Sensor Shield for iFrames (Smart TV Fix) */}
+                {!isUserActive && (
+                    <div 
+                        className="absolute inset-0 z-[70] cursor-default"
+                        onMouseMove={() => {
+                            // Wake up the global tracker by dispatching a fake event
+                            window.dispatchEvent(new MouseEvent('mousemove', { bubbles: true }));
+                        }}
+                    />
+                )}
+
                 {/* Content-Aware Overlay Layer (Strictly follows 16:9 video content) */}
-                <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-[70]">
+                <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-[75]">
                     <div className="relative h-full max-w-full aspect-video pointer-events-none">
                     </div>
                 </div>
@@ -107,36 +150,59 @@ export const Player: React.FC = () => {
                     <div key={`tech-container-${currentStation.id}-${playerType}`} className="absolute inset-0 bg-black flex items-center justify-center player-tech-container">
                         <div className="relative h-full w-full player-aspect-wrapper">
                             {playerType === 'iframe' ? (
-                                isPlaying ? (
-                                    <iframe
-                                        ref={videoRef as any}
-                                        src={(() => {
-                                            if (currentStation.iframeUrl?.includes('youtube.com/embed/')) return undefined;
-
-                                            // Construir URL base
-                                            let src = currentStation.iframeUrl || (currentStation.embedCanal ? `https://embed.saohgdasregions.fun/embed2/${currentStation.embedCanal}.html` : '');
-                                            if (!src) return undefined;
-
-                                            // Añadir parámetros de autoplay y sonido si no los tiene
-                                            const separator = src.includes('?') ? '&' : '?';
-                                            return `${src}${separator}autoplay=1&muted=0&mute=0&volume=100`;
-                                        })()}
-                                        className="w-full h-full border-0"
-                                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-                                        allowFullScreen
-                                        sandbox="allow-scripts allow-same-origin allow-presentation"
-                                        title={currentStation.name}
-                                    />
-                                ) : (
-                                    <div className="flex flex-col items-center justify-center h-full bg-[var(--dark-bg)] bg-gradient-to-b from-black/20 to-black/60">
-                                        <img
-                                            src={currentStation.logo || 'https://picsum.photos/seed/radio-streaming-pro/150/150.jpg'}
-                                            alt={currentStation.name}
-                                            className="w-32 h-32 md:w-44 md:h-44 object-contain rounded-full border-[6px] md:border-[10px] border-[var(--primary-color)] opacity-60 p-2 md:p-3 bg-white/5"
-                                            onError={(e) => { (e.target as HTMLImageElement).src = "https://picsum.photos/seed/radio-streaming-pro/150/150.jpg" }}
+                                isYouTube ? (
+                                    /* YouTube Player managed by YouTube IFrame API */
+                                    <div className="relative h-full w-full">
+                                        <iframe
+                                            ref={videoRef as any}
+                                            key={`iframe-yt-${currentStation.id}`}
+                                            className="w-full h-full border-0"
+                                            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                                            allowFullScreen
+                                            title={currentStation.name}
                                         />
-                                        <p className="mt-4 text-[var(--text-secondary)] font-medium">Pausado</p>
+                                        {!isPlaying && (
+                                            <div className="absolute inset-0 flex flex-col items-center justify-center bg-[var(--dark-bg)] bg-gradient-to-b from-black/20 to-black/60 z-10 pointer-events-none">
+                                                <img
+                                                    src={currentStation.logo || 'https://picsum.photos/seed/radio-streaming-pro/150/150.jpg'}
+                                                    alt={currentStation.name}
+                                                    className="w-32 h-32 md:w-44 md:h-44 object-contain rounded-full border-[6px] md:border-[10px] border-[var(--primary-color)] opacity-60 p-2 md:p-3 bg-white/5"
+                                                    onError={(e) => { (e.target as HTMLImageElement).src = "https://picsum.photos/seed/radio-streaming-pro/150/150.jpg" }}
+                                                />
+                                                <p className="mt-4 text-[var(--text-secondary)] font-medium">Pausado</p>
+                                            </div>
+                                        )}
                                     </div>
+                                ) : (
+                                    /* General TV / Embed iFrame (e.g. ksdjugfssddeports.com, tvporinternet2.com, etc.) */
+                                    isPlaying ? (
+                                        <iframe
+                                            ref={videoRef as any}
+                                            key={`iframe-${currentStation.id}`}
+                                            src={(() => {
+                                                const src = currentStation.iframeUrl || (currentStation.embedCanal ? `https://embed.saohgdasregions.fun/embed2/${currentStation.embedCanal}.html` : '');
+                                                if (!src) return undefined;
+                                                const separator = src.includes('?') ? '&' : '?';
+                                                return `${src}${separator}autoplay=1&muted=0&mute=0&volume=100`;
+                                            })()}
+                                            className="w-full h-full border-0"
+                                            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                                            allowFullScreen
+                                            scrolling="no"
+                                            title={currentStation.name}
+                                        />
+                                    ) : (
+                                        /* Clean Paused State: unmounts iframe completely so ALL sound & video STOP immediately */
+                                        <div className="flex flex-col items-center justify-center h-full bg-[var(--dark-bg)] bg-gradient-to-b from-black/20 to-black/60">
+                                            <img
+                                                src={currentStation.logo || 'https://picsum.photos/seed/radio-streaming-pro/150/150.jpg'}
+                                                alt={currentStation.name}
+                                                className="w-32 h-32 md:w-44 md:h-44 object-contain rounded-full border-[6px] md:border-[10px] border-[var(--primary-color)] opacity-60 p-2 md:p-3 bg-white/5"
+                                                onError={(e) => { (e.target as HTMLImageElement).src = "https://picsum.photos/seed/radio-streaming-pro/150/150.jpg" }}
+                                            />
+                                            <p className="mt-4 text-[var(--text-secondary)] font-medium">Pausado</p>
+                                        </div>
+                                    )
                                 )
                             ) : (
                                 <>
@@ -213,18 +279,18 @@ export const Player: React.FC = () => {
                 )}
             </div>
 
-            {/* 2. Horizontal Control Bar below video - Using Grid for absolute stability */}
-            <div className="hidden lg:block glass p-2 md:p-3 rounded-none border border-white/5 mt-4 mb-6 lg:mb-10">
-                <div className="grid grid-cols-1 md:grid-cols-[1fr_auto_1fr] items-center gap-3 md:gap-6">
-                    {/* Station info - Smaller font, 2 lines, fixed width container */}
-                    <div className="min-w-0 flex flex-col justify-center text-center md:text-left">
-                        <h2 className="text-xs md:text-sm font-bold text-transparent bg-clip-text bg-gradient-to-r from-[var(--primary-color)] to-[var(--accent-color)] line-clamp-2 leading-tight mb-0.5">
+            {/* 2. Control Bar below video - High z-index to ensure volume slider popover is never hidden behind player */}
+            <div className="block glass p-2 md:p-3 rounded-none border border-white/5 mt-[3px] mb-4 lg:mb-10 relative z-[200]">
+                <div className="grid grid-cols-[1fr_auto] md:grid-cols-[1fr_auto_1fr] items-center gap-3 md:gap-6">
+                    {/* Station info - Clean 2-line title and country */}
+                    <div className="min-w-0 flex flex-col justify-center text-left">
+                        <h2 className="text-xs md:text-sm font-bold text-transparent bg-clip-text bg-gradient-to-r from-[var(--primary-color)] to-[var(--accent-color)] line-clamp-1 leading-snug mb-0.5">
                             {currentStation.name}
                         </h2>
-                        <p className="text-[var(--text-secondary)] text-[9px] md:text-[11px] truncate opacity-70">{currentStation.country}</p>
+                        <p className="text-[var(--text-secondary)] text-[10px] md:text-xs truncate opacity-75">{currentStation.country}</p>
                     </div>
 
-                    {/* Player Controls - Perfectly Centered - Hidden on mobile as requested */}
+                    {/* Player Controls - Centered on desktop, bottom bar handles mobile */}
                     <div className="hidden md:flex items-center justify-center gap-3 md:gap-5">
                         <button
                             onClick={prevStation}
@@ -251,8 +317,8 @@ export const Player: React.FC = () => {
                         </button>
                     </div>
 
-                    {/* Volume and Error - Right aligned, mirroring info width */}
-                    <div className="flex flex-col items-center md:items-end justify-center min-w-0">
+                    {/* Volume and Error - Right aligned with high z-index popover */}
+                    <div className="flex flex-col items-end justify-center min-w-0 relative z-[210]">
                         {error && (
                             <div className="text-red-400 text-[9px] font-medium bg-red-400/5 px-2 py-0.5 rounded-none border border-red-400/20 max-w-full truncate mb-1">
                                 Error de carga
@@ -263,14 +329,15 @@ export const Player: React.FC = () => {
                                 Usa el volumen nativo del reproductor
                             </div>
                         ) : (
-                            <div className="flex items-center gap-4">
+                            <div className="flex items-center gap-2">
+                                {/* Responsive Vertical Popup Volume Control (Mobile & Desktop) */}
                                 <div
                                     ref={volumeRef}
-                                    className="hidden md:flex flex-col items-center relative"
+                                    className="flex flex-col items-center relative z-[220]"
                                 >
                                     {isVolumeOpen && (
-                                        <div className="absolute bottom-full left-4 -translate-x-1/2 mb-1 flex flex-col items-center bg-black/95 backdrop-blur-2xl p-3 rounded-none border border-white/10 shadow-[0_20px_50px_rgba(0,0,0,0.5)] animate-in fade-in slide-in-from-bottom-4 duration-300 min-h-[140px] z-[100]">
-                                            <div className="relative h-24 w-1 flex items-center justify-center">
+                                        <div className="absolute bottom-full right-0 mb-2 flex flex-col items-center bg-black/95 backdrop-blur-2xl p-3 rounded-none border border-white/15 shadow-[0_20px_50px_rgba(0,0,0,0.8)] animate-in fade-in slide-in-from-bottom-3 duration-200 min-h-[150px] z-[300] pointer-events-auto">
+                                            <div className="relative h-24 w-6 flex items-center justify-center">
                                                 <input
                                                     type="range"
                                                     min="0"
@@ -278,34 +345,31 @@ export const Player: React.FC = () => {
                                                     step="0.01"
                                                     value={volume}
                                                     onChange={(e) => setVolume(parseFloat(e.target.value))}
-                                                    className="absolute w-24 h-1 appearance-none bg-white/20 rounded-full cursor-pointer accent-[var(--primary-color)]"
-                                                    style={{ transform: 'rotate(-90deg)', transformOrigin: 'center' }}
+                                                    className="w-24 h-2 appearance-none bg-white/20 rounded-full cursor-pointer accent-[var(--primary-color)]"
+                                                    style={{ transform: 'rotate(-90deg)', transformOrigin: 'center', touchAction: 'none' }}
+                                                    aria-label="Control de volumen"
                                                 />
                                             </div>
-                                            <span className="mt-4 text-[10px] font-mono text-white/70 w-8 text-center">{Math.round(volume * 100)}%</span>
+                                            <span className="mt-4 text-[10px] font-mono text-white/90 w-10 text-center font-bold">
+                                                {Math.round(volume * 100)}%
+                                            </span>
+                                            <button
+                                                onClick={() => setVolume(volume > 0 ? 0 : 0.7)}
+                                                className="mt-2 text-[10px] text-[var(--text-secondary)] hover:text-white transition-colors px-1 py-0.5"
+                                                title={volume === 0 ? "Activar sonido" : "Silenciar"}
+                                            >
+                                                {volume === 0 ? "Activar" : "Silenciar"}
+                                            </button>
                                         </div>
                                     )}
                                     <button
                                         onClick={() => setIsVolumeOpen(!isVolumeOpen)}
-                                        className={`p-2.5 rounded-none transition-all duration-300 shadow-lg ${isVolumeOpen ? 'bg-[var(--primary-color)] text-white scale-110' : 'bg-white/5 text-white/70 hover:bg-white/10 hover:text-white'}`}
-                                        title="Volumen (Usa la rueda del mouse)"
+                                        className={`p-2 md:p-2.5 rounded-none transition-all duration-300 shadow-lg ${isVolumeOpen ? 'bg-[var(--primary-color)] text-white scale-105' : 'bg-white/5 text-white/70 hover:bg-white/10 hover:text-white'}`}
+                                        title="Volumen"
+                                        aria-label="Control de volumen"
                                     >
-                                        {volume === 0 ? <VolumeX size={16} /> : <Volume2 size={16} />}
+                                        {volume === 0 ? <VolumeX size={16} className="text-red-400" /> : <Volume2 size={16} />}
                                     </button>
-                                </div>
-
-                                {/* Mobile Volume Layout - Still horizontal but persistent */}
-                                <div className="flex md:hidden items-center gap-2 w-24 sm:w-32">
-                                    {volume === 0 ? <VolumeX size={14} className="text-[var(--text-secondary)]" /> : <Volume2 size={14} className="text-[var(--primary-color)]" />}
-                                    <input
-                                        type="range"
-                                        min="0"
-                                        max="1"
-                                        step="0.01"
-                                        value={volume}
-                                        onChange={(e) => setVolume(parseFloat(e.target.value))}
-                                        className="flex-1 h-1 bg-white/10 rounded-lg appearance-none cursor-pointer accent-[var(--primary-color)]"
-                                    />
                                 </div>
                             </div>
                         )}
@@ -313,7 +377,7 @@ export const Player: React.FC = () => {
                 </div>
             </div>
             {/* Added spacer to prevent cutting bottom on mobile */}
-            <div className="h-4 md:hidden" />
-        </>
+            <div className="h-2 md:hidden" />
+        </div>
     );
 };

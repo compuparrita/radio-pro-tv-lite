@@ -1,5 +1,5 @@
 import React from 'react';
-import { Radio, Moon, Sun, Zap, MessageCircle, Antenna, Star, Monitor, ChevronDown } from 'lucide-react';
+import { Radio, Moon, Waves, Zap, MessageCircle, Antenna, Star, Monitor, ChevronDown } from 'lucide-react';
 import { useChat } from '../context/ChatContext';
 import { useRadio } from '../context/RadioContext';
 
@@ -10,74 +10,90 @@ interface HeaderProps {
 }
 
 export const Header: React.FC<HeaderProps> = ({ theme, onThemeClick, onChatClick }) => {
-    const { unreadCount } = useChat();
+    const { unreadCount, onlineListeners, connectionStatus } = useChat();
     const { activeTab, setActiveTab, radioCategories, tvCategories, selectedCategory, setSelectedCategory } = useRadio();
     const [activeMenu, setActiveMenu] = React.useState<'radios' | 'tv' | null>(null);
+    const [hoverProgressMenu, setHoverProgressMenu] = React.useState<'radios' | 'tv' | null>(null);
     const closeTimeoutRef = React.useRef<number | null>(null);
-    const enterTimeoutRef = React.useRef<number | null>(null);
+    const autoSelectTimeoutRef = React.useRef<number | null>(null);
 
     const handleMouseEnter = (menu: 'radios' | 'tv') => {
-        // Clear any pending close or enter timeouts
+        // Limpiar timeouts de cierre pendientes
         if (closeTimeoutRef.current) {
             window.clearTimeout(closeTimeoutRef.current);
             closeTimeoutRef.current = null;
         }
-        if (enterTimeoutRef.current) {
-            window.clearTimeout(enterTimeoutRef.current);
+
+        // Iniciar indicador visual de progreso
+        setHoverProgressMenu(menu);
+
+        // Programar auto-activación a los 2 segundos (2000ms: Ojo, ahora es a 1s )
+        if (autoSelectTimeoutRef.current) {
+            window.clearTimeout(autoSelectTimeoutRef.current);
         }
 
-        // Set a delay for opening the menu
-        enterTimeoutRef.current = window.setTimeout(() => {
-            const targetTab = menu === 'radios' ? 'all' : 'tv';
-            if (activeTab !== targetTab) {
-                setActiveTab(targetTab);
+        autoSelectTimeoutRef.current = window.setTimeout(() => {
+            if (menu === 'radios') {
+                setActiveTab('all');
+                setSelectedCategory('Todas');
+            } else if (menu === 'tv') {
+                setActiveTab('tv');
                 setSelectedCategory('Todas');
             }
             setActiveMenu(menu);
-            enterTimeoutRef.current = null;
-        }, 350);
+            setHoverProgressMenu(null);
+            autoSelectTimeoutRef.current = null;
+        }, 1000);
     };
 
     const handleMouseLeave = () => {
-        // Clear pending enter timeout if mouse leaves early
-        if (enterTimeoutRef.current) {
-            window.clearTimeout(enterTimeoutRef.current);
-            enterTimeoutRef.current = null;
+        // Cancelar la auto-activación de 3 segundos si el usuario retira el cursor antes
+        if (autoSelectTimeoutRef.current) {
+            window.clearTimeout(autoSelectTimeoutRef.current);
+            autoSelectTimeoutRef.current = null;
         }
+        setHoverProgressMenu(null);
 
         closeTimeoutRef.current = window.setTimeout(() => {
             setActiveMenu(null);
-        }, 150);
+        }, 200);
     };
 
     React.useEffect(() => {
         return () => {
             if (closeTimeoutRef.current) window.clearTimeout(closeTimeoutRef.current);
-            if (enterTimeoutRef.current) window.clearTimeout(enterTimeoutRef.current);
+            if (autoSelectTimeoutRef.current) window.clearTimeout(autoSelectTimeoutRef.current);
         };
     }, []);
 
     // Close menu when clicking outside
     React.useEffect(() => {
-        const handleClickOutside = () => setActiveMenu(null);
+        const handleClickOutside = () => {
+            setActiveMenu(null);
+            setHoverProgressMenu(null);
+            if (autoSelectTimeoutRef.current) {
+                window.clearTimeout(autoSelectTimeoutRef.current);
+                autoSelectTimeoutRef.current = null;
+            }
+        };
         window.addEventListener('click', handleClickOutside);
         return () => window.removeEventListener('click', handleClickOutside);
     }, []);
 
     const getThemeLabel = () => {
         if (theme === 'dark') return 'Dark';
-        if (theme === 'light') return 'Claro';
+        if (theme === 'light') return 'Océano';
         return 'Juvenil';
     };
 
     return (
         <header className="w-full z-[100] lg:bg-[var(--dark-bg)]/95 lg:backdrop-blur-md border-b border-white/5 py-4 lg:py-3 transition-colors duration-300">
-            <div className="max-w-[1700px] mx-auto flex flex-col items-center lg:flex-row lg:justify-between lg:items-center px-4 gap-4">
+            <div className="max-w-[1700px] mx-auto flex flex-col items-center lg:flex-row lg:justify-between lg:items-center px-[10px] gap-4">
                 {/* Logo & Title */}
                 <div className="flex items-center gap-3">
                     <h1 className="text-2xl md:text-3xl lg:text-2xl font-black tracking-tighter text-transparent bg-clip-text bg-gradient-to-r from-[var(--primary-color)] via-[var(--secondary-color)] to-[var(--accent-color)] flex items-center gap-2">
                         <Radio size={28} className="text-[var(--primary-color)]" />
-                        <span className="inline">Radio Streaming <span className="text-[var(--text-primary)]">Pro</span></span>
+                        <span className="inline">TV Radio <span className="text-[var(--text-primary)]">Streaming Pro</span></span>
                     </h1>
                 </div>
 
@@ -97,6 +113,11 @@ export const Header: React.FC<HeaderProps> = ({ theme, onThemeClick, onChatClick
                         <button
                             onMouseEnter={() => handleMouseEnter('radios')}
                             onClick={() => {
+                                if (autoSelectTimeoutRef.current) {
+                                    window.clearTimeout(autoSelectTimeoutRef.current);
+                                    autoSelectTimeoutRef.current = null;
+                                }
+                                setHoverProgressMenu(null);
                                 if (activeMenu === 'radios') {
                                     setActiveMenu(null);
                                 } else {
@@ -106,11 +127,15 @@ export const Header: React.FC<HeaderProps> = ({ theme, onThemeClick, onChatClick
                                     setActiveMenu('radios');
                                 }
                             }}
-                            className={`flex items-center gap-2 px-2.5 py-1.5 transition-all font-bold text-[10px] md:text-xs uppercase tracking-wider whitespace-nowrap ${activeTab === 'all' ? 'bg-[var(--primary-color)] text-white shadow-[0_0_15px_rgba(139,92,246,0.3)]' : 'text-[var(--text-secondary)] hover:text-white hover:bg-white/5'}`}
+                            className={`relative overflow-hidden flex items-center gap-2 px-2.5 py-1.5 transition-all font-bold text-[10px] md:text-xs uppercase tracking-wider whitespace-nowrap ${activeTab === 'all' ? 'bg-[var(--primary-color)] text-white shadow-[0_0_15px_rgba(139,92,246,0.3)]' : 'text-[var(--text-secondary)] hover:text-white hover:bg-white/5'}`}
                         >
-                            <Antenna size={15} />
-                            <span>{activeTab === 'all' && selectedCategory !== 'Todas' ? selectedCategory : 'Radios'}</span>
-                            <ChevronDown size={14} className={`transition-transform duration-300 ${activeMenu === 'radios' ? 'rotate-180 text-white/70' : 'text-white/30'}`} />
+                            {/* Barra de progreso de 3 segundos al posar el mouse */}
+                            {hoverProgressMenu === 'radios' && (
+                                <span className="absolute bottom-0 left-0 top-0 bg-white/20 pointer-events-none animate-header-progress" />
+                            )}
+                            <Antenna size={15} className="relative z-10" />
+                            <span className="relative z-10">{activeTab === 'all' && selectedCategory !== 'Todas' ? selectedCategory : 'Radios'}</span>
+                            <ChevronDown size={14} className={`relative z-10 transition-transform duration-300 ${activeMenu === 'radios' ? 'rotate-180 text-white/70' : 'text-white/30'}`} />
                         </button>
 
                         {/* Dropdown Menu */}
@@ -161,6 +186,11 @@ export const Header: React.FC<HeaderProps> = ({ theme, onThemeClick, onChatClick
                         <button
                             onMouseEnter={() => handleMouseEnter('tv')}
                             onClick={() => {
+                                if (autoSelectTimeoutRef.current) {
+                                    window.clearTimeout(autoSelectTimeoutRef.current);
+                                    autoSelectTimeoutRef.current = null;
+                                }
+                                setHoverProgressMenu(null);
                                 if (activeMenu === 'tv') {
                                     setActiveMenu(null);
                                 } else {
@@ -170,19 +200,24 @@ export const Header: React.FC<HeaderProps> = ({ theme, onThemeClick, onChatClick
                                     setActiveMenu('tv');
                                 }
                             }}
-                            className={`flex items-center gap-2 px-2.5 py-1.5 transition-all font-bold text-[10px] md:text-xs uppercase tracking-wider whitespace-nowrap group ${activeTab === 'tv' ? 'bg-[var(--primary-color)] text-white shadow-[0_0_15px_rgba(139,92,246,0.3)]' : 'text-[var(--text-secondary)] hover:text-white hover:bg-white/5'}`}
+                            className={`relative overflow-hidden flex items-center gap-2 px-2.5 py-1.5 transition-all font-bold text-[10px] md:text-xs uppercase tracking-wider whitespace-nowrap group ${activeTab === 'tv' ? 'bg-[var(--primary-color)] text-white shadow-[0_0_15px_rgba(139,92,246,0.3)]' : 'text-[var(--text-secondary)] hover:text-white hover:bg-white/5'}`}
                         >
-                            <Monitor size={15} />
-                            <span>{activeTab === 'tv' && selectedCategory !== 'Todas' ? selectedCategory : 'Televisión'}</span>
-                            <ChevronDown size={14} className={`transition-transform duration-300 ${activeMenu === 'tv' ? 'rotate-180 text-white/70' : 'text-white/30'}`} />
+                            {/* Barra de progreso de 3 segundos al posar el mouse */}
+                            {hoverProgressMenu === 'tv' && (
+                                <span className="absolute bottom-0 left-0 top-0 bg-white/20 pointer-events-none animate-header-progress" />
+                            )}
+                            <Monitor size={15} className="relative z-10" />
+                            <span className="relative z-10">{activeTab === 'tv' && selectedCategory !== 'Todas' ? selectedCategory : 'TV & YT'}</span>
+                            <ChevronDown size={14} className={`relative z-10 transition-transform duration-300 ${activeMenu === 'tv' ? 'rotate-180 text-white/70' : 'text-white/30'}`} />
 
                             {/* Shortcut to Lite version */}
                             <a
                                 href="/tv-lite.html"
                                 target="_blank"
+                                rel="noopener noreferrer"
                                 onClick={(e) => e.stopPropagation()}
                                 className="ml-1 px-1 bg-white/20 text-[8px] rounded hover:bg-white/40 transition-colors"
-                                title="Abrir versión optimizada para TV"
+                                title="Abrir versión optimizada, LITE"
                             >
                                 LITE
                             </a>
@@ -222,7 +257,7 @@ export const Header: React.FC<HeaderProps> = ({ theme, onThemeClick, onChatClick
                     >
                         <div className="relative w-5 h-5 flex items-center justify-center">
                             {theme === 'dark' && <Moon size={18} className="text-[var(--primary-color)]" />}
-                            {theme === 'light' && <Sun size={18} className="text-[var(--warning-color)]" />}
+                            {theme === 'light' && <Waves size={18} className="text-[var(--primary-color)]" />}
                             {theme === 'youth' && <Zap size={18} className="text-[var(--accent-color)]" />}
                         </div>
                         <span className="text-xs font-bold uppercase tracking-wider min-w-[60px] text-left">
@@ -230,14 +265,26 @@ export const Header: React.FC<HeaderProps> = ({ theme, onThemeClick, onChatClick
                         </span>
                     </button>
 
-                    {/* Chat Button */} {/* uppercase */}
+                    {/* Chat Button */}
                     <button
                         onClick={onChatClick}
-                        className="relative flex items-center gap-2 px-4 py-1.5 bg-gradient-to-r from-[var(--primary-color)] to-[var(--secondary-color)] text-white hover:opacity-90 transition-all border border-transparent"
-                        title="Chatear online sin registro"
+                        className="relative flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-[var(--primary-color)] to-[var(--secondary-color)] text-white hover:opacity-90 transition-all border border-transparent"
+                        title="Chatear online"
                     >
                         <MessageCircle size={18} />
-                        <span className="text-xs font-bold tracking-wider">En Línea</span>
+                        <span className="text-xs font-bold tracking-wider">Chat</span>
+                        {/* Online count pill */}
+                        <span className="flex items-center gap-1 bg-black/25 rounded-full px-1.5 py-0.5 text-[10px] font-bold leading-none">
+                            <span className={`w-1.5 h-1.5 rounded-full inline-block ${
+                                connectionStatus === 'connected'
+                                    ? 'bg-green-400 animate-pulse'
+                                    : connectionStatus === 'connecting'
+                                        ? 'bg-yellow-400 animate-pulse'
+                                        : 'bg-red-400'
+                            }`} />
+                            {connectionStatus === 'connected' ? onlineListeners : 0}
+                        </span>
+                        {/* Unread messages badge */}
                         {unreadCount > 0 && (
                             <span className="absolute -top-1.5 -right-1.5 bg-red-500 text-white text-[10px] font-black rounded-full min-w-[20px] h-[20px] px-1 flex items-center justify-center shadow-lg border-2 border-[var(--dark-bg)]">
                                 {unreadCount > 99 ? '99' : unreadCount}

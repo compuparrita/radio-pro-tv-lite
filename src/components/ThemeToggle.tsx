@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Moon, Sun, Zap } from 'lucide-react';
+import { Moon, Waves, Zap } from 'lucide-react';
 
 type Theme = 'dark' | 'light' | 'youth';
 
@@ -38,7 +38,7 @@ export const ThemeToggle: React.FC = () => {
             title="Cambiar tema"
         >
             {theme === 'dark' && <Moon size={24} />}
-            {theme === 'light' && <Sun size={24} />}
+            {theme === 'light' && <Waves size={24} />}
             {theme === 'youth' && <Zap size={24} />}
         </button>
     );

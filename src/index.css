@@ -3,11 +3,11 @@
 @tailwind utilities;
 
 :root {
-  --primary-color: #8b5cf6;
+  --primary-color: #FF6829;
   /* Modern Violet / Paleta de colores: https://rgbacolorpicker.com/ */
   --secondary-color: #6366f1;
   /* Indigo */
-  --accent-color: #ec4899;
+  --accent-color: #ECDC48;
   /* Pink */
   --success-color: #10b981;
   --focus-ring: #ffffff;
@@ -39,29 +39,31 @@ body {
 }
 
 body.light-mode {
-  --primary-color: #6366f1;
-  /* Indigo 500 - Softer */
-  --secondary-color: #818cf8;
-  /* Indigo 400 */
-  --dark-bg: #fdfcff;
-  /* Ultra white with hint of lavender */
-  --dark-surface: #ffffff;
-  --dark-border: rgba(0, 0, 0, 0.04);
-  --text-primary: #1e293b;
-  /* Slate 800 */
-  --text-secondary: #64748b;
-  /* Slate 500 */
-  --glass-bg: rgba(255, 255, 255, 0.95);
-  --glass-border: rgba(0, 0, 0, 0.03);
-  background: #f8fafc;
-  /* Slate 50 */
+  --primary-color: #0ea5e9;
+  /* Sky 500 / Cyan brillante */
+  --secondary-color: #0369a1;
+  /* Sky 700 / Azul Océano */
+  --accent-color: #f43f5e;
+  /* Coral */
+  --dark-bg: #070d1e;
+  /* Midnight Navy profundo - cómodo a los ojos, sin blancos cegadores */
+  --dark-surface: #0f1c3f;
+  /* Slate Navy superficie - contraste nítido con el fondo */
+  --dark-border: rgba(14, 165, 233, 0.18);
+  /* Borde suave cyan */
+  --text-primary: #f8fafc;
+  /* Slate 50 - alta legibilidad */
+  --text-secondary: #94a3b8;
+  /* Slate 400 */
+  --glass-bg: rgba(15, 28, 63, 0.85);
+  --glass-border: rgba(14, 165, 233, 0.15);
+  background: #070d1e;
 }
 
 body.youth-mode {
-  --primary-color: #146B4A;
-  /* 00ff9d */
-  --secondary-color: #00b8ff;
-  --accent-color: #ff00ff;
+  --primary-color: #0077FF;
+  --secondary-color: #003F5C;
+  --accent-color: #FF9500;
   --dark-bg: #050505;
   --dark-surface: #121212;
   --dark-border: #333333;
@@ -173,10 +175,36 @@ body.light-mode .glass {
   pointer-events: none !important;
 }
 
-/* Allow controls to hide on inactivity */
+/* Allow controls to hide on inactivity - BUT keep the cursor visible */
 .video-js.vjs-user-inactive .vjs-control-bar {
   opacity: 0 !important;
   visibility: hidden !important;
+}
+
+/* GLOBAL CURSOR TRACKER (Supports TVs and iFrames) */
+/* Using a transparent pixels cursor instead of 'none' to keep mousemove events alive on Smart TVs */
+body:not(.user-is-active) {
+  cursor: url("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAAXNSR0IArs4c6QAAAAtJREFUGFdjYAACAAAFAAGq1chmAAAAAElFTkSuQmCC"), auto !important;
+}
+
+body.user-is-active {
+  cursor: default;
+}
+
+/* Ensure that interactive elements always trigger a pointer when active */
+body.user-is-active a, 
+body.user-is-active button, 
+body.user-is-active input {
+  cursor: pointer !important;
+}
+
+/* VideoJS integration with global tracker */
+.vjs-user-inactive {
+  cursor: none !important;
+}
+
+.vjs-user-active {
+  cursor: default !important;
 }
 
 /* Auto-hide Quality Selector when inactive */
@@ -283,40 +311,55 @@ button:focus-visible {
   box-shadow: 0 0 30px rgba(255, 255, 255, 0.5);
 }
 
-/* CINEMA MODE - Mobile Landscape Optimization */
-@media (max-width: 1023px) and (orientation: landscape) and (max-height: 700px) {
+/* CINEMA MODE - Ultra Maximized for Mobile/Tablet Landscape ONLY */
+/* Restrict to touch devices to prevent desktop window resizing from triggering it */
+@media (max-width: 1023px) and (orientation: landscape) and (max-height: 800px) and (pointer: coarse) {
 
-  /* Hide non-essential UI */
+  /* Hide EVERYTHING including the main header and nav bars */
   .header-container,
+  #main-header,
   .mobile-nav-container,
-  .footer-container,
-  .mobile-list-container {
+  .footer-container:not(.always-show),
+  .mobile-list-container,
+  .sidebar-container,
+  .animated-bg {
     display: none !important;
+    visibility: hidden !important;
+    opacity: 0 !important;
   }
 
-  /* Remove padding from main container */
-  .min-h-screen {
-    padding-bottom: 0 !important;
-  }
-
-  body {
+  /* Full screen lockdown */
+  body, html {
     overflow: hidden !important;
+    height: 100vh !important;
+    height: -webkit-fill-available !important;
+    width: 100vw !important;
+    position: fixed !important;
+    top: 0 !important;
+    left: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    background: black !important;
   }
 
-  /* Maximize player space */
+  /* Player covers everything */
   .player-main-media {
     position: fixed !important;
     top: 0 !important;
     left: 0 !important;
+    bottom: 0 !important;
+    right: 0 !important;
     width: 100vw !important;
     height: 100vh !important;
-    z-index: 9999 !important;
+    height: -webkit-fill-available !important;
+    z-index: 999999 !important; 
     background: black !important;
     max-height: none !important;
     border: none !important;
+    margin: 0 !important;
+    border-radius: 0 !important;
   }
 
-  /* Force internal video containers to fill the fixed viewport */
   .player-tech-container,
   .player-aspect-wrapper,
   .player-aspect-wrapper>div,
@@ -326,31 +369,153 @@ button:focus-visible {
   iframe {
     width: 100vw !important;
     height: 100vh !important;
+    height: -webkit-fill-available !important;
     max-height: 100vh !important;
     min-width: 100vw !important;
     min-height: 100vh !important;
     aspect-ratio: auto !important;
     object-fit: contain !important;
-    /* Forces fill without cropping important parts */
     padding: 0 !important;
     margin: 0 !important;
     border: none !important;
-    /* Removed 'fixed' from children to prevent stacking context issues */
-    /* Position is handled by parent .player-main-media being fixed */
+  }
+}
+
+/* Fix for floating panels height on mobile */
+@media (max-width: 1023px) {
+  :root {
+    --mobile-panel-max-height: calc(100vh - var(--header-final-height, 60px) - 140px);
   }
 
-  /* Ensure the video-js container itself is also strictly sized */
-  .video-js {
-    position: absolute !important;
+  .mobile-list-container .relative.flex-1 > div[class*="absolute"],
+  .mobile-panel-content {
+    max-height: var(--mobile-panel-max-height) !important;
+    overflow-y: auto !important;
+    scrollbar-width: thin;
+  }
+}
+
+/* DESKTOP LAYOUT REINFORCEMENT */
+@media (min-width: 1024px) {
+  .player-column {
+    min-width: 0;
+    flex: 1 1 0%;
+    position: relative;
+  }
+
+  .player-sticky-wrapper {
+    position: sticky !important;
+    top: calc(var(--header-final-height, 40px) + 3px) !important;
+    z-index: 100 !important;
+  }
+
+  .sidebar-container {
+    flex-shrink: 0;
+  }
+}
+/* Mobile sticky logic */
+@media (max-width: 1023px) {
+  .player-sticky-wrapper {
+    position: sticky !important;
     top: 0 !important;
-    left: 0 !important;
+    top: env(safe-area-inset-top, 0px) !important;
+    z-index: 100 !important;
   }
+}
 
-  /* Specifically for VideoJS to remove its internal aspect ratio padding if any */
-  .video-js.vjs-16-9,
-  .video-js.vjs-4-3,
-  .video-js.vjs-fluid {
-    padding-top: 0 !important;
-    height: 100vh !important;
+/* Prevent iframes inside the player from showing scrollbars (Windows Chromium issue).
+   NOTE: overflow:hidden is intentionally NOT set on the iframe element itself —
+   doing so disables the GPU-composited video layer in Chromium (audio plays, no video). */
+.player-main-media iframe {
+  display: block !important;
+  scrollbar-width: none !important; /* Firefox */
+}
+.player-main-media iframe::-webkit-scrollbar {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+}
+/* Clip the player wrappers so the iframe never causes layout overflow */
+.player-aspect-wrapper {
+  overflow: hidden !important;
+}
+
+/* Header button hover 3s (ojo ahora es a 1s) progress indicator */
+@keyframes headerProgress {
+  0% {
+    width: 0%;
   }
+  100% {
+    width: 100%;
+  }
+}
+
+.animate-header-progress {
+  animation: headerProgress 1s linear forwards;
+}
+
+/* Typing indicator three-dot bounce animation */
+@keyframes typingBounce {
+  0%, 60%, 100% { transform: translateY(0); opacity: 0.5; }
+  30% { transform: translateY(-4px); opacity: 1; }
+}
+
+.typing-dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background-color: currentColor;
+  animation: typingBounce 1.2s infinite;
+}
+
+.typing-dot:nth-child(2) { animation-delay: 0.2s; }
+.typing-dot:nth-child(3) { animation-delay: 0.4s; }
+
+/* Station list – table / zebra-stripe style */
+.station-list-body > div:nth-child(even) {
+  background-color: rgba(255, 255, 255, 0.025);
+}
+body.light-mode .station-list-body > div:nth-child(even) {
+  background-color: rgba(14, 165, 233, 0.035);
+}
+
+/* Scrollbar – thinner for station list */
+.station-scroll::-webkit-scrollbar { width: 4px; }
+.station-scroll::-webkit-scrollbar-track { background: transparent; }
+.station-scroll::-webkit-scrollbar-thumb {
+  background: var(--primary-color);
+  border-radius: 2px;
+  opacity: 0.6;
+}
+
+/* Light-mode (Océano): incoming chat bubble styling */
+body.light-mode .chat-bubble-incoming {
+  background: #0f1c3f !important;
+  border-color: rgba(14, 165, 233, 0.25) !important;
+  color: #f8fafc !important;
+}
+
+/* Scrollbar estilizada y flotante para el input/textarea del chat (sin chocar con esquinas redondeadas) */
+.chat-textarea-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: var(--primary-color) transparent;
+}
+.chat-textarea-scroll::-webkit-scrollbar {
+  width: 5px;
+}
+.chat-textarea-scroll::-webkit-scrollbar-track {
+  background: transparent;
+  margin-top: 8px;
+  margin-bottom: 8px; /* Evita que el indicador llegue a las curvas de las esquinas */
+}
+.chat-textarea-scroll::-webkit-scrollbar-thumb {
+  background: var(--primary-color);
+  border-radius: 9999px;
+  opacity: 0.55;
+  transition: opacity 0.2s ease, background 0.2s ease;
+}
+.chat-textarea-scroll::-webkit-scrollbar-thumb:hover {
+  background: var(--secondary-color);
+  opacity: 0.9;
 }

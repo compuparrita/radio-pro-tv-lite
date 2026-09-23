@@ -42,6 +42,26 @@ copyFile(swSrc, swDest); // Optional
 
 if (success) {
     console.log('--- Success: Assets prepared for Capacitor ---');
+
+    // Sincronizar automáticamente con Capacitor para TV Lite
+    try {
+        const { execSync } = await import('child_process');
+        console.log('--- Running Capacitor sync for TV Lite ---');
+        execSync('npx cap sync android', {
+            stdio: 'inherit',
+            cwd: root,
+            env: {
+                ...process.env,
+                CAP_WEB_DIR: 'dist-tv-lite',
+                CAP_APP_ID: 'com.radiofm.tvlite',
+                CAP_APP_NAME: 'Radio Pro TV Lite'
+            }
+        });
+        console.log('--- TV Lite build & sync complete ---');
+    } catch (err) {
+        console.error('Error during capacitor sync:', err);
+        process.exit(1);
+    }
     process.exit(0);
 } else {
     console.error('--- Failure: Required assets missing ---');

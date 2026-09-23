@@ -76,15 +76,14 @@ function AppContent() {
 
     const stopResizing = () => {
         setIsResizing(false);
+        localStorage.setItem('sidebarWidth', sidebarWidth.toString());
     };
 
     const resize = (e: MouseEvent) => {
         if (isResizing) {
-            // Calculate width from right side of screen
-            const newWidth = window.innerWidth - e.clientX - 24; // 24 is padding/gap
-            if (newWidth >= 280 && newWidth <= 600) {
+            const newWidth = window.innerWidth - e.clientX - 24;
+            if (newWidth >= 280 && newWidth <= 500) {
                 setSidebarWidth(newWidth);
-                localStorage.setItem('sidebarWidth', newWidth.toString());
             }
         }
     };
@@ -110,24 +109,99 @@ function AppContent() {
             window.removeEventListener('mousemove', resize);
             window.removeEventListener('mouseup', stopResizing);
         };
-    }, [isResizing]);
+    }, [isResizing, sidebarWidth]);
 
     // Scroll Persistence for Mobile Orientation Change
     // When entering landscape (Cinema Mode), the page scroll usually resets or becomes irrelevant.
     // We want to save the user's scroll position in portrait and restore it when they return.
     const lastPortraitScrollY = useRef(0);
 
+    // Global Activity Tracker for Cursor Visibility (Fix for Smart TVs)
     useEffect(() => {
-        const cinemaModeQuery = window.matchMedia('(max-width: 1023px) and (orientation: landscape) and (max-height: 500px)');
+        let timeoutId: number;
+        const body = document.body;
 
+        const handleActivity = () => {
+            if (!body.classList.contains('user-is-active')) {
+                body.classList.add('user-is-active');
+            }
+            
+            window.clearTimeout(timeoutId);
+            timeoutId = window.setTimeout(() => {
+                body.classList.remove('user-is-active');
+            }, 5000); // 5 seconds of grace before hiding
+        };
+
+        // Listen for all possible interactions
+        window.addEventListener('mousemove', handleActivity, { passive: true });
+        window.addEventListener('mousedown', handleActivity, { passive: true });
+        window.addEventListener('keydown', handleActivity, { passive: true });
+        window.addEventListener('touchstart', handleActivity, { passive: true });
+        window.addEventListener('scroll', handleActivity, { passive: true });
+
+        // Initial state
+        handleActivity();
+
+        return () => {
+            window.clearTimeout(timeoutId);
+            window.removeEventListener('mousemove', handleActivity);
+            window.removeEventListener('mousedown', handleActivity);
+            window.removeEventListener('keydown', handleActivity);
+            window.removeEventListener('touchstart', handleActivity);
+            window.removeEventListener('scroll', handleActivity);
+            body.classList.remove('user-is-active');
+        };
+    }, []);
+
+    // Persistencia y Restauración del Scroll al recargar el navegador
+    useEffect(() => {
+        // Permitir que el navegador mantenga o nos permita controlar el scroll manualmente
+        if ('scrollRestoration' in window.history) {
+            window.history.scrollRestoration = 'manual';
+        }
+
+        const savedScroll = sessionStorage.getItem('appScrollPosition');
+        if (savedScroll) {
+            const targetY = parseInt(savedScroll, 10);
+            if (!isNaN(targetY) && targetY > 0) {
+                // Intentar restaurar de inmediato y reintentar conforme se renderiza el contenido dinámico
+                window.scrollTo({ top: targetY, behavior: 'instant' });
+                const t1 = setTimeout(() => window.scrollTo({ top: targetY, behavior: 'instant' }), 100);
+                const t2 = setTimeout(() => window.scrollTo({ top: targetY, behavior: 'instant' }), 300);
+                const t3 = setTimeout(() => window.scrollTo({ top: targetY, behavior: 'instant' }), 600);
+                return () => {
+                    clearTimeout(t1);
+                    clearTimeout(t2);
+                    clearTimeout(t3);
+                };
+            }
+        }
+    }, []);
+
+    useEffect(() => {
+        const cinemaModeQuery = window.matchMedia('(max-width: 1023px) and (orientation: landscape) and (max-height: 800px) and (pointer: coarse)');
+
+        let saveTimeout: number;
         const handleScroll = () => {
-            // Only save scroll position if we are NOT in cinema mode
+            // Guardar posición de scroll solo si no estamos en cinema mode
             if (!cinemaModeQuery.matches) {
-                lastPortraitScrollY.current = window.scrollY;
+                const currentY = window.scrollY;
+                lastPortraitScrollY.current = currentY;
+
+                window.clearTimeout(saveTimeout);
+                saveTimeout = window.setTimeout(() => {
+                    sessionStorage.setItem('appScrollPosition', currentY.toString());
+                }, 100);
             }
         };
 
-        const handleOrientationChange = (e: MediaQueryListEvent) => {
+        const handleBeforeUnload = () => {
+            if (!cinemaModeQuery.matches) {
+                sessionStorage.setItem('appScrollPosition', window.scrollY.toString());
+            }
+        };
+
+        const handleOrientationChange = (e: MediaQueryListEvent | MediaQueryList) => {
             if (!e.matches) {
                 // We just exited cinema mode (back to portrait/normal)
                 // Restore the scroll after a brief delay to allow layout to stabilization
@@ -142,10 +216,13 @@ function AppContent() {
 
         // Attach listeners
         window.addEventListener('scroll', handleScroll, { passive: true });
+        window.addEventListener('beforeunload', handleBeforeUnload);
         cinemaModeQuery.addEventListener('change', handleOrientationChange);
 
         return () => {
+            window.clearTimeout(saveTimeout);
             window.removeEventListener('scroll', handleScroll);
+            window.removeEventListener('beforeunload', handleBeforeUnload);
             cinemaModeQuery.removeEventListener('change', handleOrientationChange);
         };
     }, []);
@@ -157,6 +234,7 @@ function AppContent() {
             {/* Universal Header - FIXED ON DESKTOP, RELATIVE ON MOBILE */}
             <div
                 ref={headerRef}
+                id="main-header"
                 className={`${isDesktop ? 'fixed' : 'relative'} top-0 left-0 w-full transition-colors duration-300 bg-[var(--dark-bg)] shadow-md header-container`}
                 style={{ zIndex: 1000 }}
             >
@@ -169,57 +247,70 @@ function AppContent() {
 
             {/* Main content area - REACTIVE PADDING (Removes black gaps) */}
             <div
-                className="w-full relative px-4"
+                className="w-full relative px-[10px]"
                 style={{
                     overflow: 'visible',
                     zIndex: 10,
                     // No padding on mobile to avoid the black gap
-                    paddingTop: isDesktop ? `${headerHeight + 20}px` : '0px'
+                    // SimetrÃ­a perfecta: 3px de separaciÃ³n con el header
+                    paddingTop: isDesktop ? `${headerHeight + 3}px` : '0px'
                 }}
             >
                 <div
-                    className="max-w-[1700px] mx-auto grid grid-cols-1 lg:flex gap-4 lg:gap-0 relative"
-                    style={{ overflow: 'visible' }}
+                    className="max-w-[1700px] mx-auto relative flex flex-col lg:grid"
+                    style={{ 
+                        gridTemplateColumns: isDesktop ? `1fr auto minmax(300px, ${sidebarWidth}px)` : 'none',
+                        gap: isDesktop ? '0' : '1.5rem'
+                    }}
                 >
                     {/* Left Column - Player + List on mobile */}
                     <div
-                        className="flex-1 lg:pr-6 player-column"
+                        className="player-column w-full"
                         style={{
-                            position: isDesktop ? 'sticky' : 'relative',
-                            top: isDesktop ? `${headerHeight}px` : '0',
-                            ...(isDesktop ? { alignSelf: 'flex-start' } : {}),
-                            zIndex: 100
+                            position: 'relative',
+                            zIndex: 10,
+                            minWidth: isDesktop ? '450px' : '0'
                         }}
                     >
                         <Player />
-                        {/* On mobile, the list is part of the same parent as the player */}
-                        <div className="lg:hidden mt-4 mobile-list-container">
+                        {/* On mobile/tablet vertical, the list is part of the same parent as the player */}
+                        <div className="lg:hidden mt-6 mobile-list-container">
                             <StationList />
                         </div>
                     </div>
 
-                    {/* Resizer Handle (Desktop only) - STICKY to stay visible during scroll */}
-                    <div
-                        onMouseDown={startResizing}
-                        className={`hidden lg:flex w-4 -mx-2 items-center justify-center cursor-col-resize group relative`}
-                        style={{
-                            zIndex: 200,
-                            position: 'sticky',
-                            top: `${headerHeight}px`, // Align top exactly with header/player
-                            height: '400px', // Matches typical player height on desktop for vertical centering
-                            alignSelf: 'flex-start'
-                        }}
-                    >
-                        <div className={`w-0.5 h-16 rounded-full transition-all duration-300 ${isResizing ? 'bg-[var(--primary-color)] h-24 scale-x-150' : 'bg-[var(--dark-border)] opacity-60 group-hover:opacity-100 group-hover:bg-[var(--primary-color)]/50 group-hover:h-24'}`} />
-                    </div>
+                    {/* Resizer Handle (Desktop only) - SeparaciÃ³n de 16px y Grip de 2px */}
+                    {isDesktop && (
+                        <div
+                            onMouseDown={startResizing}
+                            className="flex w-[16px] items-center justify-center cursor-col-resize group relative"
+                            style={{
+                                zIndex: 200,
+                                position: 'sticky',
+                                top: `calc(var(--header-final-height, 40px) + 3px)`,
+                                height: '300px', // Altura del Ã¡rea interactiva (cubre el alto del player)
+                                alignSelf: 'start'
+                            }}
+                        >
+                            {/* Línea visual del separador - más visible con puntos de grip */}
+                            <div className="flex flex-col items-center gap-1">
+                                <div className={`w-[3px] rounded-full transition-all duration-300 ${isResizing ? 'bg-[var(--primary-color)] h-32 shadow-[0_0_8px_var(--primary-color)]' : 'bg-white/25 h-8 group-hover:bg-[var(--primary-color)]/70 group-hover:h-20 group-hover:shadow-[0_0_6px_var(--primary-color)]'}`} />
+                                <div className={`flex flex-col gap-1 transition-opacity duration-300 ${isResizing ? 'opacity-0' : 'opacity-40 group-hover:opacity-80'}`}>
+                                    <div className="w-1 h-1 rounded-full bg-current" />
+                                    <div className="w-1 h-1 rounded-full bg-current" />
+                                    <div className="w-1 h-1 rounded-full bg-current" />
+                                </div>
+                            </div>
+                        </div>
+                    )}
 
-                    {/* Right Column - Desktop only */}
+                    {/* Right Column - Desktop horizontal */}
                     <div
-                        className="hidden lg:flex h-full flex-col lg:pl-6"
+                        className="hidden lg:flex flex-col sidebar-container"
                         style={{
-                            width: `${sidebarWidth}px`,
                             position: 'relative',
-                            zIndex: 100
+                            zIndex: 20,
+                            minWidth: 0
                         }}
                     >
                         <StationList />
@@ -267,3 +358,4 @@ function App() {
 }
 
 export default App;
+

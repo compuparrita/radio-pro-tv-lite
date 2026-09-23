@@ -17,8 +17,10 @@ class SocketService {
         this.socket = io(SERVER_URL, {
             transports: ['websocket', 'polling'],
             reconnection: true,
-            reconnectionDelay: 3000, // 3 seconds between attempts
-            reconnectionAttempts: 3,  // Only try 3 times
+            reconnectionDelay: 2000,
+            reconnectionDelayMax: 10000,
+            reconnectionAttempts: 15,
+            timeout: 10000,
             extraHeaders: {
                 "ngrok-skip-browser-warning": "true"
             }
