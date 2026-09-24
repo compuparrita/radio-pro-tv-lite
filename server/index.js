@@ -4,9 +4,14 @@ const { Server } = require('socket.io');
 const cors = require('cors');
 // const bcrypt = require('bcrypt');
 const bcrypt = require('bcryptjs');
-const { createProxyMiddleware } = require('http-proxy-middleware');
 const DOMPurify = require('isomorphic-dompurify');
-const { randomUUID } = require('crypto');
+const { createProxyMiddleware } = require('http-proxy-middleware');
+const crypto = require('crypto');
+const randomUUID = crypto.randomUUID
+    ? crypto.randomUUID.bind(crypto)
+    : () => ([1e7]+-1e3+-4e3+-8e3+-1e11).replace(/[018]/g, c =>
+        (c ^ crypto.randomBytes(1)[0] & 15 >> c / 4).toString(16)
+      );
 const { RoomManager } = require('./watchparty/RoomManager');
 require('dotenv').config();
 
