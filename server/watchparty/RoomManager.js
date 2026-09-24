@@ -4,6 +4,7 @@ const { generateRoomCode } = require('./roomCode');
 class RoomManager {
     #rooms = new Map();
     #codeToId = new Map();
+    #socketToRoom = new Map();
 
     createRoom({ hostSocketId, userId, userName, roomName }) {
         const roomId = randomUUID();
@@ -43,6 +44,7 @@ class RoomManager {
 
         this.#rooms.set(roomId, room);
         this.#codeToId.set(roomCode, roomId);
+        this.#socketToRoom.set(hostSocketId, roomId);
 
         return room;
     }
@@ -65,48 +67,56 @@ class RoomManager {
             joinedAt: now,
             lastPing: now,
         });
+        this.#socketToRoom.set(socketId, roomId);
 
         return { success: true, room };
     }
 
     leaveRoom({ socketId }) {
-        for (const room of this.#rooms.values()) {
-            const memberIndex = room.members.findIndex((member) => member.socketId === socketId);
+        const roomId = this.#socketToRoom.get(socketId);
+        const room = roomId ? this.#rooms.get(roomId) : null;
 
-            if (memberIndex === -1) continue;
+        if (!room) {
+            this.#socketToRoom.delete(socketId);
+            return { success: false, error: 'MEMBER_NOT_FOUND' };
+        }
 
-            const [member] = room.members.splice(memberIndex, 1);
+        const memberIndex = room.members.findIndex((member) => member.socketId === socketId);
+        if (memberIndex === -1) {
+            this.#socketToRoom.delete(socketId);
+            return { success: false, error: 'MEMBER_NOT_FOUND' };
+        }
 
-            if (room.members.length === 0) {
-                this.#rooms.delete(room.id);
-                this.#codeToId.delete(room.roomCode);
+        const [member] = room.members.splice(memberIndex, 1);
+        this.#socketToRoom.delete(socketId);
 
-                return {
-                    success: true,
-                    deleted: true,
-                    hostTransferred: false,
-                    room: null,
-                };
-            }
-
-            let hostTransferred = false;
-            if (member.role === 'host') {
-                const nextHost = room.members.reduce((earliest, candidate) => (
-                    candidate.joinedAt < earliest.joinedAt ? candidate : earliest
-                ));
-                this.transferHost(room.id, nextHost.socketId);
-                hostTransferred = true;
-            }
+        if (room.members.length === 0) {
+            this.#rooms.delete(room.id);
+            this.#codeToId.delete(room.roomCode);
 
             return {
                 success: true,
-                deleted: false,
-                hostTransferred,
-                room,
+                deleted: true,
+                hostTransferred: false,
+                room: null,
             };
         }
 
-        return { success: false, error: 'MEMBER_NOT_FOUND' };
+        let hostTransferred = false;
+        if (member.role === 'host') {
+            const nextHost = room.members.reduce((earliest, candidate) => (
+                candidate.joinedAt < earliest.joinedAt ? candidate : earliest
+            ));
+            this.transferHost(room.id, nextHost.socketId);
+            hostTransferred = true;
+        }
+
+        return {
+            success: true,
+            deleted: false,
+            hostTransferred,
+            room,
+        };
     }
 
     getRoomByCode(roomCode) {
