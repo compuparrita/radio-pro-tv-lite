@@ -44,6 +44,7 @@ interface WatchPartyContextValue {
     leaveRoom: () => Promise<boolean>;
     sendAction: (action: WatchPartyAction['action'], payload: unknown) => Promise<WatchPartyResponse>;
     consumePendingAction: () => WatchPartyAction | null;
+    clearRemoteExecutionRef: () => void;
     clearError: () => void;
 }
 
@@ -241,6 +242,8 @@ export function WatchPartyProvider({ children }: { children: ReactNode }) {
         return action;
     }, [pendingAction]);
 
+    const clearRemoteExecutionRef = useCallback(() => setRemoteExecutionRef(null), []);
+
     return (
         <WatchPartyContext.Provider value={{
             room,
@@ -259,6 +262,7 @@ export function WatchPartyProvider({ children }: { children: ReactNode }) {
             leaveRoom,
             sendAction,
             consumePendingAction,
+            clearRemoteExecutionRef,
             clearError,
         }}>
             {children}

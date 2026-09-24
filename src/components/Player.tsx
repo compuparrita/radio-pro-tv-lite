@@ -1,12 +1,20 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { Play, Pause, SkipBack, SkipForward, Volume2, VolumeX } from 'lucide-react';
 import { useRadio } from '../context/RadioContext';
+import { useWatchParty } from '../context/WatchPartyContext';
 import { useVideoPlayer } from '../hooks/useVideoPlayer';
 import { QualitySelector } from './QualitySelector';
 import { QualitySelectorPortal } from './QualitySelectorPortal';
 
 
 export const Player: React.FC = () => {
+    const {
+        room: watchPartyRoom,
+        remoteExecutionRef,
+        consumePendingAction,
+        clearRemoteExecutionRef,
+        sendAction,
+    } = useWatchParty();
     const {
         currentStation,
         isPlaying,
@@ -23,6 +31,32 @@ export const Player: React.FC = () => {
     const [isUserActive, setIsUserActive] = useState(true);
 
     const volumeRef = useRef<HTMLDivElement>(null);
+    const remoteExecutionInProgressRef = useRef<string | null>(null);
+    const suppressedLocalActionRef = useRef<'play' | 'pause' | 'seek' | null>(null);
+    const suppressionTimeoutRef = useRef<number | null>(null);
+    const lastReportedPlaybackRef = useRef<boolean | null>(isPlaying);
+    const observedPlaybackRef = useRef(isPlaying);
+    const lastReportedSeekRef = useRef<number | null>(null);
+    const watchPartyRef = useRef({ watchPartyRoom, remoteExecutionRef, sendAction });
+    watchPartyRef.current = { watchPartyRoom, remoteExecutionRef, sendAction };
+
+    const clearSuppressedAction = useCallback(() => {
+        suppressedLocalActionRef.current = null;
+        if (suppressionTimeoutRef.current !== null) {
+            window.clearTimeout(suppressionTimeoutRef.current);
+            suppressionTimeoutRef.current = null;
+        }
+    }, []);
+
+    const markSuppressedAction = useCallback((action: 'play' | 'pause' | 'seek') => {
+        clearSuppressedAction();
+        suppressedLocalActionRef.current = action;
+        suppressionTimeoutRef.current = window.setTimeout(clearSuppressedAction, 5000);
+    }, [clearSuppressedAction]);
+
+    useEffect(() => () => {
+        if (suppressionTimeoutRef.current !== null) window.clearTimeout(suppressionTimeoutRef.current);
+    }, []);
 
     // Track isPlaying in a ref to avoid stale closures in event listener callbacks
     const isPlayingRef = useRef(isPlaying);
@@ -30,11 +64,61 @@ export const Player: React.FC = () => {
         isPlayingRef.current = isPlaying;
     }, [isPlaying]);
 
+    useEffect(() => {
+        if (observedPlaybackRef.current === isPlaying) return;
+        observedPlaybackRef.current = isPlaying;
+
+        const watchParty = watchPartyRef.current;
+        if (remoteExecutionInProgressRef.current
+            || watchParty.remoteExecutionRef
+            || !watchParty.watchPartyRoom
+            || lastReportedPlaybackRef.current === isPlaying) return;
+
+        lastReportedPlaybackRef.current = isPlaying;
+        void watchParty.sendAction(isPlaying ? 'play' : 'pause', null).catch((sendError) => {
+            console.warn('[WatchParty] No se pudo enviar la accion de reproduccion:', sendError);
+        });
+    }, [isPlaying]);
+
     const handlePlayStateChange = useCallback((playing: boolean) => {
+        const action = playing ? 'play' : 'pause';
+        const suppressed = suppressedLocalActionRef.current === action;
+        if (suppressed) clearSuppressedAction();
+
         if (playing !== isPlayingRef.current) {
             setIsPlaying(playing);
         }
-    }, [setIsPlaying]);
+
+        const watchParty = watchPartyRef.current;
+        if (!suppressed
+            && !remoteExecutionInProgressRef.current
+            && !watchParty.remoteExecutionRef
+            && watchParty.watchPartyRoom
+            && lastReportedPlaybackRef.current !== playing) {
+            lastReportedPlaybackRef.current = playing;
+            void watchParty.sendAction(action, null).catch((sendError) => {
+                console.warn('[WatchParty] No se pudo enviar la accion de reproduccion:', sendError);
+            });
+        }
+    }, [clearSuppressedAction, setIsPlaying]);
+
+    const handleLocalSeek = useCallback((seconds: number) => {
+        if (!Number.isFinite(seconds)) return;
+        const suppressed = suppressedLocalActionRef.current === 'seek';
+        if (suppressed) clearSuppressedAction();
+
+        const watchParty = watchPartyRef.current;
+        if (!suppressed
+            && !remoteExecutionInProgressRef.current
+            && !watchParty.remoteExecutionRef
+            && watchParty.watchPartyRoom
+            && lastReportedSeekRef.current !== seconds) {
+            lastReportedSeekRef.current = seconds;
+            void watchParty.sendAction('seek', seconds).catch((sendError) => {
+                console.warn('[WatchParty] No se pudo enviar la posicion:', sendError);
+            });
+        }
+    }, [clearSuppressedAction]);
 
     const {
         videoRef,
@@ -45,14 +129,60 @@ export const Player: React.FC = () => {
         currentLevel,
         isAutoMode,
         setQualityLevel,
-        isYouTube
+        isYouTube,
+        executeRemoteAction
     } = useVideoPlayer(
         currentStation,
         isPlaying,
         volume,
         handlePlayStateChange,
-        setCurrentStation
+        setCurrentStation,
+        handleLocalSeek
     );
+
+    useEffect(() => {
+        const action = consumePendingAction();
+        if (!action) return;
+
+        const executionRef = remoteExecutionRef || action.actionId || action.origin;
+        if (!executionRef) {
+            clearRemoteExecutionRef();
+            return;
+        }
+
+        if (action.action !== 'play' && action.action !== 'pause' && action.action !== 'seek') {
+            clearRemoteExecutionRef();
+            return;
+        }
+
+        let seekSeconds: number | undefined;
+        if (action.action === 'seek') {
+            const payload = action.payload;
+            seekSeconds = typeof payload === 'number'
+                ? payload
+                : payload && typeof payload === 'object'
+                    ? Number((payload as { seconds?: unknown; currentTime?: unknown }).seconds
+                        ?? (payload as { currentTime?: unknown }).currentTime)
+                    : Number(payload);
+            if (!Number.isFinite(seekSeconds)) {
+                clearRemoteExecutionRef();
+                return;
+            }
+            lastReportedSeekRef.current = seekSeconds;
+        }
+
+        remoteExecutionInProgressRef.current = executionRef;
+        markSuppressedAction(action.action);
+        if (action.action === 'play') lastReportedPlaybackRef.current = true;
+        if (action.action === 'pause') lastReportedPlaybackRef.current = false;
+
+        try {
+            executeRemoteAction(action.action, seekSeconds);
+        } finally {
+            remoteExecutionInProgressRef.current = null;
+            clearRemoteExecutionRef();
+        }
+    });
 
     // Close volume on outside click or touch
     useEffect(() => {

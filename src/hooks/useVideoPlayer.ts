@@ -14,12 +14,15 @@ export interface QualityLevel {
     label: string; // e.g., "720p", "540p", "Auto"
 }
 
+export type WatchPartyPlaybackAction = 'play' | 'pause' | 'seek';
+
 export const useVideoPlayer = (
     currentStation: Station | null,
     isPlaying: boolean,
     volume: number,
     onPlayStateChange: (playing: boolean) => void,
-    onStationUpdate?: (station: Station) => void
+    onStationUpdate?: (station: Station) => void,
+    onSeek?: (seconds: number) => void
 ) => {
     const videoRef = useRef<HTMLElement | null>(null);
     const videojsPlayerRef = useRef<any>(null);
@@ -28,6 +31,9 @@ export const useVideoPlayer = (
     const timeoutsRef = useRef<number[]>([]);
     const retryCountRef = useRef<number>(0);
     const isPlayingRef = useRef(isPlaying);
+    const youtubeReadyRef = useRef(false);
+    const pendingRemoteActionRef = useRef<{ action: WatchPartyPlaybackAction; seconds?: number } | null>(null);
+    const lastYouTubeTimeRef = useRef<number | null>(null);
 
     useEffect(() => {
         isPlayingRef.current = isPlaying;
@@ -62,6 +68,76 @@ export const useVideoPlayer = (
 
     const ytId = extractYouTubeId(currentStation?.iframeUrl) || extractYouTubeId(currentStation?.url) || (currentStation?.id?.startsWith('yt-') ? currentStation.id.replace('yt-', '') : null);
     const isYouTube = !!ytId;
+
+    const applyRemoteAction = (player: any, action: WatchPartyPlaybackAction, seconds?: number) => {
+        try {
+            if (action === 'play') {
+                const result = player.play?.();
+                result?.catch?.((error: any) => {
+                    if (error?.name !== 'AbortError') console.warn('[VideoPlayer] Remote play failed:', error);
+                });
+            } else if (action === 'pause') {
+                player.pause?.();
+            } else if (Number.isFinite(seconds)) {
+                player.currentTime?.(seconds);
+            }
+        } catch (error) {
+            console.warn('[VideoPlayer] Remote playback action failed:', error);
+        }
+    };
+
+    const executeRemoteAction = (action: WatchPartyPlaybackAction, seconds?: number) => {
+        if (action === 'play') isPlayingRef.current = true;
+        if (action === 'pause') isPlayingRef.current = false;
+
+        if (playerType === 'videojs') {
+            const player = videojsPlayerRef.current;
+            if (!player) {
+                pendingRemoteActionRef.current = { action, seconds };
+                return;
+            }
+            player.ready(() => applyRemoteAction(player, action, seconds));
+            return;
+        }
+
+        if (playerType === 'iframe' && isYouTube) {
+            const player = ytPlayerRef.current;
+            if (!player || !youtubeReadyRef.current) {
+                pendingRemoteActionRef.current = { action, seconds };
+                return;
+            }
+            if (action === 'play') player.playVideo();
+            else if (action === 'pause') player.pauseVideo();
+            else if (Number.isFinite(seconds)) player.seekTo(seconds, true);
+            return;
+        }
+
+        const mediaElement = videoRef.current;
+        if (mediaElement instanceof HTMLMediaElement) {
+            if (action === 'play') {
+                mediaElement.play().catch((error: any) => {
+                    if (error?.name !== 'AbortError') console.warn('[VideoPlayer] Remote play failed:', error);
+                });
+            } else if (action === 'pause') {
+                mediaElement.pause();
+            } else if (Number.isFinite(seconds)) {
+                mediaElement.currentTime = seconds as number;
+            }
+        }
+    };
+
+    const runPendingRemoteAction = (player: any, isYouTubePlayer = false) => {
+        const pending = pendingRemoteActionRef.current;
+        if (!pending) return;
+        pendingRemoteActionRef.current = null;
+        if (isYouTubePlayer) {
+            if (pending.action === 'play') player.playVideo();
+            else if (pending.action === 'pause') player.pauseVideo();
+            else if (Number.isFinite(pending.seconds)) player.seekTo(pending.seconds, true);
+        } else {
+            applyRemoteAction(player, pending.action, pending.seconds);
+        }
+    };
 
     // Detect if iframeUrl is actually an m3u8 stream mistakenly saved in iframeUrl
     const isM3u8Iframe = !isYouTube && (currentStation?.iframeUrl?.includes('.m3u8') ?? false) && !currentStation?.iframeUrl?.includes('bradmax.com');
@@ -137,14 +213,21 @@ export const useVideoPlayer = (
             if (videoEl instanceof HTMLMediaElement && (videoEl as any).seeking) return;
             onPlayStateChange(false);
         };
+        const onSeeked = () => {
+            if (playerType === 'html5' && videoEl instanceof HTMLMediaElement) {
+                onSeek?.(videoEl.currentTime);
+            }
+        };
 
         videoEl.addEventListener('play', onPlay);
         videoEl.addEventListener('pause', onPause);
+        videoEl.addEventListener('seeked', onSeeked);
 
         return () => {
             isCancelled = true;
             videoEl.removeEventListener('play', onPlay);
             videoEl.removeEventListener('pause', onPause);
+            videoEl.removeEventListener('seeked', onSeeked);
 
             // SAFE CLEANUP: Pause both video and audio elements on unmount/station switch
             if (videoEl instanceof HTMLMediaElement) {
@@ -316,6 +399,10 @@ export const useVideoPlayer = (
                     if (player.seeking()) return;
                     onPlayStateChange?.(false);
                 });
+                player.on('seeked', () => {
+                    const currentTime = player.currentTime();
+                    if (typeof currentTime === 'number' && Number.isFinite(currentTime)) onSeek?.(currentTime);
+                });
 
                 // Si el usuario hace clic en el botón "Live" nativo, forzar reproducción SOLO si está activo
                 player.on('liveedgechange', () => {
@@ -346,6 +433,7 @@ export const useVideoPlayer = (
                     src: finalUrl,
                     type: 'application/x-mpegURL'
                 });
+                runPendingRemoteAction(player);
             });
 
             player.on('error', () => {
@@ -483,6 +571,7 @@ export const useVideoPlayer = (
                 try { ytPlayerRef.current.destroy(); } catch (e) { }
             }
             ytPlayerRef.current = null;
+            youtubeReadyRef.current = false;
             return;
         }
 
@@ -524,6 +613,7 @@ export const useVideoPlayer = (
                 try { ytPlayerRef.current.destroy(); } catch (e) { }
                 ytPlayerRef.current = null;
             }
+            youtubeReadyRef.current = false;
 
             try {
                 // Use youtube-nocookie and add widget_referrer for better embedding compatibility
@@ -536,6 +626,7 @@ export const useVideoPlayer = (
                     events: {
                         onReady: (event: any) => {
                             if (isCancelled) return;
+                            youtubeReadyRef.current = true;
                             // Si al estar listo el reproductor NO debe sonar, asegurar pausa
                             if (!isPlayingRef.current) {
                                 try {
@@ -546,9 +637,24 @@ export const useVideoPlayer = (
                                     event.target.playVideo();
                                 } catch (e) {}
                             }
+                            runPendingRemoteAction(event.target, true);
                         },
                         onStateChange: (event: any) => {
                             if (isCancelled) return;
+                            const currentTime = Number(event.target.getCurrentTime?.());
+                            if (event.data === 1) {
+                                onPlayStateChange(true);
+                                if (Number.isFinite(currentTime)) lastYouTubeTimeRef.current = currentTime;
+                            } else if (event.data === 2) {
+                                onPlayStateChange(false);
+                                if (Number.isFinite(currentTime)) lastYouTubeTimeRef.current = currentTime;
+                            } else if (event.data === 3 && Number.isFinite(currentTime)) {
+                                const previousTime = lastYouTubeTimeRef.current;
+                                if (previousTime !== null && Math.abs(currentTime - previousTime) > 0.75) {
+                                    onSeek?.(currentTime);
+                                }
+                                lastYouTubeTimeRef.current = currentTime;
+                            }
                             // YT.PlayerState.PLAYING = 1
                             if (event.data === 1) {
                                 // Si empezó a sonar por error al cargar pero isPlayingRef es falso, detener de inmediato
@@ -613,6 +719,7 @@ export const useVideoPlayer = (
 
         return () => {
             isCancelled = true;
+            youtubeReadyRef.current = false;
             if (ytPlayerRef.current && currentStation?.id !== lastReportedIdRef.current) {
                 try { ytPlayerRef.current.destroy(); } catch (e) { }
                 ytPlayerRef.current = null;
@@ -629,6 +736,7 @@ export const useVideoPlayer = (
         currentLevel,
         isAutoMode,
         setQualityLevel,
-        isYouTube
+        isYouTube,
+        executeRemoteAction
     };
 };
