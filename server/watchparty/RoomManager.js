@@ -7,15 +7,17 @@ const randomUUID = crypto.randomUUID
 const { generateRoomCode } = require('./roomCode');
 
 class RoomManager {
-    #rooms = new Map();
-    #codeToId = new Map();
-    #socketToRoom = new Map();
+    constructor() {
+        this.rooms = new Map();
+        this.codeToId = new Map();
+        this.socketToRoom = new Map();
+    }
 
     createRoom({ hostSocketId, userId, userName, roomName }) {
         const roomId = randomUUID();
         let roomCode = generateRoomCode();
 
-        while (this.#codeToId.has(roomCode)) {
+        while (this.codeToId.has(roomCode)) {
             roomCode = generateRoomCode();
         }
 
@@ -47,16 +49,16 @@ class RoomManager {
             createdAt: now,
         };
 
-        this.#rooms.set(roomId, room);
-        this.#codeToId.set(roomCode, roomId);
-        this.#socketToRoom.set(hostSocketId, roomId);
+        this.rooms.set(roomId, room);
+        this.codeToId.set(roomCode, roomId);
+        this.socketToRoom.set(hostSocketId, roomId);
 
         return room;
     }
 
     joinRoom({ roomCode, socketId, userId, userName }) {
-        const roomId = this.#codeToId.get(roomCode);
-        const room = roomId ? this.#rooms.get(roomId) : null;
+        const roomId = this.codeToId.get(roomCode);
+        const room = roomId ? this.rooms.get(roomId) : null;
 
         if (!room) {
             return { success: false, error: 'ROOM_NOT_FOUND' };
@@ -72,32 +74,32 @@ class RoomManager {
             joinedAt: now,
             lastPing: now,
         });
-        this.#socketToRoom.set(socketId, roomId);
+        this.socketToRoom.set(socketId, roomId);
 
         return { success: true, room };
     }
 
     leaveRoom({ socketId }) {
-        const roomId = this.#socketToRoom.get(socketId);
-        const room = roomId ? this.#rooms.get(roomId) : null;
+        const roomId = this.socketToRoom.get(socketId);
+        const room = roomId ? this.rooms.get(roomId) : null;
 
         if (!room) {
-            this.#socketToRoom.delete(socketId);
+            this.socketToRoom.delete(socketId);
             return { success: false, error: 'MEMBER_NOT_FOUND' };
         }
 
         const memberIndex = room.members.findIndex((member) => member.socketId === socketId);
         if (memberIndex === -1) {
-            this.#socketToRoom.delete(socketId);
+            this.socketToRoom.delete(socketId);
             return { success: false, error: 'MEMBER_NOT_FOUND' };
         }
 
         const [member] = room.members.splice(memberIndex, 1);
-        this.#socketToRoom.delete(socketId);
+        this.socketToRoom.delete(socketId);
 
         if (room.members.length === 0) {
-            this.#rooms.delete(room.id);
-            this.#codeToId.delete(room.roomCode);
+            this.rooms.delete(room.id);
+            this.codeToId.delete(room.roomCode);
 
             return {
                 success: true,
@@ -125,16 +127,16 @@ class RoomManager {
     }
 
     getRoomByCode(roomCode) {
-        const roomId = this.#codeToId.get(roomCode);
-        return roomId ? this.#rooms.get(roomId) ?? null : null;
+        const roomId = this.codeToId.get(roomCode);
+        return roomId ? this.rooms.get(roomId) ?? null : null;
     }
 
     getRoomById(roomId) {
-        return this.#rooms.get(roomId) ?? null;
+        return this.rooms.get(roomId) ?? null;
     }
 
     transferHost(roomId, newHostSocketId) {
-        const room = this.#rooms.get(roomId);
+        const room = this.rooms.get(roomId);
         if (!room) return null;
 
         const newHost = room.members.find((member) => member.socketId === newHostSocketId);
