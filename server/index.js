@@ -1,11 +1,38 @@
+process.on('uncaughtException', (err) => {
+    console.error('⚠️ [Server Error]:', err && err.message ? err.message : err);
+});
+process.on('unhandledRejection', (reason) => {
+    console.error('⚠️ [Server Rejection]:', reason);
+});
+
 const express = require('express');
 const { createServer } = require('http');
 const { Server } = require('socket.io');
 const cors = require('cors');
 // const bcrypt = require('bcrypt');
-const bcrypt = require('bcryptjs');
-const DOMPurify = require('isomorphic-dompurify');
-const { createProxyMiddleware } = require('http-proxy-middleware');
+let bcrypt;
+try {
+    bcrypt = require('bcryptjs');
+} catch (_e1) {
+    try {
+        bcrypt = require('bcrypt');
+    } catch (_e2) {
+        bcrypt = { hashSync: () => null };
+    }
+}
+let DOMPurify;
+try {
+    DOMPurify = require('isomorphic-dompurify');
+} catch (_e) {
+    DOMPurify = { sanitize: (str) => String(str || '').replace(/<[^>]*>?/gm, '') };
+}
+let createProxyMiddleware = null;
+try {
+    const proxyPkg = require('http-proxy-middleware');
+    createProxyMiddleware = proxyPkg.createProxyMiddleware || proxyPkg;
+} catch (_e) {
+    createProxyMiddleware = null;
+}
 const crypto = require('crypto');
 const randomUUID = crypto.randomUUID
     ? crypto.randomUUID.bind(crypto)
@@ -175,7 +202,7 @@ const app = express();
 const httpServer = createServer(app);
 
 // Proxy configuration for Repretel (CORS workaround)
-const repretelProxy = createProxyMiddleware({
+const repretelProxy = createProxyMiddleware ? createProxyMiddleware({
     target: 'https://d2qsan2ut81n2k.cloudfront.net',
     changeOrigin: true,
     pathRewrite: {
@@ -188,9 +215,9 @@ const repretelProxy = createProxyMiddleware({
             proxyReq.setHeader('ngrok-skip-browser-warning', 'true');
         },
     },
-});
+}) : null;
 
-const repretelC6Proxy = createProxyMiddleware({
+const repretelC6Proxy = createProxyMiddleware ? createProxyMiddleware({
     target: 'https://alba-cr-repretel-c6.stream.mediatiquestream.com',
     changeOrigin: true,
     pathRewrite: {
@@ -203,15 +230,16 @@ const repretelC6Proxy = createProxyMiddleware({
             proxyReq.setHeader('ngrok-skip-browser-warning', 'true');
         },
     },
-});
+}) : null;
 
-app.use('/repretel-stream', repretelProxy);
-app.use('/repretel-c6', repretelC6Proxy);
+if (repretelProxy) app.use('/repretel-stream', repretelProxy);
+if (repretelC6Proxy) app.use('/repretel-c6', repretelC6Proxy);
 
 // Dynamic Proxy for any stream (useful for user-added stations)
 app.use('/proxy-stream', (req, res, next) => {
     const targetUrl = req.query.url;
     if (!targetUrl) return res.status(400).send('Falta el parámetro url');
+    if (!createProxyMiddleware) return res.status(501).send('Proxy middleware no disponible');
 
     try {
         const url = new URL(targetUrl);
