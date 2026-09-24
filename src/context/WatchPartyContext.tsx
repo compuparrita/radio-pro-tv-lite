@@ -144,13 +144,17 @@ export function WatchPartyProvider({ children }: { children: ReactNode }) {
     const roomRef = useRef(room);
     roomRef.current = room;
     const lastAppliedMediaRef = useRef<string | null>(null);
+    const lastSentMediaRef = useRef<string | null>(null);
+    const remoteMediaStationRef = useRef<string | null>(null);
 
     const openMedia = useCallback((media: MediaInfo) => {
         setMediaInfo(media);
         const mediaKey = `${media.stationId}:${media.sourceUrl}`;
+        lastSentMediaRef.current = mediaKey;
         if (lastAppliedMediaRef.current === mediaKey) return;
         lastAppliedMediaRef.current = mediaKey;
 
+        remoteMediaStationRef.current = media.stationId;
         setIsPlaying(false);
         setCurrentStation(stationFromMedia(media, stations));
     }, [setCurrentStation, setIsPlaying, stations]);
@@ -163,6 +167,8 @@ export function WatchPartyProvider({ children }: { children: ReactNode }) {
         setIsHost(false);
         setMediaInfo(null);
         lastAppliedMediaRef.current = null;
+        lastSentMediaRef.current = null;
+        remoteMediaStationRef.current = null;
         setStateVersion(0);
         setRemoteExecutionRef(null);
         setPendingAction(null);
@@ -213,6 +219,7 @@ export function WatchPartyProvider({ children }: { children: ReactNode }) {
             const media = getMediaInfo((event as typeof event & { media?: unknown }).media);
             if (media) {
                 setMediaInfo(media);
+                lastSentMediaRef.current = `${media.stationId}:${media.sourceUrl}`;
                 if (roomRef.current?.hostId !== getWatchPartySocketId()) openMedia(media);
             }
             setRoom((currentRoom) => currentRoom?.id === event.roomId
@@ -235,6 +242,7 @@ export function WatchPartyProvider({ children }: { children: ReactNode }) {
             const media = getMediaInfo(event.media);
             if (!media) return;
             setMediaInfo(media);
+            lastSentMediaRef.current = `${media.stationId}:${media.sourceUrl}`;
             setStateVersion(event.stateVersion);
             setRoom((currentRoom) => currentRoom?.id === event.roomId
                 ? { ...currentRoom, stateVersion: event.stateVersion, media: media as unknown as Record<string, unknown> }
@@ -252,6 +260,31 @@ export function WatchPartyProvider({ children }: { children: ReactNode }) {
 
         return () => cleanups.forEach((cleanup) => cleanup());
     }, [clearRoomState, openMedia]);
+
+    useEffect(() => {
+        if (remoteMediaStationRef.current !== null) remoteMediaStationRef.current = null;
+    }, [currentStation]);
+
+    useEffect(() => {
+        if (!room || !isHost || !currentStation) return;
+
+        const media = createMediaInfo(currentStation);
+        if (!media) return;
+        const mediaKey = `${media.stationId}:${media.sourceUrl}`;
+
+        if (lastSentMediaRef.current === mediaKey) return;
+
+        const socket = (socketService as unknown as WatchPartySocketInternals).socket;
+        if (!socket?.connected) return;
+
+        lastSentMediaRef.current = mediaKey;
+        socket.emit('watchparty:change_media', { roomId: room.id, media }, (response: { success?: boolean; error?: string }) => {
+            if (!response?.success) {
+                console.warn('[WatchParty] No se pudo sincronizar el medio:', response?.error ?? 'sin confirmacion');
+                if (lastSentMediaRef.current === mediaKey) lastSentMediaRef.current = null;
+            }
+        });
+    }, [currentStation, isHost, room]);
 
     const clearError = useCallback(() => setError(null), []);
 
@@ -276,6 +309,7 @@ export function WatchPartyProvider({ children }: { children: ReactNode }) {
             setStateVersion(response.room.stateVersion);
             const roomMedia = getMediaInfo(response.room.media) ?? media;
             setMediaInfo(roomMedia);
+            lastSentMediaRef.current = roomMedia ? `${roomMedia.stationId}:${roomMedia.sourceUrl}` : null;
             setMembers(response.room.members);
             setHostId(response.room.hostId);
             setRoomCode(response.roomCode ?? response.room.roomCode);
