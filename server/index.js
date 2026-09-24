@@ -6,6 +6,7 @@ const cors = require('cors');
 const bcrypt = require('bcryptjs');
 const { createProxyMiddleware } = require('http-proxy-middleware');
 const DOMPurify = require('isomorphic-dompurify');
+const { RoomManager } = require('./watchparty/RoomManager');
 require('dotenv').config();
 
 const app = express();
@@ -99,6 +100,8 @@ const io = new Server(httpServer, {
 const connectedUsers = new Map(); // userId -> { socketId, name, phone?, lastMessageTime, messageCount }
 const messageHistory = []; // Last 50 messages
 const MAX_HISTORY = 50;
+const roomManager = new RoomManager();
+const watchPartySocketRooms = new Map(); // socketId -> roomId
 
 // Rate limiting configuration
 const RATE_LIMIT_WINDOW = 60000; // 1 minute
@@ -141,6 +144,50 @@ function checkRateLimit(userId) {
     user.messageCount++;
     user.lastMessageTime = now;
     return true;
+}
+
+function emitWatchPartyError(socket, ack, code, message) {
+    const response = { success: false, error: code };
+    if (typeof ack === 'function') ack(response);
+    socket.emit('watchparty:error', { code, message });
+}
+
+function isValidString(value, minLength, maxLength) {
+    return typeof value === 'string'
+        && value.trim().length >= minLength
+        && value.length <= maxLength;
+}
+
+function emitWatchPartyMembers(room) {
+    io.to(room.id).emit('watchparty:members', {
+        roomId: room.id,
+        members: room.members,
+        hostId: room.hostId,
+    });
+}
+
+function removeSocketFromWatchParty(socket) {
+    const roomId = watchPartySocketRooms.get(socket.id);
+    if (!roomId) return null;
+
+    const result = roomManager.leaveRoom({ socketId: socket.id });
+    watchPartySocketRooms.delete(socket.id);
+    socket.leave(roomId);
+
+    if (!result.success) return null;
+
+    if (result.room) {
+        emitWatchPartyMembers(result.room);
+
+        if (result.hostTransferred) {
+            io.to(roomId).emit('watchparty:host:changed', {
+                roomId,
+                hostId: result.room.hostId,
+            });
+        }
+    }
+
+    return { ...result, roomId };
 }
 
 // Socket.io events
@@ -247,9 +294,140 @@ io.on('connection', (socket) => {
         }
     });
 
+    // WatchParty room management
+    socket.on('watchparty:create', async (payload, ack) => {
+        if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+            emitWatchPartyError(socket, ack, 'INVALID_REQUEST', 'Solicitud de sala invalida');
+            return;
+        }
+
+        const { roomName, userId, userName } = payload;
+        if (!isValidString(roomName, 1, 100)
+            || !isValidString(userId, 1, 100)
+            || !isValidString(userName, 2, 50)) {
+            emitWatchPartyError(socket, ack, 'INVALID_REQUEST', 'Datos de sala o usuario invalidos');
+            return;
+        }
+
+        const sanitizedRoomName = sanitizeMessage(roomName);
+        const sanitizedUserName = sanitizeMessage(userName);
+        if (!sanitizedRoomName || sanitizedRoomName.length > 100
+            || sanitizedUserName.length < 2 || sanitizedUserName.length > 50) {
+            emitWatchPartyError(socket, ack, 'INVALID_REQUEST', 'Datos de sala o usuario invalidos');
+            return;
+        }
+
+        let room;
+        try {
+            room = roomManager.createRoom({
+                hostSocketId: socket.id,
+                userId: userId.trim(),
+                userName: sanitizedUserName,
+                roomName: sanitizedRoomName,
+            });
+            await socket.join(room.id);
+            watchPartySocketRooms.set(socket.id, room.id);
+            emitWatchPartyMembers(room);
+
+            if (typeof ack === 'function') {
+                ack({ success: true, roomCode: room.roomCode, room });
+            }
+        } catch (error) {
+            console.error('Error creating WatchParty room:', error);
+            if (room) {
+                roomManager.leaveRoom({ socketId: socket.id });
+                watchPartySocketRooms.delete(socket.id);
+                socket.leave(room.id);
+            }
+            emitWatchPartyError(socket, ack, 'ROOM_OPERATION_FAILED', 'No se pudo crear la sala');
+        }
+    });
+
+    socket.on('watchparty:join', async (payload, ack) => {
+        if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+            emitWatchPartyError(socket, ack, 'INVALID_REQUEST', 'Solicitud para unirse invalida');
+            return;
+        }
+
+        const { roomCode, userId, userName } = payload;
+        if (typeof roomCode !== 'string' || !/^[A-HJ-NP-Z2-9]{6}$/.test(roomCode)
+            || !isValidString(userId, 1, 100)
+            || !isValidString(userName, 2, 50)) {
+            emitWatchPartyError(socket, ack, 'INVALID_REQUEST', 'Datos para unirse invalidos');
+            return;
+        }
+
+        const sanitizedUserName = sanitizeMessage(userName);
+        if (sanitizedUserName.length < 2 || sanitizedUserName.length > 50) {
+            emitWatchPartyError(socket, ack, 'INVALID_REQUEST', 'Nombre de usuario invalido');
+            return;
+        }
+
+        const result = roomManager.joinRoom({
+            roomCode,
+            socketId: socket.id,
+            userId: userId.trim(),
+            userName: sanitizedUserName,
+        });
+
+        if (!result.success) {
+            emitWatchPartyError(socket, ack, 'ROOM_NOT_FOUND', 'No se encontro la sala');
+            return;
+        }
+
+        try {
+            await socket.join(result.room.id);
+            watchPartySocketRooms.set(socket.id, result.room.id);
+            emitWatchPartyMembers(result.room);
+
+            if (typeof ack === 'function') ack({ success: true, room: result.room });
+        } catch (error) {
+            console.error('Error joining WatchParty room:', error);
+            roomManager.leaveRoom({ socketId: socket.id });
+            watchPartySocketRooms.delete(socket.id);
+            emitWatchPartyError(socket, ack, 'ROOM_OPERATION_FAILED', 'No se pudo unir a la sala');
+        }
+    });
+
+    socket.on('watchparty:leave', (payload, ack) => {
+        if (payload !== undefined && (!payload || typeof payload !== 'object' || Array.isArray(payload))) {
+            emitWatchPartyError(socket, ack, 'INVALID_REQUEST', 'Solicitud para salir invalida');
+            return;
+        }
+
+        const requestedRoomId = payload?.roomId;
+        const currentRoomId = watchPartySocketRooms.get(socket.id);
+        if (requestedRoomId !== undefined && typeof requestedRoomId !== 'string') {
+            emitWatchPartyError(socket, ack, 'INVALID_REQUEST', 'Identificador de sala invalido');
+            return;
+        }
+        if (requestedRoomId && currentRoomId && requestedRoomId !== currentRoomId) {
+            emitWatchPartyError(socket, ack, 'INVALID_REQUEST', 'La sala no coincide con la sesion actual');
+            return;
+        }
+
+        const result = removeSocketFromWatchParty(socket);
+        if (!result) {
+            if (typeof ack === 'function') ack({ success: true, left: false });
+            return;
+        }
+
+        if (typeof ack === 'function') {
+            ack({
+                success: true,
+                left: true,
+                roomId: result.roomId,
+                deleted: result.deleted,
+                hostTransferred: result.hostTransferred,
+                room: result.room,
+            });
+        }
+    });
+
     // Disconnect
     socket.on('disconnect', () => {
         console.log(`User disconnected: ${userId}`);
+        removeSocketFromWatchParty(socket);
         connectedUsers.delete(userId);
 
         // Broadcast updated listener count
