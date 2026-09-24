@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { Settings } from 'lucide-react';
 import { RadioProvider } from './context/RadioContext';
 import { ChatProvider } from './context/ChatContext';
+import { WatchPartyProvider } from './context/WatchPartyContext';
 import { Header } from './components/Header';
 import { Player } from './components/Player';
 import { StationList } from './components/StationList';
@@ -351,7 +352,9 @@ function App() {
     return (
         <RadioProvider>
             <ChatProvider>
-                <AppContent />
+                <WatchPartyProvider>
+                    <AppContent />
+                </WatchPartyProvider>
             </ChatProvider>
         </RadioProvider>
     );

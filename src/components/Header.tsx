@@ -1,7 +1,8 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Radio, Moon, Waves, Zap, MessageCircle, Antenna, Star, Monitor, ChevronDown } from 'lucide-react';
 import { useChat } from '../context/ChatContext';
 import { useRadio } from '../context/RadioContext';
+import WatchPartyModal from './WatchPartyModal';
 
 interface HeaderProps {
     theme: 'dark' | 'light' | 'youth';
@@ -12,6 +13,7 @@ interface HeaderProps {
 export const Header: React.FC<HeaderProps> = ({ theme, onThemeClick, onChatClick }) => {
     const { unreadCount, onlineListeners, connectionStatus } = useChat();
     const { activeTab, setActiveTab, radioCategories, tvCategories, selectedCategory, setSelectedCategory } = useRadio();
+    const [isWatchPartyOpen, setIsWatchPartyOpen] = useState(false);
     const [activeMenu, setActiveMenu] = React.useState<'radios' | 'tv' | null>(null);
     const [hoverProgressMenu, setHoverProgressMenu] = React.useState<'radios' | 'tv' | null>(null);
     const closeTimeoutRef = React.useRef<number | null>(null);
@@ -291,8 +293,19 @@ export const Header: React.FC<HeaderProps> = ({ theme, onThemeClick, onChatClick
                             </span>
                         )}
                     </button>
+                    <button
+                        onClick={() => setIsWatchPartyOpen(true)}
+                        className="flex items-center gap-1.5 px-3 py-1.5 bg-white/5 border border-white/10 text-white hover:bg-white/10 transition-all"
+                        type="button"
+                    >
+                        <span className="text-xs font-bold tracking-wider">🎬 Cine</span>
+                    </button>
                 </div>
             </div>
+            <WatchPartyModal
+                isOpen={isWatchPartyOpen}
+                onClose={() => setIsWatchPartyOpen(false)}
+            />
         </header>
     );
 };
