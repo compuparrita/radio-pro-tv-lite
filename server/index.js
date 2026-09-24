@@ -6,6 +6,7 @@ const cors = require('cors');
 const bcrypt = require('bcryptjs');
 const { createProxyMiddleware } = require('http-proxy-middleware');
 const DOMPurify = require('isomorphic-dompurify');
+const { randomUUID } = require('crypto');
 const { RoomManager } = require('./watchparty/RoomManager');
 require('dotenv').config();
 
@@ -163,6 +164,15 @@ function emitWatchPartyMembers(room) {
         roomId: room.id,
         members: room.members,
         hostId: room.hostId,
+    });
+}
+
+function emitWatchPartyState(socket, room) {
+    socket.emit('watchparty:state', {
+        roomId: room.id,
+        stateVersion: room.stateVersion,
+        isPlaying: room.playback.isPlaying,
+        currentTime: room.playback.currentTime,
     });
 }
 
@@ -328,6 +338,7 @@ io.on('connection', (socket) => {
             await socket.join(room.id);
             watchPartySocketRooms.set(socket.id, room.id);
             emitWatchPartyMembers(room);
+            emitWatchPartyState(socket, room);
 
             if (typeof ack === 'function') {
                 ack({ success: true, roomCode: room.roomCode, room });
@@ -379,6 +390,7 @@ io.on('connection', (socket) => {
             await socket.join(result.room.id);
             watchPartySocketRooms.set(socket.id, result.room.id);
             emitWatchPartyMembers(result.room);
+            emitWatchPartyState(socket, result.room);
 
             if (typeof ack === 'function') ack({ success: true, room: result.room });
         } catch (error) {
@@ -386,6 +398,39 @@ io.on('connection', (socket) => {
             roomManager.leaveRoom({ socketId: socket.id });
             watchPartySocketRooms.delete(socket.id);
             emitWatchPartyError(socket, ack, 'ROOM_OPERATION_FAILED', 'No se pudo unir a la sala');
+        }
+    });
+
+    socket.on('watchparty:action', (payload, ack) => {
+        const validActions = new Set(['play', 'pause', 'seek', 'change_station']);
+        if (!payload || typeof payload !== 'object' || Array.isArray(payload)
+            || typeof payload.roomId !== 'string'
+            || !validActions.has(payload.action)
+            || !Number.isInteger(payload.stateVersion) || payload.stateVersion < 0) {
+            emitWatchPartyError(socket, ack, 'INVALID_REQUEST', 'Accion de WatchParty invalida');
+            return;
+        }
+
+        const { roomId, action, stateVersion } = payload;
+        const room = roomManager.getRoomById(roomId);
+        if (!room || watchPartySocketRooms.get(socket.id) !== roomId || !socket.rooms.has(roomId)) {
+            emitWatchPartyError(socket, ack, 'NOT_IN_ROOM', 'Debes pertenecer a la sala para enviar acciones');
+            return;
+        }
+
+        room.stateVersion += 1;
+        const remoteExecutionRef = randomUUID();
+        const broadcast = {
+            roomId,
+            action,
+            payload: payload.payload,
+            stateVersion: room.stateVersion,
+            remoteExecutionRef,
+        };
+        io.to(roomId).emit('watchparty:broadcast:action', broadcast);
+
+        if (typeof ack === 'function') {
+            ack({ success: true, ...broadcast });
         }
     });
 

@@ -7,7 +7,7 @@ import {
     useState,
     type ReactNode,
 } from 'react';
-import type { WatchPartyMember } from '../types/watchparty';
+import type { WatchPartyAction, WatchPartyMember } from '../types/watchparty';
 import {
     connectWatchPartySocket,
     createRoom as sendCreateRoom,
@@ -15,12 +15,16 @@ import {
     isWatchPartySocketConnected,
     joinRoom as sendJoinRoom,
     leaveRoom as sendLeaveRoom,
+    sendAction as emitWatchPartyAction,
     onWatchPartyConnectionStatus,
     registerErrorListener,
+    registerActionListener,
+    registerStateListener,
     registerHostChangedListener,
     registerMembersListener,
     type WatchPartyErrorEvent,
     type WatchPartyRoomData,
+    type WatchPartyResponse,
 } from '../services/watchPartySocket';
 
 interface WatchPartyContextValue {
@@ -32,9 +36,14 @@ interface WatchPartyContextValue {
     isLoading: boolean;
     error: WatchPartyErrorEvent | null;
     isHost: boolean;
+    stateVersion: number;
+    remoteExecutionRef: string | null;
+    pendingAction: WatchPartyAction | null;
     createRoom: (payload: { roomName: string; userName: string }) => Promise<boolean>;
     joinRoom: (payload: { roomCode: string; userName: string }) => Promise<boolean>;
     leaveRoom: () => Promise<boolean>;
+    sendAction: (action: WatchPartyAction['action'], payload: unknown) => Promise<WatchPartyResponse>;
+    consumePendingAction: () => WatchPartyAction | null;
     clearError: () => void;
 }
 
@@ -49,6 +58,9 @@ export function WatchPartyProvider({ children }: { children: ReactNode }) {
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<WatchPartyErrorEvent | null>(null);
     const [isHost, setIsHost] = useState(false);
+    const [stateVersion, setStateVersion] = useState(0);
+    const [remoteExecutionRef, setRemoteExecutionRef] = useState<string | null>(null);
+    const [pendingAction, setPendingAction] = useState<WatchPartyAction | null>(null);
     const hasStartedSocket = useRef(false);
 
     const clearRoomState = useCallback(() => {
@@ -57,6 +69,9 @@ export function WatchPartyProvider({ children }: { children: ReactNode }) {
         setHostId(null);
         setRoomCode(null);
         setIsHost(false);
+        setStateVersion(0);
+        setRemoteExecutionRef(null);
+        setPendingAction(null);
     }, []);
 
     useEffect(() => {
@@ -87,6 +102,33 @@ export function WatchPartyProvider({ children }: { children: ReactNode }) {
 
         cleanups.push(registerErrorListener(setError));
 
+        cleanups.push(registerActionListener((event) => {
+            setStateVersion(event.stateVersion);
+            setRemoteExecutionRef(event.remoteExecutionRef);
+            setPendingAction({
+                roomId: event.roomId,
+                action: event.action,
+                payload: event.payload,
+                origin: event.remoteExecutionRef,
+                actionId: event.remoteExecutionRef,
+            });
+        }));
+
+        cleanups.push(registerStateListener((event) => {
+            setStateVersion(event.stateVersion);
+            setRoom((currentRoom) => currentRoom?.id === event.roomId
+                ? {
+                    ...currentRoom,
+                    stateVersion: event.stateVersion,
+                    playback: {
+                        ...currentRoom.playback,
+                        currentTime: event.currentTime,
+                        isPlaying: event.isPlaying,
+                    },
+                }
+                : currentRoom);
+        }));
+
         if (!hasStartedSocket.current) {
             connectWatchPartySocket();
             hasStartedSocket.current = true;
@@ -114,6 +156,7 @@ export function WatchPartyProvider({ children }: { children: ReactNode }) {
             }
 
             setRoom(response.room);
+            setStateVersion(response.room.stateVersion);
             setMembers(response.room.members);
             setHostId(response.room.hostId);
             setRoomCode(response.roomCode ?? response.room.roomCode);
@@ -146,6 +189,7 @@ export function WatchPartyProvider({ children }: { children: ReactNode }) {
             }
 
             setRoom(response.room);
+            setStateVersion(response.room.stateVersion);
             setMembers(response.room.members);
             setHostId(response.room.hostId);
             setRoomCode(response.room.roomCode);
@@ -184,6 +228,19 @@ export function WatchPartyProvider({ children }: { children: ReactNode }) {
         }
     }, [clearRoomState]);
 
+    const sendAction = useCallback((action: WatchPartyAction['action'], payload: unknown) => {
+        if (!room) {
+            return Promise.resolve({ success: false, error: 'NOT_IN_ROOM' });
+        }
+        return emitWatchPartyAction({ roomId: room.id, action, payload, stateVersion });
+    }, [room, stateVersion]);
+
+    const consumePendingAction = useCallback(() => {
+        const action = pendingAction;
+        setPendingAction(null);
+        return action;
+    }, [pendingAction]);
+
     return (
         <WatchPartyContext.Provider value={{
             room,
@@ -194,9 +251,14 @@ export function WatchPartyProvider({ children }: { children: ReactNode }) {
             isLoading,
             error,
             isHost,
+            stateVersion,
+            remoteExecutionRef,
+            pendingAction,
             createRoom,
             joinRoom,
             leaveRoom,
+            sendAction,
+            consumePendingAction,
             clearError,
         }}>
             {children}

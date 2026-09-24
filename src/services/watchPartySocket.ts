@@ -1,6 +1,6 @@
 import type { Socket } from 'socket.io-client';
 import { socketService } from './socketService';
-import type { WatchPartyMember } from '../types/watchparty';
+import type { WatchPartyAction, WatchPartyMember } from '../types/watchparty';
 
 export interface WatchPartyRoomData {
     id: string;
@@ -48,6 +48,21 @@ export interface WatchPartyResponse {
     left?: boolean;
     deleted?: boolean;
     hostTransferred?: boolean;
+}
+
+export interface WatchPartyBroadcastAction {
+    roomId: string;
+    action: WatchPartyAction['action'];
+    payload: unknown;
+    stateVersion: number;
+    remoteExecutionRef: string;
+}
+
+export interface WatchPartyStateEvent {
+    roomId: string;
+    stateVersion: number;
+    isPlaying: boolean;
+    currentTime: number;
 }
 
 interface SocketServiceInternals {
@@ -140,6 +155,18 @@ export function registerErrorListener(callback: (event: WatchPartyErrorEvent) =>
     return () => socket.off('watchparty:error', callback);
 }
 
+export function registerActionListener(callback: (event: WatchPartyBroadcastAction) => void): () => void {
+    const socket = getOrCreateSocket();
+    socket.on('watchparty:broadcast:action', callback);
+    return () => socket.off('watchparty:broadcast:action', callback);
+}
+
+export function registerStateListener(callback: (event: WatchPartyStateEvent) => void): () => void {
+    const socket = getOrCreateSocket();
+    socket.on('watchparty:state', callback);
+    return () => socket.off('watchparty:state', callback);
+}
+
 export function createRoom(payload: WatchPartyCreatePayload): Promise<WatchPartyResponse> {
     return emitWithAck('watchparty:create', payload);
 }
@@ -150,4 +177,13 @@ export function joinRoom(payload: WatchPartyJoinPayload): Promise<WatchPartyResp
 
 export function leaveRoom(): Promise<WatchPartyResponse> {
     return emitWithAck('watchparty:leave', {});
+}
+
+export function sendAction(payload: {
+    roomId: string;
+    action: WatchPartyAction['action'];
+    payload: unknown;
+    stateVersion: number;
+}): Promise<WatchPartyResponse> {
+    return emitWithAck('watchparty:action', payload);
 }
