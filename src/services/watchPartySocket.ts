@@ -65,6 +65,12 @@ export interface WatchPartyStateEvent {
     currentTime: number;
 }
 
+export interface WatchPartyMediaEvent {
+    roomId: string;
+    media: unknown;
+    stateVersion: number;
+}
+
 interface SocketServiceInternals {
     socket: Socket | null;
 }
@@ -167,6 +173,12 @@ export function registerStateListener(callback: (event: WatchPartyStateEvent) =>
     return () => socket.off('watchparty:state', callback);
 }
 
+export function registerMediaListener(callback: (event: WatchPartyMediaEvent) => void): () => void {
+    const socket = getOrCreateSocket();
+    socket.on('watchparty:media', callback);
+    return () => socket.off('watchparty:media', callback);
+}
+
 export function createRoom(payload: WatchPartyCreatePayload): Promise<WatchPartyResponse> {
     return emitWithAck('watchparty:create', payload);
 }
@@ -186,4 +198,11 @@ export function sendAction(payload: {
     stateVersion: number;
 }): Promise<WatchPartyResponse> {
     return emitWithAck('watchparty:action', payload);
+}
+
+export function changeMedia(payload: {
+    roomId: string;
+    media: unknown;
+}): Promise<WatchPartyResponse> {
+    return emitWithAck('watchparty:change_media', payload);
 }

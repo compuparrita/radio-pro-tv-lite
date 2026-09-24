@@ -7,9 +7,7 @@ import {
     useState,
     type ReactNode,
 } from 'react';
-import type { Socket } from 'socket.io-client';
 import { useRadio } from './RadioContext';
-import { socketService } from '../services/socketService';
 import type { Station } from '../types';
 import type { MediaInfo, WatchPartyAction, WatchPartyMember } from '../types/watchparty';
 import {
@@ -26,6 +24,8 @@ import {
     registerStateListener,
     registerHostChangedListener,
     registerMembersListener,
+    registerMediaListener,
+    changeMedia,
     type WatchPartyErrorEvent,
     type WatchPartyRoomData,
     type WatchPartyResponse,
@@ -54,16 +54,6 @@ interface WatchPartyContextValue {
 }
 
 const WatchPartyContext = createContext<WatchPartyContextValue | undefined>(undefined);
-
-interface WatchPartySocketInternals {
-    socket: Socket | null;
-}
-
-interface WatchPartyMediaEvent {
-    roomId: string;
-    media: unknown;
-    stateVersion: number;
-}
 
 function getMediaInfo(value: unknown): MediaInfo | null {
     if (!value || typeof value !== 'object') return null;
@@ -236,8 +226,7 @@ export function WatchPartyProvider({ children }: { children: ReactNode }) {
                 : currentRoom);
         }));
 
-        const socket = (socketService as unknown as WatchPartySocketInternals).socket;
-        const handleMedia = (event: WatchPartyMediaEvent) => {
+        cleanups.push(registerMediaListener((event) => {
             if (roomRef.current && roomRef.current.id !== event.roomId) return;
             const media = getMediaInfo(event.media);
             if (!media) return;
@@ -248,9 +237,7 @@ export function WatchPartyProvider({ children }: { children: ReactNode }) {
                 ? { ...currentRoom, stateVersion: event.stateVersion, media: media as unknown as Record<string, unknown> }
                 : currentRoom);
             if (roomRef.current?.hostId !== getWatchPartySocketId()) openMedia(media);
-        };
-        socket?.on('watchparty:media', handleMedia);
-        cleanups.push(() => socket?.off('watchparty:media', handleMedia));
+        }));
 
         if (!hasStartedSocket.current) {
             connectWatchPartySocket();
@@ -274,15 +261,15 @@ export function WatchPartyProvider({ children }: { children: ReactNode }) {
 
         if (lastSentMediaRef.current === mediaKey) return;
 
-        const socket = (socketService as unknown as WatchPartySocketInternals).socket;
-        if (!socket?.connected) return;
-
         lastSentMediaRef.current = mediaKey;
-        socket.emit('watchparty:change_media', { roomId: room.id, media }, (response: { success?: boolean; error?: string }) => {
+        void changeMedia({ roomId: room.id, media }).then((response) => {
             if (!response?.success) {
                 console.warn('[WatchParty] No se pudo sincronizar el medio:', response?.error ?? 'sin confirmacion');
                 if (lastSentMediaRef.current === mediaKey) lastSentMediaRef.current = null;
             }
+        }).catch((err) => {
+            console.warn('[WatchParty] Error al enviar cambio de medio:', err);
+            if (lastSentMediaRef.current === mediaKey) lastSentMediaRef.current = null;
         });
     }, [currentStation, isHost, room]);
 
