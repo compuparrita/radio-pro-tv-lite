@@ -159,6 +159,38 @@ function isValidString(value, minLength, maxLength) {
         && value.length <= maxLength;
 }
 
+function normalizeWatchPartyMedia(media) {
+    if (!media || typeof media !== 'object' || Array.isArray(media)
+        || !isValidString(media.stationId, 1, 100)
+        || !isValidString(media.sourceUrl, 1, 2048)
+        || !isValidString(media.title, 1, 200)
+        || !['youtube', 'hls'].includes(media.mediaType)
+        || typeof media.isLive !== 'boolean') {
+        return null;
+    }
+
+    const sourceUrl = media.sourceUrl.trim();
+    if (!sourceUrl.startsWith('/')) {
+        try {
+            const parsedUrl = new URL(sourceUrl);
+            if (parsedUrl.protocol !== 'http:' && parsedUrl.protocol !== 'https:') return null;
+        } catch (_error) {
+            return null;
+        }
+    }
+
+    const title = sanitizeMessage(media.title);
+    if (!title) return null;
+
+    return {
+        stationId: media.stationId.trim(),
+        mediaType: media.mediaType,
+        sourceUrl,
+        title,
+        isLive: media.isLive,
+    };
+}
+
 function emitWatchPartyMembers(room) {
     io.to(room.id).emit('watchparty:members', {
         roomId: room.id,
@@ -173,6 +205,7 @@ function emitWatchPartyState(socket, room) {
         stateVersion: room.stateVersion,
         isPlaying: room.playback.isPlaying,
         currentTime: room.playback.currentTime,
+        media: room.media,
     });
 }
 
@@ -312,9 +345,11 @@ io.on('connection', (socket) => {
         }
 
         const { roomName, userId, userName } = payload;
+        const media = payload.media == null ? null : normalizeWatchPartyMedia(payload.media);
         if (!isValidString(roomName, 1, 100)
             || !isValidString(userId, 1, 100)
-            || !isValidString(userName, 2, 50)) {
+            || !isValidString(userName, 2, 50)
+            || (payload.media != null && !media)) {
             emitWatchPartyError(socket, ack, 'INVALID_REQUEST', 'Datos de sala o usuario invalidos');
             return;
         }
@@ -335,10 +370,10 @@ io.on('connection', (socket) => {
                 userName: sanitizedUserName,
                 roomName: sanitizedRoomName,
             });
+            room.media = media;
             await socket.join(room.id);
             watchPartySocketRooms.set(socket.id, room.id);
             emitWatchPartyMembers(room);
-            emitWatchPartyState(socket, room);
 
             if (typeof ack === 'function') {
                 ack({ success: true, roomCode: room.roomCode, room });
@@ -399,6 +434,37 @@ io.on('connection', (socket) => {
             watchPartySocketRooms.delete(socket.id);
             emitWatchPartyError(socket, ack, 'ROOM_OPERATION_FAILED', 'No se pudo unir a la sala');
         }
+    });
+
+    socket.on('watchparty:change_media', (payload, ack) => {
+        if (!payload || typeof payload !== 'object' || Array.isArray(payload)
+            || typeof payload.roomId !== 'string') {
+            emitWatchPartyError(socket, ack, 'INVALID_REQUEST', 'Solicitud para cambiar medio invalida');
+            return;
+        }
+
+        const { roomId } = payload;
+        const room = roomManager.getRoomById(roomId);
+        if (!room || watchPartySocketRooms.get(socket.id) !== roomId || !socket.rooms.has(roomId)) {
+            emitWatchPartyError(socket, ack, 'NOT_IN_ROOM', 'Debes pertenecer a la sala');
+            return;
+        }
+        if (room.hostId !== socket.id) {
+            emitWatchPartyError(socket, ack, 'HOST_ONLY', 'Solo el anfitrion puede cambiar el medio');
+            return;
+        }
+
+        const media = normalizeWatchPartyMedia(payload.media);
+        if (!media) {
+            emitWatchPartyError(socket, ack, 'INVALID_MEDIA', 'Datos del medio invalidos');
+            return;
+        }
+
+        room.media = media;
+        room.stateVersion += 1;
+        const event = { roomId, media, stateVersion: room.stateVersion };
+        io.to(roomId).emit('watchparty:media', event);
+        if (typeof ack === 'function') ack({ success: true, ...event });
     });
 
     socket.on('watchparty:action', (payload, ack) => {

@@ -7,7 +7,11 @@ import {
     useState,
     type ReactNode,
 } from 'react';
-import type { WatchPartyAction, WatchPartyMember } from '../types/watchparty';
+import type { Socket } from 'socket.io-client';
+import { useRadio } from './RadioContext';
+import { socketService } from '../services/socketService';
+import type { Station } from '../types';
+import type { MediaInfo, WatchPartyAction, WatchPartyMember } from '../types/watchparty';
 import {
     connectWatchPartySocket,
     createRoom as sendCreateRoom,
@@ -36,6 +40,7 @@ interface WatchPartyContextValue {
     isLoading: boolean;
     error: WatchPartyErrorEvent | null;
     isHost: boolean;
+    mediaInfo: MediaInfo | null;
     stateVersion: number;
     remoteExecutionRef: string | null;
     pendingAction: WatchPartyAction | null;
@@ -50,7 +55,79 @@ interface WatchPartyContextValue {
 
 const WatchPartyContext = createContext<WatchPartyContextValue | undefined>(undefined);
 
+interface WatchPartySocketInternals {
+    socket: Socket | null;
+}
+
+interface WatchPartyMediaEvent {
+    roomId: string;
+    media: unknown;
+    stateVersion: number;
+}
+
+function getMediaInfo(value: unknown): MediaInfo | null {
+    if (!value || typeof value !== 'object') return null;
+    const media = value as Partial<MediaInfo>;
+    if (typeof media.stationId !== 'string'
+        || typeof media.mediaType !== 'string'
+        || (media.mediaType !== 'youtube' && media.mediaType !== 'hls')
+        || typeof media.sourceUrl !== 'string'
+        || typeof media.title !== 'string'
+        || typeof media.isLive !== 'boolean') return null;
+    return media as MediaInfo;
+}
+
+function getYouTubeId(sourceUrl: string): string | null {
+    return sourceUrl.match(/(?:youtube(?:-nocookie)?\.com\/(?:embed\/|watch\?v=)|youtu\.be\/)([^?&/]+)/i)?.[1] ?? null;
+}
+
+function createMediaInfo(station: Station | null): MediaInfo | null {
+    if (!station) return null;
+    const sourceUrl = station.iframeUrl || station.url;
+    if (!sourceUrl) return null;
+    const mediaType = station.id.startsWith('yt-') || /youtube(?:-nocookie)?\.com|youtu\.be/i.test(sourceUrl)
+        ? 'youtube'
+        : 'hls';
+    const isLive = Boolean((station as Station & { isLive?: boolean }).isLive ?? mediaType === 'hls');
+    return {
+        stationId: station.id,
+        mediaType,
+        sourceUrl,
+        title: station.name,
+        isLive,
+    };
+}
+
+function stationFromMedia(media: MediaInfo, stations: Station[]): Station {
+    const knownStation = stations.find((station) => station.id === media.stationId);
+    if (knownStation) {
+        const station = { ...knownStation, name: media.title };
+        if (media.mediaType === 'youtube') {
+            const videoId = getYouTubeId(media.sourceUrl);
+            station.url = media.sourceUrl;
+            station.iframeUrl = videoId ? `https://www.youtube.com/embed/${videoId}` : media.sourceUrl;
+        }
+        return station;
+    }
+
+    const station: Station = {
+        id: media.stationId,
+        name: media.title,
+        url: media.sourceUrl,
+        logo: '',
+        country: '',
+        type: 'video',
+    };
+
+    if (media.mediaType === 'youtube') {
+        const videoId = getYouTubeId(media.sourceUrl) || (media.stationId.startsWith('yt-') ? media.stationId.slice(3) : null);
+        station.iframeUrl = videoId ? `https://www.youtube.com/embed/${videoId}` : media.sourceUrl;
+    }
+    return station;
+}
+
 export function WatchPartyProvider({ children }: { children: ReactNode }) {
+    const { currentStation, stations, setCurrentStation, setIsPlaying } = useRadio();
     const [room, setRoom] = useState<WatchPartyRoomData | null>(null);
     const [members, setMembers] = useState<WatchPartyMember[]>([]);
     const [hostId, setHostId] = useState<string | null>(null);
@@ -59,10 +136,24 @@ export function WatchPartyProvider({ children }: { children: ReactNode }) {
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<WatchPartyErrorEvent | null>(null);
     const [isHost, setIsHost] = useState(false);
+    const [mediaInfo, setMediaInfo] = useState<MediaInfo | null>(null);
     const [stateVersion, setStateVersion] = useState(0);
     const [remoteExecutionRef, setRemoteExecutionRef] = useState<string | null>(null);
     const [pendingAction, setPendingAction] = useState<WatchPartyAction | null>(null);
     const hasStartedSocket = useRef(false);
+    const roomRef = useRef(room);
+    roomRef.current = room;
+    const lastAppliedMediaRef = useRef<string | null>(null);
+
+    const openMedia = useCallback((media: MediaInfo) => {
+        setMediaInfo(media);
+        const mediaKey = `${media.stationId}:${media.sourceUrl}`;
+        if (lastAppliedMediaRef.current === mediaKey) return;
+        lastAppliedMediaRef.current = mediaKey;
+
+        setIsPlaying(false);
+        setCurrentStation(stationFromMedia(media, stations));
+    }, [setCurrentStation, setIsPlaying, stations]);
 
     const clearRoomState = useCallback(() => {
         setRoom(null);
@@ -70,6 +161,8 @@ export function WatchPartyProvider({ children }: { children: ReactNode }) {
         setHostId(null);
         setRoomCode(null);
         setIsHost(false);
+        setMediaInfo(null);
+        lastAppliedMediaRef.current = null;
         setStateVersion(0);
         setRemoteExecutionRef(null);
         setPendingAction(null);
@@ -117,10 +210,16 @@ export function WatchPartyProvider({ children }: { children: ReactNode }) {
 
         cleanups.push(registerStateListener((event) => {
             setStateVersion(event.stateVersion);
+            const media = getMediaInfo((event as typeof event & { media?: unknown }).media);
+            if (media) {
+                setMediaInfo(media);
+                if (roomRef.current?.hostId !== getWatchPartySocketId()) openMedia(media);
+            }
             setRoom((currentRoom) => currentRoom?.id === event.roomId
                 ? {
                     ...currentRoom,
                     stateVersion: event.stateVersion,
+                    ...(media ? { media: media as unknown as Record<string, unknown> } : {}),
                     playback: {
                         ...currentRoom.playback,
                         currentTime: event.currentTime,
@@ -130,6 +229,21 @@ export function WatchPartyProvider({ children }: { children: ReactNode }) {
                 : currentRoom);
         }));
 
+        const socket = (socketService as unknown as WatchPartySocketInternals).socket;
+        const handleMedia = (event: WatchPartyMediaEvent) => {
+            if (roomRef.current && roomRef.current.id !== event.roomId) return;
+            const media = getMediaInfo(event.media);
+            if (!media) return;
+            setMediaInfo(media);
+            setStateVersion(event.stateVersion);
+            setRoom((currentRoom) => currentRoom?.id === event.roomId
+                ? { ...currentRoom, stateVersion: event.stateVersion, media: media as unknown as Record<string, unknown> }
+                : currentRoom);
+            if (roomRef.current?.hostId !== getWatchPartySocketId()) openMedia(media);
+        };
+        socket?.on('watchparty:media', handleMedia);
+        cleanups.push(() => socket?.off('watchparty:media', handleMedia));
+
         if (!hasStartedSocket.current) {
             connectWatchPartySocket();
             hasStartedSocket.current = true;
@@ -137,7 +251,7 @@ export function WatchPartyProvider({ children }: { children: ReactNode }) {
         setIsConnected(isWatchPartySocketConnected());
 
         return () => cleanups.forEach((cleanup) => cleanup());
-    }, [clearRoomState]);
+    }, [clearRoomState, openMedia]);
 
     const clearError = useCallback(() => setError(null), []);
 
@@ -145,7 +259,9 @@ export function WatchPartyProvider({ children }: { children: ReactNode }) {
         setIsLoading(true);
         setError(null);
         try {
-            const response = await sendCreateRoom({ roomName, userName });
+            const media = createMediaInfo(currentStation);
+            const createPayload = media ? { roomName, userName, media } : { roomName, userName };
+            const response = await sendCreateRoom(createPayload);
             if (!response.success || !response.room) {
                 setError({
                     code: response.error ?? 'ROOM_CREATE_FAILED',
@@ -158,6 +274,8 @@ export function WatchPartyProvider({ children }: { children: ReactNode }) {
 
             setRoom(response.room);
             setStateVersion(response.room.stateVersion);
+            const roomMedia = getMediaInfo(response.room.media) ?? media;
+            setMediaInfo(roomMedia);
             setMembers(response.room.members);
             setHostId(response.room.hostId);
             setRoomCode(response.roomCode ?? response.room.roomCode);
@@ -172,7 +290,7 @@ export function WatchPartyProvider({ children }: { children: ReactNode }) {
         } finally {
             setIsLoading(false);
         }
-    }, []);
+    }, [currentStation]);
 
     const joinRoom = useCallback(async ({ roomCode: requestedRoomCode, userName }: { roomCode: string; userName: string }) => {
         setIsLoading(true);
@@ -191,10 +309,13 @@ export function WatchPartyProvider({ children }: { children: ReactNode }) {
 
             setRoom(response.room);
             setStateVersion(response.room.stateVersion);
+            const roomMedia = getMediaInfo(response.room.media);
+            setMediaInfo(roomMedia);
             setMembers(response.room.members);
             setHostId(response.room.hostId);
             setRoomCode(response.room.roomCode);
             setIsHost(response.room.hostId === getWatchPartySocketId());
+            if (roomMedia && response.room.hostId !== getWatchPartySocketId()) openMedia(roomMedia);
             return true;
         } catch (requestError) {
             setError({
@@ -205,7 +326,7 @@ export function WatchPartyProvider({ children }: { children: ReactNode }) {
         } finally {
             setIsLoading(false);
         }
-    }, []);
+    }, [openMedia]);
 
     const leaveRoom = useCallback(async () => {
         setIsLoading(true);
@@ -254,6 +375,7 @@ export function WatchPartyProvider({ children }: { children: ReactNode }) {
             isLoading,
             error,
             isHost,
+            mediaInfo,
             stateVersion,
             remoteExecutionRef,
             pendingAction,
