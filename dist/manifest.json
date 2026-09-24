@@ -1,0 +1,23 @@
+{
+    "name": "Radio Streaming Pro",
+    "short_name": "Radio Pro",
+    "description": "Tu mejor música y televisión en vivo.",
+    "start_url": "/",
+    "display": "standalone",
+    "background_color": "#030712",
+    "theme_color": "#8b5cf6",
+    "icons": [
+        {
+            "src": "pwa-192x192.png",
+            "sizes": "192x192",
+            "type": "image/png",
+            "purpose": "any maskable"
+        },
+        {
+            "src": "pwa-512x512.png",
+            "sizes": "512x512",
+            "type": "image/png",
+            "purpose": "any maskable"
+        }
+    ]
+}

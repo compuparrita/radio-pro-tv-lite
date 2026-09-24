@@ -69,6 +69,7 @@ export interface WatchPartyMediaEvent {
     roomId: string;
     media: unknown;
     stateVersion: number;
+    senderId?: string;
 }
 
 interface SocketServiceInternals {

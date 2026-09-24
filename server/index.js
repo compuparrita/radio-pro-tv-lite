@@ -160,34 +160,38 @@ function isValidString(value, minLength, maxLength) {
 }
 
 function normalizeWatchPartyMedia(media) {
-    if (!media || typeof media !== 'object' || Array.isArray(media)
-        || !isValidString(media.stationId, 1, 100)
-        || !isValidString(media.sourceUrl, 1, 2048)
-        || !isValidString(media.title, 1, 200)
-        || !['youtube', 'hls'].includes(media.mediaType)
-        || typeof media.isLive !== 'boolean') {
+    if (!media || typeof media !== 'object' || Array.isArray(media)) {
         return null;
     }
 
+    const stationId = typeof media.stationId === 'string' ? media.stationId.trim().slice(0, 100) : '';
+    if (!stationId) return null;
+
+    if (typeof media.sourceUrl !== 'string') return null;
     const sourceUrl = media.sourceUrl.trim();
-    if (!sourceUrl.startsWith('/')) {
+    if (!sourceUrl || sourceUrl.length > 2048) return null;
+
+    if (!sourceUrl.startsWith('/') && !sourceUrl.startsWith('data:')) {
         try {
             const parsedUrl = new URL(sourceUrl);
             if (parsedUrl.protocol !== 'http:' && parsedUrl.protocol !== 'https:') return null;
         } catch (_error) {
-            return null;
+            if (sourceUrl.includes('://')) return null;
         }
     }
 
-    const title = sanitizeMessage(media.title);
-    if (!title) return null;
+    const rawTitle = typeof media.title === 'string' ? media.title.slice(0, 200) : 'Video';
+    const title = sanitizeMessage(rawTitle) || 'Video';
+
+    const validTypes = ['youtube', 'hls', 'video', 'audio', 'iframe'];
+    const mediaType = validTypes.includes(media.mediaType) ? media.mediaType : 'video';
 
     return {
-        stationId: media.stationId.trim(),
-        mediaType: media.mediaType,
+        stationId,
+        mediaType,
         sourceUrl,
         title,
-        isLive: media.isLive,
+        isLive: Boolean(media.isLive),
     };
 }
 
@@ -449,10 +453,6 @@ io.on('connection', (socket) => {
             emitWatchPartyError(socket, ack, 'NOT_IN_ROOM', 'Debes pertenecer a la sala');
             return;
         }
-        if (room.hostId !== socket.id) {
-            emitWatchPartyError(socket, ack, 'HOST_ONLY', 'Solo el anfitrion puede cambiar el medio');
-            return;
-        }
 
         const media = normalizeWatchPartyMedia(payload.media);
         if (!media) {
@@ -462,7 +462,11 @@ io.on('connection', (socket) => {
 
         room.media = media;
         room.stateVersion += 1;
-        const event = { roomId, media, stateVersion: room.stateVersion };
+        room.playback.isPlaying = true;
+        room.playback.currentTime = 0;
+        room.playback.updatedAt = Date.now();
+
+        const event = { roomId, media, stateVersion: room.stateVersion, senderId: socket.id };
         io.to(roomId).emit('watchparty:media', event);
         if (typeof ack === 'function') ack({ success: true, ...event });
     });

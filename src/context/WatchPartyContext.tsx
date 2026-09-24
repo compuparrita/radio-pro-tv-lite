@@ -59,12 +59,18 @@ function getMediaInfo(value: unknown): MediaInfo | null {
     if (!value || typeof value !== 'object') return null;
     const media = value as Partial<MediaInfo>;
     if (typeof media.stationId !== 'string'
-        || typeof media.mediaType !== 'string'
-        || (media.mediaType !== 'youtube' && media.mediaType !== 'hls')
-        || typeof media.sourceUrl !== 'string'
-        || typeof media.title !== 'string'
-        || typeof media.isLive !== 'boolean') return null;
-    return media as MediaInfo;
+        || typeof media.sourceUrl !== 'string') return null;
+    const validTypes = ['youtube', 'hls', 'video', 'audio', 'iframe'];
+    const mediaType = (media.mediaType && validTypes.includes(media.mediaType))
+        ? media.mediaType
+        : 'video';
+    return {
+        stationId: media.stationId,
+        mediaType: mediaType as MediaInfo['mediaType'],
+        sourceUrl: media.sourceUrl,
+        title: typeof media.title === 'string' ? media.title : 'Emisión',
+        isLive: Boolean(media.isLive),
+    };
 }
 
 function getYouTubeId(sourceUrl: string): string | null {
@@ -75,15 +81,16 @@ function createMediaInfo(station: Station | null): MediaInfo | null {
     if (!station) return null;
     const sourceUrl = station.iframeUrl || station.url;
     if (!sourceUrl) return null;
-    const mediaType = station.id.startsWith('yt-') || /youtube(?:-nocookie)?\.com|youtu\.be/i.test(sourceUrl)
+    const isYt = station.id.startsWith('yt-') || /youtube(?:-nocookie)?\.com|youtu\.be/i.test(sourceUrl);
+    const mediaType: MediaInfo['mediaType'] = isYt
         ? 'youtube'
-        : 'hls';
-    const isLive = Boolean((station as Station & { isLive?: boolean }).isLive ?? mediaType === 'hls');
+        : (station.type === 'audio' ? 'audio' : 'hls');
+    const isLive = Boolean((station as Station & { isLive?: boolean }).isLive ?? (mediaType === 'hls' || mediaType === 'audio'));
     return {
         stationId: station.id,
         mediaType,
         sourceUrl,
-        title: station.name,
+        title: station.name || 'Emisión',
         isLive,
     };
 }
@@ -91,7 +98,7 @@ function createMediaInfo(station: Station | null): MediaInfo | null {
 function stationFromMedia(media: MediaInfo, stations: Station[]): Station {
     const knownStation = stations.find((station) => station.id === media.stationId);
     if (knownStation) {
-        const station = { ...knownStation, name: media.title };
+        const station = { ...knownStation, name: media.title || knownStation.name };
         if (media.mediaType === 'youtube') {
             const videoId = getYouTubeId(media.sourceUrl);
             station.url = media.sourceUrl;
@@ -100,13 +107,14 @@ function stationFromMedia(media: MediaInfo, stations: Station[]): Station {
         return station;
     }
 
+    const isAudio = media.mediaType === 'audio';
     const station: Station = {
         id: media.stationId,
-        name: media.title,
+        name: media.title || 'Emisión Compartida',
         url: media.sourceUrl,
         logo: '',
         country: '',
-        type: 'video',
+        type: isAudio ? 'audio' : 'video',
     };
 
     if (media.mediaType === 'youtube') {
@@ -145,7 +153,7 @@ export function WatchPartyProvider({ children }: { children: ReactNode }) {
         lastAppliedMediaRef.current = mediaKey;
 
         remoteMediaStationRef.current = media.stationId;
-        setIsPlaying(false);
+        setIsPlaying(true);
         setCurrentStation(stationFromMedia(media, stations));
     }, [setCurrentStation, setIsPlaying, stations]);
 
@@ -236,7 +244,11 @@ export function WatchPartyProvider({ children }: { children: ReactNode }) {
             setRoom((currentRoom) => currentRoom?.id === event.roomId
                 ? { ...currentRoom, stateVersion: event.stateVersion, media: media as unknown as Record<string, unknown> }
                 : currentRoom);
-            if (roomRef.current?.hostId !== getWatchPartySocketId()) openMedia(media);
+            const myId = getWatchPartySocketId();
+            const isSender = Boolean(event.senderId && myId && event.senderId === myId);
+            if (!isSender) {
+                openMedia(media);
+            }
         }));
 
         if (!hasStartedSocket.current) {
@@ -249,11 +261,11 @@ export function WatchPartyProvider({ children }: { children: ReactNode }) {
     }, [clearRoomState, openMedia]);
 
     useEffect(() => {
-        if (remoteMediaStationRef.current !== null) remoteMediaStationRef.current = null;
-    }, [currentStation]);
-
-    useEffect(() => {
-        if (!room || !isHost || !currentStation) return;
+        if (!room || !currentStation) return;
+        if (remoteMediaStationRef.current === currentStation.id) {
+            remoteMediaStationRef.current = null;
+            return;
+        }
 
         const media = createMediaInfo(currentStation);
         if (!media) return;
@@ -271,7 +283,7 @@ export function WatchPartyProvider({ children }: { children: ReactNode }) {
             console.warn('[WatchParty] Error al enviar cambio de medio:', err);
             if (lastSentMediaRef.current === mediaKey) lastSentMediaRef.current = null;
         });
-    }, [currentStation, isHost, room]);
+    }, [currentStation, room]);
 
     const clearError = useCallback(() => setError(null), []);
 

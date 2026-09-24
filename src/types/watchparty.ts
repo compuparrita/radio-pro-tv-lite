@@ -2,7 +2,7 @@ import type { Station } from '../types';
 
 export interface MediaInfo {
     stationId: string;
-    mediaType: 'youtube' | 'hls';
+    mediaType: 'youtube' | 'hls' | 'video' | 'audio' | 'iframe';
     sourceUrl: string;
     title: string;
     isLive: boolean;
