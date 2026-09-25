@@ -103,26 +103,38 @@ function WatchPartyModal({ isOpen, onClose }: WatchPartyModalProps) {
                                 <p className="text-xs font-semibold uppercase tracking-wider text-zinc-500">Sala</p>
                                 <h3 className="mt-1 truncate text-xl font-bold">{room.name}</h3>
                             </div>
-                            <span className={`shrink-0 rounded-full px-3 py-1 text-xs font-bold tracking-wider ${isHost ? 'bg-cyan-400/15 text-cyan-200' : 'bg-zinc-800 text-zinc-300'}`}>
-                                {isHost ? 'HOST' : 'GUEST'}
-                            </span>
+                            {isHost && (
+                                <span className="shrink-0 rounded-full bg-cyan-400/15 px-3 py-1 text-xs font-bold tracking-wider text-cyan-200">
+                                    HOST
+                                </span>
+                            )}
                         </div>
 
-                        <div className="rounded-2xl border border-zinc-700 bg-zinc-800/60 p-5 text-center">
-                            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-zinc-400">Código de sala</p>
-                            <p className="my-3 font-mono text-3xl font-bold tracking-[0.25em] text-white sm:text-4xl">
-                                {roomCode ?? room.roomCode}
-                            </p>
-                            <button
-                                className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl bg-zinc-700 px-4 py-2 text-sm font-semibold text-white transition hover:bg-zinc-600 focus:outline-none focus:ring-2 focus:ring-cyan-400/60"
-                                onClick={() => void handleCopyCode()}
-                                type="button"
-                            >
-                                {copied ? <Check aria-hidden="true" size={16} /> : <Copy aria-hidden="true" size={16} />}
-                                {copied ? 'Copiado' : 'Copiar código'}
-                            </button>
-                            {copyError && <p className="mt-2 text-xs text-red-300" role="alert">{copyError}</p>}
-                        </div>
+                        {isHost ? (
+                            <div className="rounded-2xl border border-zinc-700 bg-zinc-800/60 p-5 text-center">
+                                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-zinc-400">{'C\u00f3digo de sala'}</p>
+                                <p className="my-3 font-mono text-3xl font-bold tracking-[0.25em] text-white sm:text-4xl">
+                                    {roomCode ?? room.roomCode}
+                                </p>
+                                <button
+                                    className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl bg-zinc-700 px-4 py-2 text-sm font-semibold text-white transition hover:bg-zinc-600 focus:outline-none focus:ring-2 focus:ring-cyan-400/60"
+                                    onClick={() => void handleCopyCode()}
+                                    type="button"
+                                >
+                                    {copied ? <Check aria-hidden="true" size={16} /> : <Copy aria-hidden="true" size={16} />}
+                                    {copied ? 'Copiado' : 'Copiar c\u00f3digo'}
+                                </button>
+                                {copyError && <p className="mt-2 text-xs text-red-300" role="alert">{copyError}</p>}
+                            </div>
+                        ) : (
+                            <div className="rounded-2xl border border-zinc-700 bg-zinc-800/60 p-5 text-center">
+                                <p className="text-sm font-semibold text-emerald-300">Conectado a la sala</p>
+                                <p className="mt-3 text-xs font-semibold uppercase tracking-[0.2em] text-zinc-400">{'C\u00f3digo:'}</p>
+                                <p className="mt-1 font-mono text-2xl font-bold tracking-[0.2em] text-white">
+                                    {roomCode ?? room.roomCode}
+                                </p>
+                            </div>
+                        )}
 
                         <div>
                             <div className="mb-3 flex items-center justify-between">
