@@ -43,6 +43,7 @@ interface WatchPartyContextValue {
     error: WatchPartyErrorEvent | null;
     isHost: boolean;
     canChangeMedia: boolean;
+    needsSyncPlayback: boolean;
     mediaInfo: MediaInfo | null;
     stateVersion: number;
     remoteExecutionRef: string | null;
@@ -54,6 +55,7 @@ interface WatchPartyContextValue {
     consumePendingAction: () => WatchPartyAction | null;
     clearRemoteExecutionRef: () => void;
     clearError: () => void;
+    syncPlayback: () => void;
 }
 
 const WatchPartyContext = createContext<WatchPartyContextValue | undefined>(undefined);
@@ -147,12 +149,31 @@ export function WatchPartyProvider({ children }: { children: ReactNode }) {
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<WatchPartyErrorEvent | null>(null);
     const [isHost, setIsHost] = useState(false);
+    const [needsSyncPlayback, setNeedsSyncPlayback] = useState(false);
     const [mediaInfo, setMediaInfo] = useState<MediaInfo | null>(null);
     const [stateVersion, setStateVersion] = useState(0);
     const [remoteExecutionRef, setRemoteExecutionRef] = useState<string | null>(null);
     const [pendingAction, setPendingAction] = useState<WatchPartyAction | null>(null);
     const hasStartedSocket = useRef(false);
-    const activeSessionRef = useRef<{ roomCode: string; userName: string } | null>(null);
+    const readSavedSession = (): { roomCode: string; userId: string; role: 'host' | 'guest' } | null => {
+        try {
+            const value = localStorage.getItem('watchparty_session');
+            if (!value) return null;
+            const session = JSON.parse(value) as { roomCode?: unknown; userId?: unknown; role?: unknown };
+            if (typeof session.roomCode !== 'string' || typeof session.userId !== 'string'
+                || (session.role !== 'host' && session.role !== 'guest')) return null;
+            return { roomCode: session.roomCode, userId: session.userId, role: session.role };
+        } catch {
+            return null;
+        }
+    };
+    const activeSessionRef = useRef<{ roomCode: string; userName: string; userId?: string; role?: 'host' | 'guest' } | null>(null);
+    if (activeSessionRef.current === null && profile?.name) {
+        const savedSession = readSavedSession();
+        if (savedSession) activeSessionRef.current = { ...savedSession, userName: profile.name };
+    }
+    const rejoinInFlightRef = useRef(false);
+    const joiningRoomRef = useRef(false);
     const roomRef = useRef(room);
     roomRef.current = room;
     const lastAppliedMediaRef = useRef<string | null>(null);
@@ -205,17 +226,44 @@ export function WatchPartyProvider({ children }: { children: ReactNode }) {
         return () => window.clearInterval(intervalId);
     }, [room, roomCode, isHost, isConnected, members, stateVersion, mediaInfo]);
 
-    const openMedia = useCallback((media: MediaInfo) => {
+    const openMedia = useCallback((media: MediaInfo, silent = false, currentTime = 0, hostIsPlaying = false) => {
         setMediaInfo(media);
+        if (silent) {
+            setIsPlaying(false);
+            const executionRef = `watchparty-initial-sync-${Date.now()}`;
+            setRemoteExecutionRef(executionRef);
+            window.setTimeout(() => setPendingAction({
+                roomId: roomRef.current?.id ?? '',
+                action: 'seek',
+                payload: Math.max(0, currentTime),
+                origin: executionRef,
+                actionId: executionRef,
+            }), 0);
+            setNeedsSyncPlayback(hostIsPlaying);
+        }
         const mediaKey = `${media.stationId}:${media.sourceUrl}`;
         lastSentMediaRef.current = mediaKey;
         if (lastAppliedMediaRef.current === mediaKey) return;
         lastAppliedMediaRef.current = mediaKey;
 
         remoteMediaStationRef.current = media.stationId;
-        setIsPlaying(true);
+        if (!silent) setIsPlaying(true);
         setCurrentStation(stationFromMedia(media, stations));
     }, [setCurrentStation, setIsPlaying, stations]);
+
+    const pauseForSilentJoin = useCallback(() => {
+        const executionRef = `watchparty-initial-pause-${Date.now()}`;
+        setIsPlaying(false);
+        setRemoteExecutionRef(executionRef);
+        setPendingAction({
+            roomId: roomRef.current?.id ?? '',
+            action: 'pause',
+            payload: null,
+            origin: executionRef,
+            actionId: executionRef,
+        });
+        setNeedsSyncPlayback(false);
+    }, [setIsPlaying]);
 
     const clearRoomState = useCallback(() => {
         setRadioMediaChangeAllowed(true);
@@ -224,6 +272,7 @@ export function WatchPartyProvider({ children }: { children: ReactNode }) {
         setHostId(null);
         setRoomCode(null);
         setIsHost(false);
+        setNeedsSyncPlayback(false);
         setMediaInfo(null);
         lastAppliedMediaRef.current = null;
         lastSentMediaRef.current = null;
@@ -233,35 +282,60 @@ export function WatchPartyProvider({ children }: { children: ReactNode }) {
         setPendingAction(null);
     }, []);
 
+    const persistSession = useCallback((nextRoomCode: string, role: 'host' | 'guest') => {
+        const userId = getWatchPartySocketId();
+        if (!userId) return;
+        const session = { roomCode: nextRoomCode, userId, role };
+        try { localStorage.setItem('watchparty_session', JSON.stringify(session)); } catch { /* Storage may be unavailable. */ }
+        activeSessionRef.current = { ...session, userName: profile?.name ?? '' };
+    }, [profile?.name]);
+
+    const rejoinSavedRoom = useCallback(async () => {
+        const session = activeSessionRef.current;
+        if (!session || !profile?.name || rejoinInFlightRef.current) return;
+        rejoinInFlightRef.current = true;
+        joiningRoomRef.current = true;
+        try {
+            const response = await sendJoinRoom({ roomCode: session.roomCode, userName: profile.name });
+            if (!response.success || !response.room) {
+                if (response.error === 'ROOM_NOT_FOUND') {
+                    try { localStorage.removeItem('watchparty_session'); } catch { /* Storage may be unavailable. */ }
+                    activeSessionRef.current = null;
+                    clearRoomState();
+                    setError({ code: 'ROOM_ENDED', message: 'La sala terminó.' });
+                }
+                return;
+            }
+            const joinedRoom = response.room;
+            const isCurrentHost = joinedRoom.hostId === getWatchPartySocketId();
+            setRoom(joinedRoom);
+            setStateVersion(joinedRoom.stateVersion);
+            setMembers(joinedRoom.members);
+            setHostId(joinedRoom.hostId);
+            setIsHost(isCurrentHost);
+            setRadioMediaChangeAllowed(isCurrentHost);
+            setRoomCode(joinedRoom.roomCode);
+            persistSession(joinedRoom.roomCode, isCurrentHost ? 'host' : 'guest');
+            const roomMedia = getMediaInfo(joinedRoom.media);
+            if (!isCurrentHost) {
+                if (roomMedia) openMedia(roomMedia, true, joinedRoom.playback.currentTime, joinedRoom.playback.isPlaying);
+                else pauseForSilentJoin();
+            }
+        } catch {
+            // Keep the saved session so a later Socket.IO reconnect can retry.
+        } finally {
+            joiningRoomRef.current = false;
+            rejoinInFlightRef.current = false;
+        }
+    }, [clearRoomState, openMedia, pauseForSilentJoin, persistSession, profile?.name]);
+
     useEffect(() => {
         const cleanups: Array<() => void> = [];
 
         cleanups.push(onWatchPartyConnectionStatus(async (status) => {
             const connected = status === 'connected';
             setIsConnected(connected);
-            if (connected && activeSessionRef.current) {
-                try {
-                    const response = await sendJoinRoom(activeSessionRef.current);
-                    if (response.success && response.room) {
-                        setRoom(response.room);
-                        setStateVersion(response.room.stateVersion);
-                        setMembers(response.room.members);
-                        setHostId(response.room.hostId);
-                        const isCurrentHost = response.room.hostId === getWatchPartySocketId();
-                        setIsHost(isCurrentHost);
-                        setRadioMediaChangeAllowed(isCurrentHost);
-                        const roomMedia = getMediaInfo(response.room.media);
-                        if (roomMedia) {
-                            setMediaInfo(roomMedia);
-                            if (response.room.hostId !== getWatchPartySocketId()) {
-                                openMedia(roomMedia);
-                            }
-                        }
-                    }
-                } catch (reconnectError) {
-                    console.warn('[WatchParty] Reconnect join error:', reconnectError);
-                }
-            }
+            if (connected) void rejoinSavedRoom();
         }));
 
         cleanups.push(registerMembersListener((event) => {
@@ -323,7 +397,7 @@ export function WatchPartyProvider({ children }: { children: ReactNode }) {
             if (media) {
                 setMediaInfo(media);
                 lastSentMediaRef.current = `${media.stationId}:${media.sourceUrl}`;
-                if (roomRef.current?.hostId !== getWatchPartySocketId()) openMedia(media);
+                if (!joiningRoomRef.current && roomRef.current?.hostId !== getWatchPartySocketId()) openMedia(media);
             }
             setRoom((currentRoom) => currentRoom?.id === event.roomId
                 ? {
@@ -363,7 +437,11 @@ export function WatchPartyProvider({ children }: { children: ReactNode }) {
         setIsConnected(isWatchPartySocketConnected());
 
         return () => cleanups.forEach((cleanup) => cleanup());
-    }, [clearRoomState, openMedia]);
+    }, [clearRoomState, openMedia, rejoinSavedRoom]);
+
+    useEffect(() => {
+        if (isWatchPartySocketConnected()) void rejoinSavedRoom();
+    }, [rejoinSavedRoom]);
 
     useEffect(() => {
         if (!room || !currentStation) return;
@@ -422,6 +500,7 @@ export function WatchPartyProvider({ children }: { children: ReactNode }) {
             setIsHost(true);
             setRadioMediaChangeAllowed(true);
             activeSessionRef.current = { roomCode: response.roomCode ?? response.room.roomCode, userName };
+            persistSession(response.roomCode ?? response.room.roomCode, 'host');
             return true;
         } catch (requestError) {
             setError({
@@ -432,7 +511,7 @@ export function WatchPartyProvider({ children }: { children: ReactNode }) {
         } finally {
             setIsLoading(false);
         }
-    }, [currentStation, profile?.name]);
+    }, [currentStation, persistSession, profile?.name]);
 
     const joinRoom = useCallback(async ({ roomCode: requestedRoomCode }: { roomCode: string }) => {
         const userName = profile?.name;
@@ -440,7 +519,9 @@ export function WatchPartyProvider({ children }: { children: ReactNode }) {
         setIsLoading(true);
         setError(null);
         try {
+            joiningRoomRef.current = true;
             const response = await sendJoinRoom({ roomCode: requestedRoomCode.trim().toUpperCase(), userName });
+            joiningRoomRef.current = false;
             if (!response.success || !response.room) {
                 setError({
                     code: response.error ?? 'ROOM_JOIN_FAILED',
@@ -461,10 +542,16 @@ export function WatchPartyProvider({ children }: { children: ReactNode }) {
             const isCurrentHost = response.room.hostId === getWatchPartySocketId();
             setIsHost(isCurrentHost);
             setRadioMediaChangeAllowed(isCurrentHost);
-            if (roomMedia && response.room.hostId !== getWatchPartySocketId()) openMedia(roomMedia);
-            activeSessionRef.current = { roomCode: response.room.roomCode, userName };
+            if (roomMedia && response.room.hostId !== getWatchPartySocketId()) {
+                openMedia(roomMedia, true, response.room.playback.currentTime, response.room.playback.isPlaying);
+                setNeedsSyncPlayback(response.room.playback.isPlaying);
+            } else if (response.room.hostId !== getWatchPartySocketId()) {
+                pauseForSilentJoin();
+            }
+            persistSession(response.room.roomCode, isCurrentHost ? 'host' : 'guest');
             return true;
         } catch (requestError) {
+            joiningRoomRef.current = false;
             setError({
                 code: 'CONNECTION_ERROR',
                 message: requestError instanceof Error ? requestError.message : 'No se pudo conectar con el servidor.',
@@ -473,7 +560,7 @@ export function WatchPartyProvider({ children }: { children: ReactNode }) {
         } finally {
             setIsLoading(false);
         }
-    }, [openMedia, profile?.name]);
+    }, [openMedia, pauseForSilentJoin, persistSession, profile?.name]);
 
     const leaveRoom = useCallback(async () => {
         setIsLoading(true);
@@ -485,6 +572,7 @@ export function WatchPartyProvider({ children }: { children: ReactNode }) {
                 return false;
             }
             activeSessionRef.current = null;
+            try { localStorage.removeItem('watchparty_session'); } catch { /* Storage may be unavailable. */ }
             clearRoomState();
             return true;
         } catch (requestError) {
@@ -549,6 +637,14 @@ export function WatchPartyProvider({ children }: { children: ReactNode }) {
     }, [pendingAction]);
 
     const clearRemoteExecutionRef = useCallback(() => setRemoteExecutionRef(null), []);
+    const syncPlayback = useCallback(() => {
+        if (!room || isHost || !needsSyncPlayback) return;
+        const executionRef = `watchparty-local-sync-${Date.now()}`;
+        setRemoteExecutionRef(executionRef);
+        setPendingAction({ roomId: room.id, action: 'play', payload: null, origin: executionRef, actionId: executionRef });
+        setIsPlaying(true);
+        setNeedsSyncPlayback(false);
+    }, [isHost, needsSyncPlayback, room, setIsPlaying]);
     const canChangeMedia = !room || isHost;
 
     return (
@@ -562,6 +658,7 @@ export function WatchPartyProvider({ children }: { children: ReactNode }) {
             error,
             isHost,
             canChangeMedia,
+            needsSyncPlayback,
             mediaInfo,
             stateVersion,
             remoteExecutionRef,
@@ -573,6 +670,7 @@ export function WatchPartyProvider({ children }: { children: ReactNode }) {
             consumePendingAction,
             clearRemoteExecutionRef,
             clearError,
+            syncPlayback,
         }}>
             {children}
         </WatchPartyContext.Provider>

@@ -32,6 +32,8 @@ function WatchPartyModal({ isOpen, onClose }: WatchPartyModalProps) {
         error,
         isHost,
         clearError,
+        needsSyncPlayback,
+        syncPlayback,
     } = useWatchParty();
 
     if (!isOpen) return null;
@@ -94,7 +96,7 @@ function WatchPartyModal({ isOpen, onClose }: WatchPartyModalProps) {
                 <div className="space-y-5 overflow-y-auto px-6 py-5">
                     {error && (
                         <div className="rounded-xl border border-red-400/20 bg-red-400/[0.08] px-4 py-3 text-sm text-red-200" role="alert">
-                            <span className="mr-2 font-semibold">{error.code}</span>{error.message}
+                            {error.code !== 'ROOM_ENDED' && <span className="mr-2 font-semibold">{error.code}</span>}{error.message}
                         </div>
                     )}
 
@@ -140,6 +142,18 @@ function WatchPartyModal({ isOpen, onClose }: WatchPartyModalProps) {
                                             <p className="mt-1 font-mono text-lg font-medium tracking-[0.2em] text-white/85">{roomCode ?? room.roomCode}</p>
                                         </div>
                                         <p className="text-sm text-white/55">{'Anfitrión: '}<span className="text-white/85">{hostName}</span></p>
+                                        {needsSyncPlayback && !isHost && (
+                                            <div className="rounded-xl border border-cyan-200/15 bg-cyan-200/[0.06] p-4">
+                                                <p className="text-sm text-white/75">{hostName} está reproduciendo</p>
+                                                <button
+                                                    className="mt-3 min-h-11 w-full rounded-xl bg-white text-sm font-semibold text-zinc-950 transition hover:bg-cyan-50 focus:outline-none focus:ring-2 focus:ring-cyan-200/70"
+                                                    onClick={syncPlayback}
+                                                    type="button"
+                                                >
+                                                    Sincronizar y reproducir
+                                                </button>
+                                            </div>
+                                        )}
                                     </div>
                                 )}
                             </section>

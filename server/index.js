@@ -794,7 +794,7 @@ io.on('connection', (socket) => {
                 if (watchPartySocketRooms.get(socket.id) === currentRoomId) {
                     removeSocketFromWatchParty(socket);
                 }
-            }, 6000);
+            }, 60000);
         }
         connectedUsers.delete(userId);
 
