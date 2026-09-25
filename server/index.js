@@ -720,6 +720,36 @@ io.on('connection', (socket) => {
         }
     });
 
+    socket.on('watchparty:heartbeat', (payload) => {
+        if (!payload || typeof payload !== 'object' || Array.isArray(payload)
+            || typeof payload.roomCode !== 'string'
+            || !Number.isInteger(payload.stateVersion)
+            || !Number.isFinite(payload.currentTime)
+            || typeof payload.isPlaying !== 'boolean'
+            || typeof payload.isLive !== 'boolean'
+            || !Number.isFinite(payload.timestamp)) return;
+
+        const room = roomManager.getRoomByCode(payload.roomCode.trim().toUpperCase());
+        if (!room || room.hostId !== socket.id
+            || watchPartySocketRooms.get(socket.id) !== room.id
+            || !socket.rooms.has(room.id)
+            || payload.stateVersion !== room.stateVersion
+            || room.members.length < 2) return;
+
+        const heartbeat = {
+            roomCode: room.roomCode,
+            stateVersion: room.stateVersion,
+            currentTime: Math.max(0, payload.currentTime),
+            isPlaying: payload.isPlaying,
+            isLive: payload.isLive,
+            timestamp: payload.timestamp,
+        };
+        room.playback.currentTime = heartbeat.currentTime;
+        room.playback.isPlaying = heartbeat.isPlaying;
+        room.playback.updatedAt = Date.now();
+        socket.to(room.id).emit('watchparty:heartbeat', heartbeat);
+    });
+
     socket.on('watchparty:leave', (payload, ack) => {
         if (payload !== undefined && (!payload || typeof payload !== 'object' || Array.isArray(payload))) {
             emitWatchPartyError(socket, ack, 'INVALID_REQUEST', 'Solicitud para salir invalida');

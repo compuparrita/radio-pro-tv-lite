@@ -10,6 +10,7 @@ import {
 import { useRadio } from './RadioContext';
 import type { Station } from '../types';
 import type { MediaInfo, WatchPartyAction, WatchPartyMember } from '../types/watchparty';
+import { socketService } from '../services/socketService';
 import {
     connectWatchPartySocket,
     createRoom as sendCreateRoom,
@@ -54,6 +55,15 @@ interface WatchPartyContextValue {
 }
 
 const WatchPartyContext = createContext<WatchPartyContextValue | undefined>(undefined);
+
+interface WatchPartyHeartbeat {
+    roomCode: string;
+    stateVersion: number;
+    currentTime: number;
+    isPlaying: boolean;
+    isLive: boolean;
+    timestamp: number;
+}
 
 function getMediaInfo(value: unknown): MediaInfo | null {
     if (!value || typeof value !== 'object') return null;
@@ -146,6 +156,51 @@ export function WatchPartyProvider({ children }: { children: ReactNode }) {
     const lastSentMediaRef = useRef<string | null>(null);
     const remoteMediaStationRef = useRef<string | null>(null);
 
+    useEffect(() => {
+        const socket = (socketService as unknown as { socket: {
+            connected: boolean;
+            on: (event: string, callback: (payload: WatchPartyHeartbeat) => void) => void;
+            off: (event: string, callback: (payload: WatchPartyHeartbeat) => void) => void;
+            emit: (event: string, payload: unknown) => void;
+        } | null }).socket;
+        if (!socket) return;
+
+        const onHeartbeat = (heartbeat: WatchPartyHeartbeat) => {
+            if (!roomRef.current || heartbeat.roomCode !== roomRef.current.roomCode
+                || heartbeat.stateVersion < roomRef.current.stateVersion) return;
+            window.dispatchEvent(new CustomEvent('watchparty:heartbeat:remote', { detail: heartbeat }));
+        };
+        socket.on('watchparty:heartbeat', onHeartbeat);
+        return () => socket.off('watchparty:heartbeat', onHeartbeat);
+    }, [isConnected]);
+
+    useEffect(() => {
+        if (!room || !roomCode || !isHost || !isConnected
+            || members.filter((member) => member.role === 'guest').length === 0) return;
+
+        const socket = (socketService as unknown as { socket: {
+            connected: boolean;
+            emit: (event: string, payload: unknown) => void;
+        } | null }).socket;
+        if (!socket?.connected) return;
+
+        const emitHeartbeat = () => {
+            if (!socket.connected || roomRef.current?.id !== room.id) return;
+            const playback = roomRef.current.playback;
+            const elapsed = playback.isPlaying ? Math.max(0, Date.now() - playback.updatedAt) / 1000 : 0;
+            socket.emit('watchparty:heartbeat', {
+                roomCode,
+                stateVersion,
+                currentTime: playback.currentTime + elapsed,
+                isPlaying: playback.isPlaying,
+                isLive: Boolean(mediaInfo?.isLive),
+                timestamp: Date.now(),
+            });
+        };
+        const intervalId = window.setInterval(emitHeartbeat, 3000);
+        return () => window.clearInterval(intervalId);
+    }, [room, roomCode, isHost, isConnected, members, stateVersion, mediaInfo]);
+
     const openMedia = useCallback((media: MediaInfo) => {
         setMediaInfo(media);
         const mediaKey = `${media.stationId}:${media.sourceUrl}`;
@@ -223,6 +278,24 @@ export function WatchPartyProvider({ children }: { children: ReactNode }) {
 
         cleanups.push(registerActionListener((event) => {
             setStateVersion(event.stateVersion);
+            setRoom((currentRoom) => currentRoom?.id === event.roomId
+                ? {
+                    ...currentRoom,
+                    playback: {
+                        ...currentRoom.playback,
+                        ...(event.action === 'play' ? { isPlaying: true } : {}),
+                        ...(event.action === 'pause' ? { isPlaying: false } : {}),
+                        ...(event.action === 'seek' ? {
+                            currentTime: typeof event.payload === 'number'
+                                ? event.payload
+                                : Number((event.payload as { seconds?: number; currentTime?: number } | null)?.seconds
+                                    ?? (event.payload as { currentTime?: number } | null)?.currentTime
+                                    ?? event.payload),
+                        } : {}),
+                        updatedAt: Date.now(),
+                    },
+                }
+                : currentRoom);
             setRemoteExecutionRef(event.remoteExecutionRef);
             setPendingAction({
                 roomId: event.roomId,

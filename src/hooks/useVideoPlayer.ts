@@ -34,6 +34,7 @@ export const useVideoPlayer = (
     const youtubeReadyRef = useRef(false);
     const pendingRemoteActionRef = useRef<{ action: WatchPartyPlaybackAction; seconds?: number } | null>(null);
     const lastYouTubeTimeRef = useRef<number | null>(null);
+    const remoteSeekSuppressionRef = useRef(false);
 
     useEffect(() => {
         isPlayingRef.current = isPlaying;
@@ -126,6 +127,68 @@ export const useVideoPlayer = (
         }
     };
 
+    const goLive = () => {
+        if (playerType === 'videojs') {
+            videojsPlayerRef.current?.liveTracker?.seekToLiveEdge?.();
+            return;
+        }
+        if (playerType === 'iframe' && isYouTube) {
+            const player = ytPlayerRef.current;
+            const duration = Number(player?.getDuration?.());
+            if (player && Number.isFinite(duration)) player.seekTo(duration, true);
+            return;
+        }
+        const mediaElement = videoRef.current;
+        if (mediaElement instanceof HTMLMediaElement && Number.isFinite(mediaElement.duration)) {
+            mediaElement.currentTime = mediaElement.duration;
+        }
+    };
+
+    const reportSeek = (seconds: number) => {
+        if (remoteSeekSuppressionRef.current) return;
+        onSeek?.(seconds);
+    };
+
+    useEffect(() => {
+        const handleHeartbeat = (event: Event) => {
+            const heartbeat = (event as CustomEvent<{
+                currentTime: number;
+                isPlaying: boolean;
+                isLive: boolean;
+                timestamp: number;
+            }>).detail;
+            if (!heartbeat || !Number.isFinite(heartbeat.currentTime)) return;
+
+            let localTime: number | null = null;
+            if (playerType === 'videojs') {
+                const value = Number(videojsPlayerRef.current?.currentTime?.());
+                if (Number.isFinite(value)) localTime = value;
+            } else if (playerType === 'iframe' && isYouTube) {
+                const value = Number(ytPlayerRef.current?.getCurrentTime?.());
+                if (Number.isFinite(value)) localTime = value;
+            } else if (videoRef.current instanceof HTMLMediaElement) {
+                const value = videoRef.current.currentTime;
+                if (Number.isFinite(value)) localTime = value;
+            }
+            if (localTime === null) return;
+
+            const elapsed = heartbeat.isPlaying ? Math.max(0, Date.now() - heartbeat.timestamp) / 1000 : 0;
+            const hostTime = heartbeat.currentTime + elapsed;
+            const drift = hostTime - localTime;
+            if (Math.abs(drift) < 0.25) return;
+
+            remoteSeekSuppressionRef.current = true;
+            window.setTimeout(() => { remoteSeekSuppressionRef.current = false; }, 1500);
+            if (heartbeat.isLive && Math.abs(drift) >= 1) {
+                goLive();
+            } else {
+                executeRemoteAction('seek', localTime + (Math.abs(drift) >= 1 ? drift : drift * 0.5));
+            }
+        };
+        window.addEventListener('watchparty:heartbeat:remote', handleHeartbeat);
+        return () => window.removeEventListener('watchparty:heartbeat:remote', handleHeartbeat);
+    });
+
     const runPendingRemoteAction = (player: any, isYouTubePlayer = false) => {
         const pending = pendingRemoteActionRef.current;
         if (!pending) return;
@@ -215,7 +278,7 @@ export const useVideoPlayer = (
         };
         const onSeeked = () => {
             if (playerType === 'html5' && videoEl instanceof HTMLMediaElement) {
-                onSeek?.(videoEl.currentTime);
+                reportSeek(videoEl.currentTime);
             }
         };
 
@@ -401,7 +464,7 @@ export const useVideoPlayer = (
                 });
                 player.on('seeked', () => {
                     const currentTime = player.currentTime();
-                    if (typeof currentTime === 'number' && Number.isFinite(currentTime)) onSeek?.(currentTime);
+                    if (typeof currentTime === 'number' && Number.isFinite(currentTime)) reportSeek(currentTime);
                 });
 
                 // Si el usuario hace clic en el botón "Live" nativo, forzar reproducción SOLO si está activo
@@ -651,7 +714,7 @@ export const useVideoPlayer = (
                             } else if (event.data === 3 && Number.isFinite(currentTime)) {
                                 const previousTime = lastYouTubeTimeRef.current;
                                 if (previousTime !== null && Math.abs(currentTime - previousTime) > 0.75) {
-                                    onSeek?.(currentTime);
+                                    reportSeek(currentTime);
                                 }
                                 lastYouTubeTimeRef.current = currentTime;
                             }
@@ -737,6 +800,7 @@ export const useVideoPlayer = (
         isAutoMode,
         setQualityLevel,
         isYouTube,
-        executeRemoteAction
+        executeRemoteAction,
+        goLive
     };
 };
