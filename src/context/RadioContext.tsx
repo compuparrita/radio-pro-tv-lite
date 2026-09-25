@@ -15,6 +15,12 @@ import {
 
 const RadioContext = createContext<RadioContextType | undefined>(undefined);
 
+let radioMediaChangeAllowed = true;
+
+export const setRadioMediaChangeAllowed = (allowed: boolean) => {
+    radioMediaChangeAllowed = allowed;
+};
+
 export const useRadio = () => {
     const context = useContext(RadioContext);
     if (!context) {
@@ -300,6 +306,7 @@ export const RadioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     }, [volume]);
 
     const playStation = (station: Station) => {
+        if (!radioMediaChangeAllowed) return;
         if (!station) return;
         setCurrentStation(station);
         setIsPlaying(true);

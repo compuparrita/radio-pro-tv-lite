@@ -7,7 +7,7 @@ import {
     useState,
     type ReactNode,
 } from 'react';
-import { useRadio } from './RadioContext';
+import { setRadioMediaChangeAllowed, useRadio } from './RadioContext';
 import type { Station } from '../types';
 import type { MediaInfo, WatchPartyAction, WatchPartyMember } from '../types/watchparty';
 import { socketService } from '../services/socketService';
@@ -41,6 +41,7 @@ interface WatchPartyContextValue {
     isLoading: boolean;
     error: WatchPartyErrorEvent | null;
     isHost: boolean;
+    canChangeMedia: boolean;
     mediaInfo: MediaInfo | null;
     stateVersion: number;
     remoteExecutionRef: string | null;
@@ -216,6 +217,7 @@ export function WatchPartyProvider({ children }: { children: ReactNode }) {
     }, [setCurrentStation, setIsPlaying, stations]);
 
     const clearRoomState = useCallback(() => {
+        setRadioMediaChangeAllowed(true);
         setRoom(null);
         setMembers([]);
         setHostId(null);
@@ -244,7 +246,9 @@ export function WatchPartyProvider({ children }: { children: ReactNode }) {
                         setStateVersion(response.room.stateVersion);
                         setMembers(response.room.members);
                         setHostId(response.room.hostId);
-                        setIsHost(response.room.hostId === getWatchPartySocketId());
+                        const isCurrentHost = response.room.hostId === getWatchPartySocketId();
+                        setIsHost(isCurrentHost);
+                        setRadioMediaChangeAllowed(isCurrentHost);
                         const roomMedia = getMediaInfo(response.room.media);
                         if (roomMedia) {
                             setMediaInfo(roomMedia);
@@ -260,17 +264,21 @@ export function WatchPartyProvider({ children }: { children: ReactNode }) {
         }));
 
         cleanups.push(registerMembersListener((event) => {
+            const isCurrentHost = event.hostId === getWatchPartySocketId();
             setMembers(event.members);
             setHostId(event.hostId);
-            setIsHost(event.hostId === getWatchPartySocketId());
+            setIsHost(isCurrentHost);
+            setRadioMediaChangeAllowed(isCurrentHost);
             setRoom((currentRoom) => currentRoom?.id === event.roomId
                 ? { ...currentRoom, members: event.members, hostId: event.hostId }
                 : currentRoom);
         }));
 
         cleanups.push(registerHostChangedListener((event) => {
+            const isCurrentHost = event.hostId === getWatchPartySocketId();
             setHostId(event.hostId);
-            setIsHost(event.hostId === getWatchPartySocketId());
+            setIsHost(isCurrentHost);
+            setRadioMediaChangeAllowed(isCurrentHost);
             setRoom((currentRoom) => currentRoom?.id === event.roomId
                 ? { ...currentRoom, hostId: event.hostId }
                 : currentRoom);
@@ -409,6 +417,7 @@ export function WatchPartyProvider({ children }: { children: ReactNode }) {
             setHostId(response.room.hostId);
             setRoomCode(response.roomCode ?? response.room.roomCode);
             setIsHost(true);
+            setRadioMediaChangeAllowed(true);
             activeSessionRef.current = { roomCode: response.roomCode ?? response.room.roomCode, userName };
             return true;
         } catch (requestError) {
@@ -444,7 +453,9 @@ export function WatchPartyProvider({ children }: { children: ReactNode }) {
             setMembers(response.room.members);
             setHostId(response.room.hostId);
             setRoomCode(response.room.roomCode);
-            setIsHost(response.room.hostId === getWatchPartySocketId());
+            const isCurrentHost = response.room.hostId === getWatchPartySocketId();
+            setIsHost(isCurrentHost);
+            setRadioMediaChangeAllowed(isCurrentHost);
             if (roomMedia && response.room.hostId !== getWatchPartySocketId()) openMedia(roomMedia);
             activeSessionRef.current = { roomCode: response.room.roomCode, userName };
             return true;
@@ -533,6 +544,7 @@ export function WatchPartyProvider({ children }: { children: ReactNode }) {
     }, [pendingAction]);
 
     const clearRemoteExecutionRef = useCallback(() => setRemoteExecutionRef(null), []);
+    const canChangeMedia = !room || isHost;
 
     return (
         <WatchPartyContext.Provider value={{
@@ -544,6 +556,7 @@ export function WatchPartyProvider({ children }: { children: ReactNode }) {
             isLoading,
             error,
             isHost,
+            canChangeMedia,
             mediaInfo,
             stateVersion,
             remoteExecutionRef,
