@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { MessageCircle, X, Send, Users, Wifi, WifiOff, Trash2, LogOut, HelpCircle, Bell, BellOff, Menu, ChevronDown, CheckSquare, Clock, Paperclip, FileText, Download, ExternalLink, Music, Loader2, Mic, CheckCheck, Play, Pause, Smile } from 'lucide-react';
+import { MessageCircle, X, Send, Users, Wifi, WifiOff, Trash2, HelpCircle, Bell, BellOff, Menu, ChevronDown, CheckSquare, Clock, Paperclip, FileText, Download, ExternalLink, Music, Loader2, Mic, CheckCheck, Play, Pause, Smile } from 'lucide-react';
 import { useChat } from '../context/ChatContext';
 import { useRadio } from '../context/RadioContext';
 import HelpModal from './HelpModal';
@@ -750,12 +750,10 @@ export const ChatModal: React.FC<ChatModalProps> = ({ externalOpen, onOpenChange
         connectionStatus,
         userIdentity,
         sendMessage,
-        identify,
         isIdentified,
         clearMessages,
         deleteMessage,
         deleteMultipleMessages,
-        logout,
         error: contextError,
         setModalOpen,
         notificationsEnabled,
@@ -770,8 +768,6 @@ export const ChatModal: React.FC<ChatModalProps> = ({ externalOpen, onOpenChange
 
     const [isOpen, setIsOpen] = useState(false);
     const [currentMessage, setCurrentMessage] = useState('');
-    const [name, setName] = useState('');
-    const [phone, setPhone] = useState('');
     const [error, setError] = useState('');
     const [isHelpOpen, setIsHelpOpen] = useState(false);
     const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -950,27 +946,6 @@ export const ChatModal: React.FC<ChatModalProps> = ({ externalOpen, onOpenChange
         setModalOpen(isOpen);
         onOpenChange?.(isOpen);
     }, [isOpen, setModalOpen, onOpenChange]);
-
-    const handleIdentify = (e: React.FormEvent) => {
-        e.preventDefault();
-
-        if (name.trim().length < 2) {
-            setError('El nombre debe tener al menos 2 caracteres');
-            return;
-        }
-
-        if (name.trim().length > 50) {
-            setError('El nombre no puede tener más de 50 caracteres');
-            return;
-        }
-
-        identify({
-            name: name.trim(),
-            phone: phone.trim() || undefined
-        });
-
-        setError('');
-    };
 
 const compressImageFile = (file: File): Promise<{ data: string; previewUrl: string; size: number }> => {
     return new Promise((resolve) => {
@@ -1688,21 +1663,6 @@ const compressImageFile = (file: File): Promise<{ data: string; previewUrl: stri
                                                 <span>Limpiar Historial</span>
                                             </button>
 
-                                            {isIdentified && (
-                                                <>
-                                                    <div className="my-1 border-t border-white/10" />
-                                                    <button
-                                                        onClick={() => {
-                                                            setIsMenuOpen(false);
-                                                            logout();
-                                                        }}
-                                                        className="w-full px-3 py-2 text-left text-xs font-medium text-red-400 hover:bg-red-500/10 flex items-center gap-2.5 transition-colors"
-                                                    >
-                                                        <LogOut size={16} />
-                                                        <span>Cerrar Sesión</span>
-                                                    </button>
-                                                </>
-                                            )}
                                         </div>
                                     )}
 
@@ -1764,64 +1724,9 @@ const compressImageFile = (file: File): Promise<{ data: string; previewUrl: stri
                             </div>
                         )}
 
-                        {/* Identification Form */}
                         {!isIdentified && (
-                            <div className="flex-1 flex items-center justify-center p-6">
-                                <form onSubmit={handleIdentify} className="w-full max-w-sm space-y-4">
-                                    <div className="text-center mb-6">
-                                        <h4 className="text-xl font-bold mb-2">Únete al chat</h4>
-                                        <p className="text-sm text-[var(--text-secondary)]">
-                                            Identifícate para comenzar a chatear
-                                        </p>
-                                    </div>
-
-                                    <div>
-                                        <label className="block text-sm font-medium mb-2">
-                                            Nombre *
-                                        </label>
-                                        <input
-                                            type="text"
-                                            value={name}
-                                            onChange={(e) => setName(e.target.value)}
-                                            placeholder="Tu nombre"
-                                            className="w-full p-3 bg-[var(--dark-bg)] border border-[var(--dark-border)] rounded-lg focus:border-[var(--primary-color)] outline-none"
-                                            required
-                                            minLength={2}
-                                            maxLength={50}
-                                        />
-                                    </div>
-
-                                    <div>
-                                        <label className="block text-sm font-medium mb-1.5 flex items-center justify-between">
-                                            <span>Teléfono <span className="text-xs text-[var(--text-secondary)] font-normal">(opcional)</span></span>
-                                            <span className="text-xs text-[var(--primary-color)] font-medium">ID Único</span>
-                                        </label>
-                                        <input
-                                            type="tel"
-                                            value={phone}
-                                            onChange={(e) => setPhone(e.target.value)}
-                                            placeholder="Ej: 8888-8888"
-                                            className="w-full p-3 bg-[var(--dark-bg)] border border-[var(--dark-border)] rounded-lg focus:border-[var(--primary-color)] outline-none"
-                                            title="Tu teléfono funciona como tu llave personal. Si entras desde tu móvil, PC o Android TV con el mismo número, tus favoritos e historial se sincronizan solos."
-                                        />
-                                        <p className="mt-1.5 text-xs text-[var(--text-secondary)] leading-relaxed bg-white/5 p-2 rounded-md border border-white/5">
-                                            💡 <strong>¿Para qué sirve?</strong> Funciona como tu identificador personal. Si cambias de dispositivo (celular, PC o Smart TV) y pones el mismo teléfono, se sincronizarán tu historial y tus emisoras favoritas automáticamente sin necesidad de contraseñas.
-                                        </p>
-                                    </div>
-
-                                    {error && (
-                                        <div className="text-red-400 text-sm text-center">
-                                            {error}
-                                        </div>
-                                    )}
-
-                                    <button
-                                        type="submit"
-                                        className="w-full py-3 bg-gradient-to-r from-[var(--primary-color)] to-[var(--secondary-color)] text-white rounded-lg font-medium hover:opacity-90 transition-opacity"
-                                    >
-                                        Continuar al Chat
-                                    </button>
-                                </form>
+                            <div className="flex flex-1 items-center justify-center p-6 text-sm text-[var(--text-secondary)]">
+                                Preparando el perfil...
                             </div>
                         )}
 

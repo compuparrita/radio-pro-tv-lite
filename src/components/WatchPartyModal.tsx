@@ -15,7 +15,6 @@ const secondaryButtonClassName = 'inline-flex min-h-10 items-center justify-cent
 
 function WatchPartyModal({ isOpen, onClose }: WatchPartyModalProps) {
     const [activeTab, setActiveTab] = useState<WatchPartyTab>('create');
-    const [userName, setUserName] = useState('');
     const [roomName, setRoomName] = useState('');
     const [joinCode, setJoinCode] = useState('');
     const [copied, setCopied] = useState(false);
@@ -43,9 +42,9 @@ function WatchPartyModal({ isOpen, onClose }: WatchPartyModalProps) {
         event.preventDefault();
         clearError();
         if (activeTab === 'create') {
-            void createRoom({ roomName, userName });
+            void createRoom({ roomName });
         } else {
-            void joinRoom({ roomCode: joinCode, userName });
+            void joinRoom({ roomCode: joinCode });
         }
     };
 
@@ -193,17 +192,6 @@ function WatchPartyModal({ isOpen, onClose }: WatchPartyModalProps) {
                             </div>
 
                             <form className="space-y-4" onSubmit={handleSubmit}>
-                                <label className="block space-y-2 text-sm text-white/65">
-                                    Tu nombre
-                                    <input
-                                        autoComplete="nickname"
-                                        className={inputClassName}
-                                        onChange={(event) => setUserName(event.target.value)}
-                                        placeholder="Nombre"
-                                        required
-                                        value={userName}
-                                    />
-                                </label>
                                 {activeTab === 'create' ? (
                                     <label className="block space-y-2 text-sm text-white/65">
                                         Nombre de la sala

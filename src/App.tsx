@@ -3,6 +3,7 @@ import { Settings } from 'lucide-react';
 import { RadioProvider } from './context/RadioContext';
 import { ChatProvider } from './context/ChatContext';
 import { WatchPartyProvider } from './context/WatchPartyContext';
+import { UserProfileProvider, useUserProfile } from './context/UserProfileContext';
 import { Header } from './components/Header';
 import { Player } from './components/Player';
 import { StationList } from './components/StationList';
@@ -12,6 +13,7 @@ import { MobileNav } from './components/MobileNav';
 import { useTVRemote } from './hooks/useTVRemote';
 import GeneralHelpModal from './components/GeneralHelpModal';
 import WatchPartyModal from './components/WatchPartyModal';
+import { UserProfileForm } from './components/UserProfileForm';
 import { HelpCircle } from 'lucide-react';
 
 function AppContent() {
@@ -356,17 +358,23 @@ function AppContent() {
     );
 }
 
+function UserProfileGate() {
+    const { hasProfile } = useUserProfile();
+    return hasProfile ? <AppContent /> : <UserProfileForm />;
+}
+
 function App() {
     return (
-        <RadioProvider>
-            <ChatProvider>
-                <WatchPartyProvider>
-                    <AppContent />
-                </WatchPartyProvider>
-            </ChatProvider>
-        </RadioProvider>
+        <UserProfileProvider>
+            <RadioProvider>
+                <ChatProvider>
+                    <WatchPartyProvider>
+                        <UserProfileGate />
+                    </WatchPartyProvider>
+                </ChatProvider>
+            </RadioProvider>
+        </UserProfileProvider>
     );
 }
 
 export default App;
-

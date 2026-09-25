@@ -8,6 +8,7 @@ import {
     type ReactNode,
 } from 'react';
 import { setRadioMediaChangeAllowed, useRadio } from './RadioContext';
+import { useUserProfile } from './UserProfileContext';
 import type { Station } from '../types';
 import type { MediaInfo, WatchPartyAction, WatchPartyMember } from '../types/watchparty';
 import { socketService } from '../services/socketService';
@@ -46,8 +47,8 @@ interface WatchPartyContextValue {
     stateVersion: number;
     remoteExecutionRef: string | null;
     pendingAction: WatchPartyAction | null;
-    createRoom: (payload: { roomName: string; userName: string }) => Promise<boolean>;
-    joinRoom: (payload: { roomCode: string; userName: string }) => Promise<boolean>;
+    createRoom: (payload: { roomName: string }) => Promise<boolean>;
+    joinRoom: (payload: { roomCode: string }) => Promise<boolean>;
     leaveRoom: () => Promise<boolean>;
     sendAction: (action: WatchPartyAction['action'], payload: unknown) => Promise<WatchPartyResponse>;
     consumePendingAction: () => WatchPartyAction | null;
@@ -137,6 +138,7 @@ function stationFromMedia(media: MediaInfo, stations: Station[]): Station {
 
 export function WatchPartyProvider({ children }: { children: ReactNode }) {
     const { currentStation, stations, setCurrentStation, setIsPlaying } = useRadio();
+    const { profile } = useUserProfile();
     const [room, setRoom] = useState<WatchPartyRoomData | null>(null);
     const [members, setMembers] = useState<WatchPartyMember[]>([]);
     const [hostId, setHostId] = useState<string | null>(null);
@@ -390,7 +392,9 @@ export function WatchPartyProvider({ children }: { children: ReactNode }) {
 
     const clearError = useCallback(() => setError(null), []);
 
-    const createRoom = useCallback(async ({ roomName, userName }: { roomName: string; userName: string }) => {
+    const createRoom = useCallback(async ({ roomName }: { roomName: string }) => {
+        const userName = profile?.name;
+        if (!userName) return false;
         setIsLoading(true);
         setError(null);
         try {
@@ -428,9 +432,11 @@ export function WatchPartyProvider({ children }: { children: ReactNode }) {
         } finally {
             setIsLoading(false);
         }
-    }, [currentStation]);
+    }, [currentStation, profile?.name]);
 
-    const joinRoom = useCallback(async ({ roomCode: requestedRoomCode, userName }: { roomCode: string; userName: string }) => {
+    const joinRoom = useCallback(async ({ roomCode: requestedRoomCode }: { roomCode: string }) => {
+        const userName = profile?.name;
+        if (!userName) return false;
         setIsLoading(true);
         setError(null);
         try {
@@ -467,7 +473,7 @@ export function WatchPartyProvider({ children }: { children: ReactNode }) {
         } finally {
             setIsLoading(false);
         }
-    }, [openMedia]);
+    }, [openMedia, profile?.name]);
 
     const leaveRoom = useCallback(async () => {
         setIsLoading(true);

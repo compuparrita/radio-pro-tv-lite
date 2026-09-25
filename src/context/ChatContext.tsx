@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useRef, useCallback, ReactNode } from 'react';
 import { ChatMessage, UserIdentity, ConnectionStatus } from '../types/chat';
+import { useUserProfile } from './UserProfileContext';
 import {
     fetchChatHistoryFromCloud,
     sendChatMessageToCloud,
@@ -19,12 +20,10 @@ interface ChatContextType {
     connectionStatus: ConnectionStatus;
     userIdentity: UserIdentity | null;
     sendMessage: (message: string, attachment?: { url: string; name: string; type: string; size?: number }) => Promise<void>;
-    identify: (identity: UserIdentity) => void;
     isIdentified: boolean;
     clearMessages: () => void;
     deleteMessage: (messageId: string) => Promise<void>;
     deleteMultipleMessages: (messageIds: string[]) => Promise<void>;
-    logout: () => void;
     error: string | null;
     unreadCount: number;
     setModalOpen: (isOpen: boolean) => void;
@@ -146,12 +145,15 @@ function showDesktopNotification(senderName: string, messageText: string, onOpen
 }
 
 export const ChatProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
+    const { profile } = useUserProfile();
     const [messages, setMessages] = useState<ChatMessage[]>([]);
     const [onlineListeners, setOnlineListeners] = useState(1);
     const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>(() =>
         typeof navigator !== 'undefined' && !navigator.onLine ? 'disconnected' : 'connecting'
     );
-    const [userIdentity, setUserIdentity] = useState<UserIdentity | null>(null);
+    const [userIdentity, setUserIdentity] = useState<UserIdentity | null>(() => profile
+        ? { name: profile.name, phone: profile.phone }
+        : null);
     const [error, setError] = useState<string | null>(null);
     const [unreadCount, setUnreadCount] = useState(0);
     const [isModalOpen, setIsModalOpen] = useState(false);
@@ -172,6 +174,10 @@ export const ChatProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const [typingUsers, setTypingUsers] = useState<string[]>([]);
     const userIdentityRef = useRef<UserIdentity | null>(null);
     const typingTimeoutsRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
+
+    useEffect(() => {
+        setUserIdentity(profile ? { name: profile.name, phone: profile.phone } : null);
+    }, [profile?.name, profile?.phone]);
 
     const isNotificationsMutedRef = useRef(isNotificationsMuted);
     useEffect(() => {
@@ -400,18 +406,6 @@ export const ChatProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         }
     };
 
-    const logout = () => {
-        setUserIdentity(null);
-        localStorage.removeItem('chatIdentity');
-        localStorage.removeItem('chatClearedAt');
-        localStorage.removeItem('chatDeletedIds');
-        setMessages([]);
-
-        if (typeof window !== 'undefined') {
-            window.dispatchEvent(new CustomEvent('user-identity-changed', { detail: null }));
-        }
-    };
-
     const setModalOpen = (isOpen: boolean) => {
         setIsModalOpen(isOpen);
         if (isOpen) {
@@ -435,18 +429,6 @@ export const ChatProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             localStorage.setItem('lastReadMessageCount', messages.length.toString());
         }
     }, [messages, isModalOpen]);
-
-    // Cargar identidad inicial
-    useEffect(() => {
-        const savedIdentity = localStorage.getItem('chatIdentity');
-        if (savedIdentity) {
-            try {
-                setUserIdentity(JSON.parse(savedIdentity));
-            } catch (e) {
-                console.error('Failed to parse saved identity');
-            }
-        }
-    }, []);
 
     // Conectar a Supabase (Carga de Historial + Realtime + Presencia)
     useEffect(() => {
@@ -605,36 +587,6 @@ export const ChatProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         };
     }, [userIdentity?.name, userIdentity?.phone, reconnectKey, flushPendingMessages]);
 
-    const identify = async (identity: UserIdentity) => {
-        setUserIdentity(identity);
-        localStorage.setItem('chatIdentity', JSON.stringify(identity));
-
-        // Limpiar marcas previas de borrado local al registrarse para mostrar el historial completo de la nube
-        localStorage.removeItem('chatClearedAt');
-        localStorage.removeItem('chatDeletedIds');
-
-        // Consultar de inmediato el historial más reciente desde Supabase
-        setConnectionStatus('connecting');
-        try {
-            const history = await fetchChatHistoryFromCloud(50);
-            setMessages(history);
-            setConnectionStatus('connected');
-        } catch (err) {
-            console.error('Error cargando historial de chat en registro:', err);
-            setConnectionStatus('connected');
-        }
-
-        // Notificar en tiempo real a RadioContext para que recupere favoritos de inmediato
-        if (typeof window !== 'undefined') {
-            window.dispatchEvent(new CustomEvent('user-identity-changed', { detail: identity }));
-        }
-
-        // Solicitar permisos de notificación al identificarse
-        if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'default') {
-            Notification.requestPermission().then(p => setNotificationsEnabled(p === 'granted'));
-        }
-    };
-
     const sendMessage = async (
         messageText: string,
         attachment?: { url: string; name: string; type: string; size?: number }
@@ -792,12 +744,10 @@ export const ChatProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 connectionStatus,
                 userIdentity,
                 sendMessage,
-                identify,
                 isIdentified: !!userIdentity,
                 clearMessages,
                 deleteMessage,
                 deleteMultipleMessages,
-                logout,
                 error,
                 unreadCount,
                 setModalOpen,
