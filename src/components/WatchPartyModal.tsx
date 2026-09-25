@@ -236,8 +236,17 @@ function WatchPartyModal({ isOpen, onClose }: WatchPartyModalProps) {
                 <footer className="border-t border-white/[0.07] px-6 py-4">
                     {room ? (
                         isHost ? (
-                            <button className="min-h-11 w-full rounded-xl bg-white/[0.07] text-sm font-medium text-white/85 transition hover:bg-white/[0.11] focus:outline-none focus:ring-2 focus:ring-white/20" onClick={onClose} type="button">
-                                Cerrar
+                            <button
+                                className="min-h-11 w-full rounded-xl bg-white/[0.07] text-sm font-medium text-white/85 transition hover:bg-white/[0.11] focus:outline-none focus:ring-2 focus:ring-white/20 disabled:cursor-wait disabled:opacity-50"
+                                disabled={isLoading}
+                                onClick={() => {
+                                    void leaveRoom().then((left) => {
+                                        if (left) onClose();
+                                    });
+                                }}
+                                type="button"
+                            >
+                                {isLoading ? 'Abandonando...' : 'Abandonar sala'}
                             </button>
                         ) : (
                             <button
