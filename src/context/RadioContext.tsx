@@ -15,10 +15,10 @@ import {
 
 const RadioContext = createContext<RadioContextType | undefined>(undefined);
 
-let radioMediaChangeAllowed = true;
+let canChangeMedia = true;
 
 export const setRadioMediaChangeAllowed = (allowed: boolean) => {
-    radioMediaChangeAllowed = allowed;
+    canChangeMedia = allowed;
 };
 
 export const useRadio = () => {
@@ -118,6 +118,16 @@ export const RadioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
     const [currentStation, setCurrentStation] = useState<Station | null>(null);
     const [isPlaying, setIsPlaying] = useState(false);
+
+    const playStation = (station: Station, startPlayback = true) => {
+        if (!canChangeMedia) return;
+        if (!station) return;
+        setCurrentStation(station);
+        if (startPlayback) setIsPlaying(true);
+        if (!station.id.startsWith('yt-')) {
+            localStorage.setItem('lastStationId', station.id);
+        }
+    };
 
     // Initialize activeTab and selectedCategory from localStorage
     const [activeTab, setActiveTab] = useState<'all' | 'favorites' | 'tv'>(() => {
@@ -243,13 +253,13 @@ export const RadioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         if (lastStationId) {
             const savedStation = stations.find(s => s.id === lastStationId);
             if (savedStation) {
-                setCurrentStation(savedStation);
+                playStation(savedStation, false);
                 return;
             }
         }
 
         // 2. Si no ha seleccionado nada o tras un reset/borrado, sintonizar la predeterminada
-        setCurrentStation(defaultStation);
+        playStation(defaultStation, false);
     }, [stations, isInitialLoad]);
 
     // Robustness: Handle station deletion if they were current
@@ -261,7 +271,7 @@ export const RadioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             const stillExists = stations.find(s => s.id === currentStation.id);
             if (!stillExists) {
                 const fallback = stations.find(s => s.name === 'DJX Discomovil Radio live') || stations[0];
-                setCurrentStation(fallback);
+                playStation(fallback, false);
                 localStorage.setItem('lastStationId', fallback.id);
             }
         }
@@ -304,16 +314,6 @@ export const RadioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         }, 500);
         return () => clearTimeout(timer);
     }, [volume]);
-
-    const playStation = (station: Station) => {
-        if (!radioMediaChangeAllowed) return;
-        if (!station) return;
-        setCurrentStation(station);
-        setIsPlaying(true);
-        if (!station.id.startsWith('yt-')) {
-            localStorage.setItem('lastStationId', station.id);
-        }
-    };
 
     const togglePlay = () => setIsPlaying(prev => !prev);
 
