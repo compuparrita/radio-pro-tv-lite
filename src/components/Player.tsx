@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { Play, Pause, SkipBack, SkipForward, Volume2, VolumeX } from 'lucide-react';
 import { useRadio } from '../context/RadioContext';
-import { WATCHPARTY_DEBUG, useWatchParty } from '../context/WatchPartyContext';
+import { useWatchParty } from '../context/WatchPartyContext';
 import { useVideoPlayer } from '../hooks/useVideoPlayer';
 import { QualitySelector } from './QualitySelector';
 import { QualitySelectorPortal } from './QualitySelectorPortal';
@@ -14,12 +14,6 @@ export const Player: React.FC = () => {
         consumePendingAction,
         clearRemoteExecutionRef,
         sendAction,
-        role,
-        canChangeMedia,
-        roomCode,
-        stateVersion,
-        lastAction,
-        lastCaller,
     } = useWatchParty();
     const {
         currentStation,
@@ -253,50 +247,17 @@ export const Player: React.FC = () => {
         return () => observer.disconnect();
     }, []);
 
-    const watchPartyDebugOverlay = WATCHPARTY_DEBUG && watchPartyRoom && (
-        <aside
-            aria-label="WatchParty Debug"
-            style={{
-                position: 'fixed',
-                left: 8,
-                bottom: 8,
-                width: 220,
-                boxSizing: 'border-box',
-                padding: 10,
-                background: 'rgba(0, 0, 0, 0.9)',
-                color: '#fff',
-                fontFamily: 'monospace',
-                fontSize: 11,
-                lineHeight: 1.45,
-                pointerEvents: 'none',
-                zIndex: 99999,
-            }}
-        >
-            <div style={{ fontWeight: 700, marginBottom: 3 }}>WatchParty Debug</div>
-            <div>Role: {role === 'host' ? 'Host' : 'Guest'}</div>
-            <div>Media: {String(canChangeMedia)}</div>
-            <div>Room: {roomCode || '—'}</div>
-            <div>Version: {stateVersion}</div>
-            <div>Action: {lastAction}</div>
-            <div>Caller: {lastCaller}</div>
-        </aside>
-    );
-
     if (!currentStation) {
         return (
-            <>
-                <div className="glass p-8 text-center">
-                    <h2 className="text-2xl font-bold mb-4">Selecciona una emisora</h2>
-                    <p className="text-[var(--text-secondary)]">Elige una emisora de la lista para comenzar.</p>
-                </div>
-                {watchPartyDebugOverlay}
-            </>
+            <div className="glass p-8 text-center">
+                <h2 className="text-2xl font-bold mb-4">Selecciona una emisora</h2>
+                <p className="text-[var(--text-secondary)]">Elige una emisora de la lista para comenzar.</p>
+            </div>
         );
     }
 
 
     return (
-        <>
         <div className="player-sticky-wrapper sticky" style={{ zIndex: 100 }}>
             {/* 1. Main Media Area (Video or Large Logo) */}
             <div
@@ -553,7 +514,5 @@ export const Player: React.FC = () => {
             {/* Added spacer to prevent cutting bottom on mobile */}
             <div className="h-2 md:hidden" />
         </div>
-        {watchPartyDebugOverlay}
-        </>
     );
 };

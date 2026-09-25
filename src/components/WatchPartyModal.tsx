@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Check, Copy, Info, LogOut, PlusCircle, Users } from 'lucide-react';
+import { Check, Copy, HelpCircle, LogOut, PlusCircle, Users, X } from 'lucide-react';
 import { useWatchParty } from '../context/WatchPartyContext';
 
 interface WatchPartyModalProps {
@@ -10,7 +10,8 @@ interface WatchPartyModalProps {
 
 type WatchPartyTab = 'create' | 'join';
 
-const inputClassName = 'h-12 w-full rounded-xl border border-zinc-700 bg-zinc-800/70 px-4 text-sm text-white placeholder:text-zinc-500 outline-none transition focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20';
+const inputClassName = 'h-11 w-full rounded-xl border border-white/10 bg-white/[0.04] px-4 text-sm text-white placeholder:text-white/30 outline-none transition focus:border-cyan-300/60 focus:ring-2 focus:ring-cyan-300/10';
+const secondaryButtonClassName = 'inline-flex min-h-10 items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/[0.04] px-4 py-2 text-sm font-medium text-white/80 transition hover:bg-white/[0.08] hover:text-white focus:outline-none focus:ring-2 focus:ring-cyan-300/50';
 
 function WatchPartyModal({ isOpen, onClose }: WatchPartyModalProps) {
     const [activeTab, setActiveTab] = useState<WatchPartyTab>('create');
@@ -19,6 +20,7 @@ function WatchPartyModal({ isOpen, onClose }: WatchPartyModalProps) {
     const [joinCode, setJoinCode] = useState('');
     const [copied, setCopied] = useState(false);
     const [copyError, setCopyError] = useState('');
+    const [isHelpOpen, setIsHelpOpen] = useState(false);
     const {
         createRoom,
         joinRoom,
@@ -35,10 +37,11 @@ function WatchPartyModal({ isOpen, onClose }: WatchPartyModalProps) {
 
     if (!isOpen) return null;
 
+    const hostName = members.find((member) => member.socketId === hostId)?.userName ?? 'Anfitrión';
+
     const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
         event.preventDefault();
         clearError();
-
         if (activeTab === 'create') {
             void createRoom({ roomName, userName });
         } else {
@@ -54,199 +57,238 @@ function WatchPartyModal({ isOpen, onClose }: WatchPartyModalProps) {
             setCopied(true);
             window.setTimeout(() => setCopied(false), 1800);
         } catch {
-            setCopyError('No se pudo copiar el código. Puedes seleccionarlo y copiarlo manualmente.');
+            setCopyError('No se pudo copiar el código.');
         }
     };
 
     const modalContent = (
         <div
-            className="fixed inset-0 z-[9999] flex items-center justify-center p-3 sm:p-4 bg-black/70 backdrop-blur-sm"
+            className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm"
             onClick={onClose}
         >
             <section
                 aria-labelledby="watchparty-title"
                 aria-modal="true"
-                className="w-full max-w-lg max-h-[90vh] flex flex-col rounded-2xl border border-zinc-700 bg-zinc-900 text-white shadow-2xl overflow-hidden"
+                className="relative flex max-h-[84vh] w-full max-w-[460px] flex-col overflow-hidden rounded-[28px] border border-white/[0.09] bg-[#111318]/95 text-white shadow-[0_24px_100px_rgba(0,0,0,0.55)] backdrop-blur-xl"
                 role="dialog"
                 onClick={(event) => event.stopPropagation()}
             >
-                <header className="shrink-0 flex items-start justify-between border-b border-white/10 px-5 py-4 sm:px-7 sm:py-5">
+                <header className="flex items-start justify-between border-b border-white/[0.07] px-6 py-5">
                     <div>
-                        <p className="mb-0.5 text-xs font-semibold uppercase tracking-[0.2em] text-cyan-300">WATCHPARTY BETA</p>
-                        <h2 id="watchparty-title" className="text-xl sm:text-2xl font-bold tracking-tight">Cine Compartido</h2>
-                        <p className="mt-1 text-xs sm:text-sm text-white/55">{'Sincroniza películas, TV y YouTube con tus amigos.'}</p>
+                        <h2 id="watchparty-title" className="text-xl font-semibold tracking-tight">WatchParty</h2>
+                        <p className="mt-1 text-sm text-white/45">
+                            {room
+                                ? (isHost ? 'Comparte esta sala con tus amigos' : 'Conectado a la sala')
+                                : 'Disfruta y sincroniza contenido en grupo'}
+                        </p>
                     </div>
                     <button
                         aria-label="Cerrar"
-                        className="flex h-9 w-9 sm:h-10 sm:w-10 items-center justify-center rounded-full text-white/55 transition-colors hover:bg-zinc-800 hover:text-white focus:outline-none focus:ring-2 focus:ring-cyan-300/60"
+                        className="-mr-2 -mt-1 flex h-9 w-9 items-center justify-center rounded-full text-white/45 transition hover:bg-white/[0.07] hover:text-white focus:outline-none focus:ring-2 focus:ring-cyan-300/50"
                         onClick={onClose}
                         type="button"
                     >
-                        <svg aria-hidden="true" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M6 6l12 12M18 6L6 18" />
-                        </svg>
+                        <X aria-hidden="true" size={18} />
                     </button>
                 </header>
 
-                <div className="overflow-y-auto flex-1">
+                <div className="space-y-5 overflow-y-auto px-6 py-5">
                     {error && (
-                        <div className="mx-5 mt-4 rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-200 sm:mx-7" role="alert">
-                            <span className="mr-2 font-bold">{error.code}</span>
-                            {error.message}
+                        <div className="rounded-xl border border-red-400/20 bg-red-400/[0.08] px-4 py-3 text-sm text-red-200" role="alert">
+                            <span className="mr-2 font-semibold">{error.code}</span>{error.message}
                         </div>
                     )}
 
-                {room ? (
-                    <div className="space-y-5 px-5 py-6 sm:px-7 sm:py-7">
-                        <div className="flex items-start justify-between gap-3">
-                            <div className="min-w-0">
-                                <p className="text-xs font-semibold uppercase tracking-wider text-zinc-500">Sala</p>
-                                <h3 className="mt-1 truncate text-xl font-bold">{room.name}</h3>
-                            </div>
-                            {isHost && (
-                                <span className="shrink-0 rounded-full bg-cyan-400/15 px-3 py-1 text-xs font-bold tracking-wider text-cyan-200">
-                                    HOST
-                                </span>
-                            )}
-                        </div>
-
-                        {isHost ? (
-                            <div className="rounded-2xl border border-zinc-700 bg-zinc-800/60 p-5 text-center">
-                                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-zinc-400">{'C\u00f3digo de sala'}</p>
-                                <p className="my-3 font-mono text-3xl font-bold tracking-[0.25em] text-white sm:text-4xl">
-                                    {roomCode ?? room.roomCode}
-                                </p>
-                                <button
-                                    className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl bg-zinc-700 px-4 py-2 text-sm font-semibold text-white transition hover:bg-zinc-600 focus:outline-none focus:ring-2 focus:ring-cyan-400/60"
-                                    onClick={() => void handleCopyCode()}
-                                    type="button"
-                                >
-                                    {copied ? <Check aria-hidden="true" size={16} /> : <Copy aria-hidden="true" size={16} />}
-                                    {copied ? 'Copiado' : 'Copiar c\u00f3digo'}
-                                </button>
-                                {copyError && <p className="mt-2 text-xs text-red-300" role="alert">{copyError}</p>}
-                            </div>
-                        ) : (
-                            <div className="rounded-2xl border border-zinc-700 bg-zinc-800/60 p-5 text-center">
-                                <p className="text-sm font-semibold text-emerald-300">Conectado a la sala</p>
-                                <p className="mt-3 text-xs font-semibold uppercase tracking-[0.2em] text-zinc-400">{'C\u00f3digo:'}</p>
-                                <p className="mt-1 font-mono text-2xl font-bold tracking-[0.2em] text-white">
-                                    {roomCode ?? room.roomCode}
-                                </p>
-                            </div>
-                        )}
-
-                        <div>
-                            <div className="mb-3 flex items-center justify-between">
-                                <h4 className="text-sm font-semibold text-zinc-200">Miembros</h4>
-                                <span className="rounded-full bg-zinc-800 px-2.5 py-1 text-xs text-zinc-400">{members.length}</span>
-                            </div>
-                            <ul className="max-h-48 space-y-2 overflow-y-auto">
-                                {members.map((member) => (
-                                    <li key={member.socketId} className="flex items-center justify-between rounded-xl bg-zinc-800/70 px-4 py-3">
-                                        <div className="flex min-w-0 items-center gap-3">
-                                            <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${member.socketId === hostId ? 'bg-cyan-300' : 'bg-zinc-500'}`} />
-                                            <span className="truncate text-sm font-medium text-white">{member.userName}</span>
-                                        </div>
-                                        <span className={`ml-3 text-xs font-semibold ${member.socketId === hostId ? 'text-cyan-200' : 'text-zinc-400'}`}>
-                                            {member.socketId === hostId ? 'HOST' : 'GUEST'}
+                    {room ? (
+                        <>
+                            <section className="rounded-2xl border border-white/[0.07] bg-white/[0.025] p-5">
+                                <div className="flex items-start justify-between gap-3">
+                                    <div className="min-w-0">
+                                        <p className="text-[11px] font-medium uppercase tracking-[0.16em] text-white/35">Sala</p>
+                                        <h3 className="mt-1 truncate text-lg font-medium text-white/90">{room.name}</h3>
+                                    </div>
+                                    {isHost && (
+                                        <span className="shrink-0 rounded-full border border-cyan-200/15 bg-cyan-200/[0.07] px-2.5 py-1 text-[11px] font-medium text-cyan-100/80">
+                                            Anfitrión
                                         </span>
-                                    </li>
-                                ))}
-                            </ul>
-                        </div>
+                                    )}
+                                </div>
 
-                        <button
-                            className="flex min-h-12 w-full items-center justify-center gap-2 rounded-xl border border-red-400/20 bg-red-500/10 px-4 py-3 text-sm font-bold text-red-200 transition hover:bg-red-500/20 disabled:cursor-wait disabled:opacity-60"
-                            disabled={isLoading}
-                            onClick={() => void leaveRoom()}
-                            type="button"
-                        >
-                            <LogOut aria-hidden="true" size={17} />
-                            {isLoading ? 'Saliendo...' : 'Salir de la sala'}
-                        </button>
-                    </div>
-                ) : (
-                    <>
-                        <div className="px-5 pt-6 sm:px-7">
-                            <div aria-label="Opciones de WatchParty" className="grid grid-cols-2 gap-1 rounded-xl bg-zinc-800/70 p-1" role="tablist">
+                                {isHost ? (
+                                    <>
+                                        <div className="mt-5 rounded-xl bg-black/20 px-4 py-4 text-center">
+                                            <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-white/35">{'Código de sala'}</p>
+                                            <p className="mt-2 font-mono text-3xl font-semibold tracking-[0.28em] text-white">
+                                                {roomCode ?? room.roomCode}
+                                            </p>
+                                        </div>
+                                        <div className="mt-3 flex flex-wrap justify-center gap-2">
+                                            <button className={secondaryButtonClassName} onClick={() => void handleCopyCode()} type="button">
+                                                {copied ? <Check aria-hidden="true" size={15} /> : <Copy aria-hidden="true" size={15} />}
+                                                {copied ? 'Copiado' : 'Copiar'}
+                                            </button>
+                                            <button className={secondaryButtonClassName} onClick={() => setIsHelpOpen(true)} type="button">
+                                                <HelpCircle aria-hidden="true" size={15} />
+                                                {'¿Cómo funciona?'}
+                                            </button>
+                                        </div>
+                                        {copyError && <p className="mt-2 text-center text-xs text-red-300" role="alert">{copyError}</p>}
+                                    </>
+                                ) : (
+                                    <div className="mt-4 space-y-3">
+                                        <div className="rounded-xl bg-black/20 px-4 py-3">
+                                            <p className="text-[11px] font-medium uppercase tracking-[0.16em] text-white/35">{'Código'}</p>
+                                            <p className="mt-1 font-mono text-lg font-medium tracking-[0.2em] text-white/85">{roomCode ?? room.roomCode}</p>
+                                        </div>
+                                        <p className="text-sm text-white/55">{'Anfitrión: '}<span className="text-white/85">{hostName}</span></p>
+                                    </div>
+                                )}
+                            </section>
+
+                            <section aria-labelledby="watchparty-participants">
+                                <div className="mb-3 flex items-center justify-between">
+                                    <div className="flex items-center gap-2 text-sm font-medium text-white/75">
+                                        <Users aria-hidden="true" className="text-white/40" size={16} />
+                                        <h3 id="watchparty-participants">Participantes</h3>
+                                    </div>
+                                    <span className="rounded-full bg-white/[0.06] px-2.5 py-1 text-xs tabular-nums text-white/45">{members.length}</span>
+                                </div>
+                                <ul className="max-h-40 space-y-1.5 overflow-y-auto">
+                                    {members.map((member) => {
+                                        const isMemberHost = member.socketId === hostId;
+                                        return (
+                                            <li key={member.socketId} className="flex items-center justify-between rounded-xl px-3 py-2.5 transition hover:bg-white/[0.035]">
+                                                <div className="flex min-w-0 items-center gap-3">
+                                                    <span className={'h-2 w-2 shrink-0 rounded-full ' + (isMemberHost ? 'bg-cyan-200' : 'bg-white/25')} />
+                                                    <span className="truncate text-sm text-white/80">{member.userName}</span>
+                                                </div>
+                                                {isMemberHost && <span className="text-[11px] font-medium text-cyan-100/65">Anfitrión</span>}
+                                            </li>
+                                        );
+                                    })}
+                                </ul>
+                            </section>
+                        </>
+                    ) : (
+                        <>
+                            <div aria-label="Opciones de WatchParty" className="grid grid-cols-2 rounded-xl bg-white/[0.04] p-1" role="tablist">
                                 <button
                                     aria-selected={activeTab === 'create'}
-                                    className={`flex items-center justify-center gap-2 rounded-lg px-3 py-3 text-sm font-semibold transition ${activeTab === 'create' ? 'bg-zinc-700 text-white shadow-sm' : 'bg-transparent text-zinc-400 hover:text-zinc-200'}`}
+                                    className={'rounded-lg px-3 py-2.5 text-sm font-medium transition ' + (activeTab === 'create' ? 'bg-white/[0.09] text-white' : 'text-white/45 hover:text-white/75')}
                                     onClick={() => { setActiveTab('create'); clearError(); }}
                                     role="tab"
                                     type="button"
                                 >
-                                    <PlusCircle aria-hidden="true" size={17} />
-                                    Crear Sala
+                                    <span className="inline-flex items-center gap-2"><PlusCircle aria-hidden="true" size={15} />Crear sala</span>
                                 </button>
                                 <button
                                     aria-selected={activeTab === 'join'}
-                                    className={`flex items-center justify-center gap-2 rounded-lg px-3 py-3 text-sm font-semibold transition ${activeTab === 'join' ? 'bg-zinc-700 text-white shadow-sm' : 'bg-transparent text-zinc-400 hover:text-zinc-200'}`}
+                                    className={'rounded-lg px-3 py-2.5 text-sm font-medium transition ' + (activeTab === 'join' ? 'bg-white/[0.09] text-white' : 'text-white/45 hover:text-white/75')}
                                     onClick={() => { setActiveTab('join'); clearError(); }}
                                     role="tab"
                                     type="button"
                                 >
-                                    <Users aria-hidden="true" size={17} />
                                     Unirse
                                 </button>
                             </div>
-                        </div>
 
-                        <form className="space-y-5 px-5 py-6 sm:px-7 sm:py-7" onSubmit={handleSubmit}>
-                            <label className="block space-y-2 text-sm font-medium text-white/75">
-                                Alias del usuario
-                                <input
-                                    autoComplete="nickname"
-                                    className={inputClassName}
-                                    onChange={(event) => setUserName(event.target.value)}
-                                    placeholder="Tu nombre"
-                                    required
-                                    value={userName}
-                                />
-                            </label>
-
-                            {activeTab === 'create' ? (
-                                <label className="block space-y-2 text-sm font-medium text-white/75">
-                                    Nombre de la sala
-                                    <input className={inputClassName} onChange={(event) => setRoomName(event.target.value)} placeholder="Noche de cine" required value={roomName} />
-                                </label>
-                            ) : (
-                                <label className="block space-y-2 text-sm font-medium text-white/75">
-                                    {'C\u00f3digo de sala'}
+                            <form className="space-y-4" onSubmit={handleSubmit}>
+                                <label className="block space-y-2 text-sm text-white/65">
+                                    Tu nombre
                                     <input
-                                        className={`${inputClassName} uppercase tracking-[0.2em] text-center`}
-                                        onChange={(event) => setJoinCode(event.target.value)}
-                                        placeholder="A7K9P2"
+                                        autoComplete="nickname"
+                                        className={inputClassName}
+                                        onChange={(event) => setUserName(event.target.value)}
+                                        placeholder="Nombre"
                                         required
-                                        value={joinCode}
+                                        value={userName}
                                     />
                                 </label>
-                            )}
-
-                            <button
-                                className="min-h-12 w-full rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 px-4 py-3 text-sm font-bold text-white shadow-lg shadow-cyan-950/30 transition hover:brightness-110 focus:outline-none focus:ring-2 focus:ring-cyan-300 focus:ring-offset-2 focus:ring-offset-zinc-900 disabled:cursor-wait disabled:opacity-60"
-                                disabled={isLoading}
-                                type="submit"
-                            >
-                                {isLoading ? 'Conectando...' : activeTab === 'create' ? 'Crear Sala' : 'Unirse a la Sala'}
-                            </button>
-                        </form>
-                    </>
-                )}
-
-                {!room && (
-                    <footer className="px-5 pb-5 sm:px-7 sm:pb-7">
-                        <div className="flex gap-3 rounded-xl bg-zinc-800 p-4 text-sm leading-relaxed text-zinc-300">
-                            <Info aria-hidden="true" className="mt-0.5 shrink-0 text-cyan-300" size={18} />
-                            <p>
-                                <span className="mb-0.5 block font-semibold text-white">Beta</span>
-                                {'El anfitri\u00f3n controla la reproducci\u00f3n y los invitados pueden seguir la sincronizaci\u00f3n en tiempo real.'}
-                            </p>
-                        </div>
-                    </footer>
-                )}
+                                {activeTab === 'create' ? (
+                                    <label className="block space-y-2 text-sm text-white/65">
+                                        Nombre de la sala
+                                        <input className={inputClassName} onChange={(event) => setRoomName(event.target.value)} placeholder="Noche de cine" required value={roomName} />
+                                    </label>
+                                ) : (
+                                    <label className="block space-y-2 text-sm text-white/65">
+                                        {'Código de sala'}
+                                        <input
+                                            className={inputClassName + ' text-center uppercase tracking-[0.2em]'}
+                                            onChange={(event) => setJoinCode(event.target.value)}
+                                            placeholder="A7K9P2"
+                                            required
+                                            value={joinCode}
+                                        />
+                                    </label>
+                                )}
+                                <button
+                                    className="min-h-11 w-full rounded-xl bg-white text-sm font-semibold text-zinc-950 transition hover:bg-cyan-50 focus:outline-none focus:ring-2 focus:ring-cyan-200/70 disabled:cursor-wait disabled:opacity-55"
+                                    disabled={isLoading}
+                                    type="submit"
+                                >
+                                    {isLoading ? 'Conectando...' : activeTab === 'create' ? 'Crear sala' : 'Unirse a la sala'}
+                                </button>
+                            </form>
+                        </>
+                    )}
                 </div>
+
+                <footer className="border-t border-white/[0.07] px-6 py-4">
+                    {room ? (
+                        isHost ? (
+                            <button className="min-h-11 w-full rounded-xl bg-white/[0.07] text-sm font-medium text-white/85 transition hover:bg-white/[0.11] focus:outline-none focus:ring-2 focus:ring-white/20" onClick={onClose} type="button">
+                                Cerrar
+                            </button>
+                        ) : (
+                            <button
+                                className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-red-300/15 bg-red-300/[0.06] text-sm font-medium text-red-100/85 transition hover:bg-red-300/[0.1] focus:outline-none focus:ring-2 focus:ring-red-200/30 disabled:opacity-50"
+                                disabled={isLoading}
+                                onClick={() => void leaveRoom()}
+                                type="button"
+                            >
+                                <LogOut aria-hidden="true" size={15} />
+                                {isLoading ? 'Saliendo...' : 'Salir de la sala'}
+                            </button>
+                        )
+                    ) : (
+                        <button className="w-full py-1 text-sm text-white/40 transition hover:text-white/75" onClick={() => setIsHelpOpen(true)} type="button">
+                            {'¿Cómo funciona?'}
+                        </button>
+                    )}
+                </footer>
+
+                {isHelpOpen && createPortal(
+                    <div className="fixed inset-0 z-[10001] flex items-center justify-center bg-black/75 p-4 backdrop-blur-sm" onClick={() => setIsHelpOpen(false)}>
+                        <section
+                            aria-labelledby="watchparty-help-title"
+                            aria-modal="true"
+                            className="w-full max-w-sm rounded-2xl border border-white/10 bg-[#17191f] p-5 text-white shadow-2xl"
+                            role="dialog"
+                            onClick={(event) => event.stopPropagation()}
+                        >
+                            <div className="flex items-start justify-between">
+                                <div>
+                                    <h3 id="watchparty-help-title" className="font-semibold">{'¿Cómo funciona?'}</h3>
+                                    <p className="mt-1 text-xs text-white/40">Una sala compartida, sincronizada en tiempo real.</p>
+                                </div>
+                                <button aria-label="Cerrar ayuda" className="rounded-full p-1 text-white/45 hover:bg-white/10 hover:text-white" onClick={() => setIsHelpOpen(false)} type="button">
+                                    <X aria-hidden="true" size={17} />
+                                </button>
+                            </div>
+                            <ol className="mt-5 space-y-3 text-sm text-white/65">
+                                <li className="flex gap-3"><span className="text-cyan-200/70">01</span><span>El anfitrión crea una sala.</span></li>
+                                <li className="flex gap-3"><span className="text-cyan-200/70">02</span><span>Comparte el código con sus amigos.</span></li>
+                                <li className="flex gap-3"><span className="text-cyan-200/70">03</span><span>Los invitados ingresan el código para unirse.</span></li>
+                                <li className="flex gap-3"><span className="text-cyan-200/70">04</span><span>La reproducción, las pausas y el contenido se sincronizan automáticamente.</span></li>
+                                <li className="flex gap-3"><span className="text-cyan-200/70">05</span><span>Si el anfitrión sale, el rol se transfiere automáticamente.</span></li>
+                            </ol>
+                            <button className="mt-5 min-h-10 w-full rounded-xl bg-white/[0.07] text-sm font-medium text-white/80 hover:bg-white/[0.11]" onClick={() => setIsHelpOpen(false)} type="button">
+                                Entendido
+                            </button>
+                        </section>
+                    </div>,
+                    document.body,
+                )}
             </section>
         </div>
     );

@@ -32,8 +32,6 @@ import {
     type WatchPartyResponse,
 } from '../services/watchPartySocket';
 
-export const WATCHPARTY_DEBUG = true;
-
 interface WatchPartyContextValue {
     room: WatchPartyRoomData | null;
     members: WatchPartyMember[];
@@ -44,9 +42,6 @@ interface WatchPartyContextValue {
     error: WatchPartyErrorEvent | null;
     isHost: boolean;
     canChangeMedia: boolean;
-    role: 'host' | 'guest' | 'outside';
-    lastAction: string;
-    lastCaller: string;
     mediaInfo: MediaInfo | null;
     stateVersion: number;
     remoteExecutionRef: string | null;
@@ -152,8 +147,6 @@ export function WatchPartyProvider({ children }: { children: ReactNode }) {
     const [isHost, setIsHost] = useState(false);
     const [mediaInfo, setMediaInfo] = useState<MediaInfo | null>(null);
     const [stateVersion, setStateVersion] = useState(0);
-    const [lastAction, setLastAction] = useState('—');
-    const [lastCaller, setLastCaller] = useState('—');
     const [remoteExecutionRef, setRemoteExecutionRef] = useState<string | null>(null);
     const [pendingAction, setPendingAction] = useState<WatchPartyAction | null>(null);
     const hasStartedSocket = useRef(false);
@@ -165,21 +158,6 @@ export function WatchPartyProvider({ children }: { children: ReactNode }) {
     const remoteMediaStationRef = useRef<string | null>(null);
     const commandLockRef = useRef(false);
     const commandLockReleaseRef = useRef<(() => void) | null>(null);
-    const lastLocalCallerRef = useRef<{ caller: string; timestamp: number } | null>(null);
-
-    const recordDebugEvent = useCallback((action: string, caller: string) => {
-        if (!WATCHPARTY_DEBUG) return;
-        setLastAction(action);
-        setLastCaller(caller);
-    }, []);
-
-    const getRecentDebugCaller = useCallback(() => {
-        const recentCaller = lastLocalCallerRef.current;
-        return recentCaller && Date.now() - recentCaller.timestamp < 5000
-            ? recentCaller.caller
-            : 'Remote';
-    }, []);
-
     useEffect(() => {
         const socket = (socketService as unknown as { socket: {
             connected: boolean;
@@ -226,7 +204,6 @@ export function WatchPartyProvider({ children }: { children: ReactNode }) {
     }, [room, roomCode, isHost, isConnected, members, stateVersion, mediaInfo]);
 
     const openMedia = useCallback((media: MediaInfo) => {
-        recordDebugEvent('media', 'Remote');
         setMediaInfo(media);
         const mediaKey = `${media.stationId}:${media.sourceUrl}`;
         lastSentMediaRef.current = mediaKey;
@@ -236,7 +213,7 @@ export function WatchPartyProvider({ children }: { children: ReactNode }) {
         remoteMediaStationRef.current = media.stationId;
         setIsPlaying(true);
         setCurrentStation(stationFromMedia(media, stations));
-    }, [recordDebugEvent, setCurrentStation, setIsPlaying, stations]);
+    }, [setCurrentStation, setIsPlaying, stations]);
 
     const clearRoomState = useCallback(() => {
         setRadioMediaChangeAllowed(true);
@@ -250,9 +227,6 @@ export function WatchPartyProvider({ children }: { children: ReactNode }) {
         lastSentMediaRef.current = null;
         remoteMediaStationRef.current = null;
         setStateVersion(0);
-        setLastAction('—');
-        setLastCaller('—');
-        lastLocalCallerRef.current = null;
         setRemoteExecutionRef(null);
         setPendingAction(null);
     }, []);
@@ -312,7 +286,6 @@ export function WatchPartyProvider({ children }: { children: ReactNode }) {
         cleanups.push(registerErrorListener(setError));
 
         cleanups.push(registerActionListener((event) => {
-            recordDebugEvent(event.action, getRecentDebugCaller());
             setStateVersion(event.stateVersion);
             setRoom((currentRoom) => currentRoom?.id === event.roomId
                 ? {
@@ -346,7 +319,6 @@ export function WatchPartyProvider({ children }: { children: ReactNode }) {
             setStateVersion(event.stateVersion);
             const media = getMediaInfo((event as typeof event & { media?: unknown }).media);
             if (media) {
-                recordDebugEvent('media', 'Remote');
                 setMediaInfo(media);
                 lastSentMediaRef.current = `${media.stationId}:${media.sourceUrl}`;
                 if (roomRef.current?.hostId !== getWatchPartySocketId()) openMedia(media);
@@ -369,7 +341,6 @@ export function WatchPartyProvider({ children }: { children: ReactNode }) {
             if (roomRef.current && roomRef.current.id !== event.roomId) return;
             const media = getMediaInfo(event.media);
             if (!media) return;
-            recordDebugEvent('media', event.senderId === getWatchPartySocketId() ? getRecentDebugCaller() : 'Remote');
             setMediaInfo(media);
             lastSentMediaRef.current = `${media.stationId}:${media.sourceUrl}`;
             setStateVersion(event.stateVersion);
@@ -390,49 +361,7 @@ export function WatchPartyProvider({ children }: { children: ReactNode }) {
         setIsConnected(isWatchPartySocketConnected());
 
         return () => cleanups.forEach((cleanup) => cleanup());
-    }, [clearRoomState, getRecentDebugCaller, openMedia, recordDebugEvent]);
-
-    useEffect(() => {
-        if (!WATCHPARTY_DEBUG || !room) return;
-
-        const handleClickCapture = (event: MouseEvent) => {
-            const target = event.target instanceof Element ? event.target : null;
-            if (!target) return;
-
-            const button = target.closest('button');
-            const title = button?.getAttribute('title') ?? '';
-            let caller: string | null = null;
-            let action = 'media';
-
-            if (title === 'Siguiente' || title === 'Anterior') {
-                caller = 'MobileNav';
-            } else if (title.includes('Flecha')) {
-                caller = 'Player';
-            } else if (target.closest('.station-list-body .cursor-pointer')) {
-                caller = 'StationList';
-            }
-
-            if (!caller) return;
-            if (/pausar/i.test(title)) action = 'pause';
-            else if (/reproducir|play/i.test(title) && !/siguiente|anterior/i.test(title)) action = 'play';
-
-            lastLocalCallerRef.current = { caller, timestamp: Date.now() };
-            recordDebugEvent(action, caller);
-        };
-
-        const handleRemoteKeyCapture = (event: KeyboardEvent) => {
-            if (!['ArrowLeft', 'ArrowRight', 'MediaTrackPrevious', 'MediaTrackNext'].includes(event.key)) return;
-            lastLocalCallerRef.current = { caller: 'Remote', timestamp: Date.now() };
-            recordDebugEvent('media', 'Remote');
-        };
-
-        document.addEventListener('click', handleClickCapture, true);
-        document.addEventListener('keydown', handleRemoteKeyCapture, true);
-        return () => {
-            document.removeEventListener('click', handleClickCapture, true);
-            document.removeEventListener('keydown', handleRemoteKeyCapture, true);
-        };
-    }, [room?.id, recordDebugEvent]);
+    }, [clearRoomState, openMedia]);
 
     useEffect(() => {
         if (!room || !currentStation) return;
@@ -615,7 +544,6 @@ export function WatchPartyProvider({ children }: { children: ReactNode }) {
 
     const clearRemoteExecutionRef = useCallback(() => setRemoteExecutionRef(null), []);
     const canChangeMedia = !room || isHost;
-    const role: WatchPartyContextValue['role'] = room ? (isHost ? 'host' : 'guest') : 'outside';
 
     return (
         <WatchPartyContext.Provider value={{
@@ -628,9 +556,6 @@ export function WatchPartyProvider({ children }: { children: ReactNode }) {
             error,
             isHost,
             canChangeMedia,
-            role,
-            lastAction,
-            lastCaller,
             mediaInfo,
             stateVersion,
             remoteExecutionRef,
