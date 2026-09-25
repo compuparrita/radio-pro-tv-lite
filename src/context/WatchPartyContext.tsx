@@ -155,6 +155,8 @@ export function WatchPartyProvider({ children }: { children: ReactNode }) {
     const lastAppliedMediaRef = useRef<string | null>(null);
     const lastSentMediaRef = useRef<string | null>(null);
     const remoteMediaStationRef = useRef<string | null>(null);
+    const commandLockRef = useRef(false);
+    const commandLockReleaseRef = useRef<(() => void) | null>(null);
 
     useEffect(() => {
         const socket = (socketService as unknown as { socket: {
@@ -484,7 +486,44 @@ export function WatchPartyProvider({ children }: { children: ReactNode }) {
         if (!room) {
             return Promise.resolve({ success: false, error: 'NOT_IN_ROOM' });
         }
-        return emitWatchPartyAction({ roomId: room.id, action, payload, stateVersion });
+
+        const isPlayPause = action === 'play' || action === 'pause';
+        if (!isPlayPause) {
+            return emitWatchPartyAction({ roomId: room.id, action, payload, stateVersion });
+        }
+        if (commandLockRef.current) {
+            return Promise.resolve({ success: false, error: 'COMMAND_LOCKED' });
+        }
+
+        commandLockRef.current = true;
+        const startedAt = Date.now();
+        let acknowledged = false;
+        let cooldownElapsed = false;
+        let maxTimeoutId = 0;
+        let cooldownTimeoutId = 0;
+        const releaseLock = () => {
+            if (commandLockReleaseRef.current !== releaseLock) return;
+            window.clearTimeout(maxTimeoutId);
+            window.clearTimeout(cooldownTimeoutId);
+            commandLockRef.current = false;
+            commandLockReleaseRef.current = null;
+        };
+        commandLockReleaseRef.current = releaseLock;
+        maxTimeoutId = window.setTimeout(releaseLock, 500);
+        cooldownTimeoutId = window.setTimeout(() => {
+            cooldownElapsed = true;
+            if (acknowledged) releaseLock();
+        }, 350);
+
+        return emitWatchPartyAction({ roomId: room.id, action, payload, stateVersion }).then((response) => {
+            acknowledged = true;
+            if (cooldownElapsed || Date.now() - startedAt >= 350) releaseLock();
+            return response;
+        }, (error: unknown) => {
+            acknowledged = true;
+            if (cooldownElapsed || Date.now() - startedAt >= 350) releaseLock();
+            throw error;
+        });
     }, [room, stateVersion]);
 
     const consumePendingAction = useCallback(() => {
