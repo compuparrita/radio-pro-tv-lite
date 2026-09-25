@@ -17,6 +17,22 @@ const RadioContext = createContext<RadioContextType | undefined>(undefined);
 
 let canChangeMedia = true;
 
+function getStationChangeCaller(event?: unknown): string {
+    const currentTarget = (event as { currentTarget?: HTMLElement } | undefined)?.currentTarget;
+    const buttonTitle = currentTarget?.getAttribute('title') ?? '';
+    if (buttonTitle === 'Siguiente' || buttonTitle === 'Anterior') return 'MobileNav';
+    if (buttonTitle.includes('Flecha')) return 'Player';
+
+    const stack = new Error().stack ?? '';
+    if (stack.includes('StationList')) return 'StationList';
+    if (stack.includes('MobileNav')) return 'MobileNav';
+    if (stack.includes('Player')) return 'Player';
+    if (stack.includes('useTVRemote')) return 'useTVRemote';
+    if (stack.includes('nextStation')) return 'nextStation';
+    if (stack.includes('prevStation')) return 'prevStation';
+    return 'unknown';
+}
+
 export const setRadioMediaChangeAllowed = (allowed: boolean) => {
     canChangeMedia = allowed;
 };
@@ -119,7 +135,11 @@ export const RadioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     const [currentStation, setCurrentStation] = useState<Station | null>(null);
     const [isPlaying, setIsPlaying] = useState(false);
 
-    const playStation = (station: Station, startPlayback = true) => {
+    const playStation = (station: Station, startPlayback = true, caller?: string) => {
+        const callerName = caller ?? getStationChangeCaller();
+        console.log(
+            `[playStation] station=${station?.name ?? station?.id ?? 'unknown'} canChangeMedia=${canChangeMedia} role=${canChangeMedia ? 'host-or-outside' : 'guest'} caller=${callerName}`
+        );
         if (!canChangeMedia) return;
         if (!station) return;
         setCurrentStation(station);
@@ -383,39 +403,41 @@ export const RadioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         return list.length > 0 ? list : stations;
     };
 
-    const nextStation = () => {
+    const nextStation = (event?: unknown) => {
+        const caller = getStationChangeCaller(event);
         const navStations = getNavigableStations();
         if (navStations.length === 0) return;
 
         if (!currentStation) {
-            playStation(navStations[0]);
+            playStation(navStations[0], true, caller);
             return;
         }
 
         const index = navStations.findIndex(s => s.id === currentStation.id);
         if (index === -1) {
-            playStation(navStations[0]);
+            playStation(navStations[0], true, caller);
         } else {
             const nextIndex = (index + 1) % navStations.length;
-            playStation(navStations[nextIndex]);
+            playStation(navStations[nextIndex], true, caller);
         }
     };
 
-    const prevStation = () => {
+    const prevStation = (event?: unknown) => {
+        const caller = getStationChangeCaller(event);
         const navStations = getNavigableStations();
         if (navStations.length === 0) return;
 
         if (!currentStation) {
-            playStation(navStations[navStations.length - 1]);
+            playStation(navStations[navStations.length - 1], true, caller);
             return;
         }
 
         const index = navStations.findIndex(s => s.id === currentStation.id);
         if (index === -1) {
-            playStation(navStations[navStations.length - 1]);
+            playStation(navStations[navStations.length - 1], true, caller);
         } else {
             const prevIndex = (index - 1 + navStations.length) % navStations.length;
-            playStation(navStations[prevIndex]);
+            playStation(navStations[prevIndex], true, caller);
         }
     };
 

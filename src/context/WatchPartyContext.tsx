@@ -546,6 +546,12 @@ export function WatchPartyProvider({ children }: { children: ReactNode }) {
     const clearRemoteExecutionRef = useCallback(() => setRemoteExecutionRef(null), []);
     const canChangeMedia = !room || isHost;
 
+    useEffect(() => {
+        console.log(
+            `[WatchParty] role=${room ? (isHost ? 'host' : 'guest') : 'outside'} canChangeMedia=${canChangeMedia} roomCode=${roomCode ?? 'none'}`
+        );
+    }, [room?.id, roomCode, isHost, canChangeMedia]);
+
     return (
         <WatchPartyContext.Provider value={{
             room,
