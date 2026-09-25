@@ -60,25 +60,25 @@ function WatchPartyModal({ isOpen, onClose }: WatchPartyModalProps) {
 
     const modalContent = (
         <div
-            className="fixed inset-0 z-[9999] flex items-center justify-center overflow-y-auto bg-black/70 p-4 backdrop-blur-sm"
+            className="fixed inset-0 z-[9999] flex items-center justify-center p-3 sm:p-4 bg-black/70 backdrop-blur-sm"
             onClick={onClose}
         >
             <section
                 aria-labelledby="watchparty-title"
                 aria-modal="true"
-                className="mx-4 my-auto w-full max-w-lg overflow-hidden rounded-2xl border border-zinc-700 bg-zinc-900 text-white shadow-2xl"
+                className="w-full max-w-lg max-h-[90vh] flex flex-col rounded-2xl border border-zinc-700 bg-zinc-900 text-white shadow-2xl overflow-hidden"
                 role="dialog"
                 onClick={(event) => event.stopPropagation()}
             >
-                <header className="flex items-start justify-between border-b border-white/10 px-5 py-6 sm:px-7">
+                <header className="shrink-0 flex items-start justify-between border-b border-white/10 px-5 py-4 sm:px-7 sm:py-5">
                     <div>
-                        <p className="mb-1 text-xs font-semibold uppercase tracking-[0.2em] text-cyan-300">WATCHPARTY BETA</p>
-                        <h2 id="watchparty-title" className="text-2xl font-bold tracking-tight">Cine Compartido</h2>
-                        <p className="mt-2 text-sm text-white/55">{'Sincroniza pel\u00edculas, TV y YouTube con tus amigos.'}</p>
+                        <p className="mb-0.5 text-xs font-semibold uppercase tracking-[0.2em] text-cyan-300">WATCHPARTY BETA</p>
+                        <h2 id="watchparty-title" className="text-xl sm:text-2xl font-bold tracking-tight">Cine Compartido</h2>
+                        <p className="mt-1 text-xs sm:text-sm text-white/55">{'Sincroniza películas, TV y YouTube con tus amigos.'}</p>
                     </div>
                     <button
                         aria-label="Cerrar"
-                        className="flex h-10 w-10 items-center justify-center rounded-full text-white/55 transition-colors hover:bg-zinc-800 hover:text-white focus:outline-none focus:ring-2 focus:ring-cyan-300/60"
+                        className="flex h-9 w-9 sm:h-10 sm:w-10 items-center justify-center rounded-full text-white/55 transition-colors hover:bg-zinc-800 hover:text-white focus:outline-none focus:ring-2 focus:ring-cyan-300/60"
                         onClick={onClose}
                         type="button"
                     >
@@ -88,12 +88,13 @@ function WatchPartyModal({ isOpen, onClose }: WatchPartyModalProps) {
                     </button>
                 </header>
 
-                {error && (
-                    <div className="mx-5 mt-5 rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-200 sm:mx-7" role="alert">
-                        <span className="mr-2 font-bold">{error.code}</span>
-                        {error.message}
-                    </div>
-                )}
+                <div className="overflow-y-auto flex-1">
+                    {error && (
+                        <div className="mx-5 mt-4 rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-200 sm:mx-7" role="alert">
+                            <span className="mr-2 font-bold">{error.code}</span>
+                            {error.message}
+                        </div>
+                    )}
 
                 {room ? (
                     <div className="space-y-5 px-5 py-6 sm:px-7 sm:py-7">
@@ -233,6 +234,7 @@ function WatchPartyModal({ isOpen, onClose }: WatchPartyModalProps) {
                         </div>
                     </footer>
                 )}
+                </div>
             </section>
         </div>
     );

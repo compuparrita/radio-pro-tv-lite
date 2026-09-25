@@ -11,11 +11,13 @@ import { ChatModal } from './components/ChatModal';
 import { MobileNav } from './components/MobileNav';
 import { useTVRemote } from './hooks/useTVRemote';
 import GeneralHelpModal from './components/GeneralHelpModal';
+import WatchPartyModal from './components/WatchPartyModal';
 import { HelpCircle } from 'lucide-react';
 
 function AppContent() {
     const [isManagerOpen, setIsManagerOpen] = useState(false);
     const [isChatOpen, setIsChatOpen] = useState(false);
+    const [isWatchPartyOpen, setIsWatchPartyOpen] = useState(false);
     const [theme, setTheme] = useState<'dark' | 'light' | 'youth'>(() => {
         const saved = localStorage.getItem('theme');
         return (saved as 'dark' | 'light' | 'youth') || 'dark';
@@ -243,6 +245,7 @@ function AppContent() {
                     theme={theme}
                     onThemeClick={cycleTheme}
                     onChatClick={() => setIsChatOpen(true)}
+                    onWatchPartyClick={() => setIsWatchPartyOpen(true)}
                 />
             </div>
 
@@ -341,8 +344,13 @@ function AppContent() {
             <StationManager isOpen={isManagerOpen} onClose={() => setIsManagerOpen(false)} />
             <ChatModal externalOpen={isChatOpen} onOpenChange={setIsChatOpen} />
             <GeneralHelpModal isOpen={isAppHelpOpen} onClose={() => setIsAppHelpOpen(false)} />
+            <WatchPartyModal isOpen={isWatchPartyOpen} onClose={() => setIsWatchPartyOpen(false)} />
             <div className="mobile-nav-container">
-                <MobileNav onChatClick={() => setIsChatOpen(true)} onThemeClick={cycleTheme} />
+                <MobileNav
+                    onChatClick={() => setIsChatOpen(true)}
+                    onThemeClick={cycleTheme}
+                    onWatchPartyClick={() => setIsWatchPartyOpen(true)}
+                />
             </div>
         </div>
     );

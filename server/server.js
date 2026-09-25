@@ -110,15 +110,26 @@ class RoomManager {
         }
 
         const now = Date.now();
-        room.members.push({
-            socketId,
-            userId,
-            userName,
-            role: 'guest',
-            followHost: true,
-            joinedAt: now,
-            lastPing: now,
-        });
+        const existingMember = room.members.find((m) => m.userName === userName || (m.userId && m.userId === userId));
+        if (existingMember) {
+            this.socketToRoom.delete(existingMember.socketId);
+            existingMember.socketId = socketId;
+            existingMember.userId = userId;
+            existingMember.lastPing = now;
+            if (existingMember.role === 'host') {
+                room.hostId = socketId;
+            }
+        } else {
+            room.members.push({
+                socketId,
+                userId,
+                userName,
+                role: 'guest',
+                followHost: true,
+                joinedAt: now,
+                lastPing: now,
+            });
+        }
         this.socketToRoom.set(socketId, roomId);
 
         return { success: true, room };
@@ -678,6 +689,22 @@ io.on('connection', (socket) => {
         }
 
         room.stateVersion += 1;
+        if (action === 'play') {
+            room.playback.isPlaying = true;
+            room.playback.updatedAt = Date.now();
+        } else if (action === 'pause') {
+            room.playback.isPlaying = false;
+            room.playback.updatedAt = Date.now();
+        } else if (action === 'seek') {
+            const seekSeconds = typeof payload.payload === 'number'
+                ? payload.payload
+                : Number(payload.payload && typeof payload.payload === 'object' ? payload.payload.seconds ?? payload.payload.currentTime : payload.payload);
+            if (Number.isFinite(seekSeconds)) {
+                room.playback.currentTime = seekSeconds;
+                room.playback.updatedAt = Date.now();
+            }
+        }
+
         const remoteExecutionRef = randomUUID();
         const broadcast = {
             roomId,
@@ -731,7 +758,14 @@ io.on('connection', (socket) => {
     // Disconnect
     socket.on('disconnect', () => {
         console.log(`User disconnected: ${userId}`);
-        removeSocketFromWatchParty(socket);
+        const currentRoomId = watchPartySocketRooms.get(socket.id);
+        if (currentRoomId) {
+            setTimeout(() => {
+                if (watchPartySocketRooms.get(socket.id) === currentRoomId) {
+                    removeSocketFromWatchParty(socket);
+                }
+            }, 6000);
+        }
         connectedUsers.delete(userId);
 
         // Broadcast updated listener count

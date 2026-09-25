@@ -8,9 +8,10 @@ interface HeaderProps {
     theme: 'dark' | 'light' | 'youth';
     onThemeClick: () => void;
     onChatClick: () => void;
+    onWatchPartyClick?: () => void;
 }
 
-export const Header: React.FC<HeaderProps> = ({ theme, onThemeClick, onChatClick }) => {
+export const Header: React.FC<HeaderProps> = ({ theme, onThemeClick, onChatClick, onWatchPartyClick }) => {
     const { unreadCount, onlineListeners, connectionStatus } = useChat();
     const { activeTab, setActiveTab, radioCategories, tvCategories, selectedCategory, setSelectedCategory } = useRadio();
     const [isWatchPartyOpen, setIsWatchPartyOpen] = useState(false);
@@ -294,7 +295,13 @@ export const Header: React.FC<HeaderProps> = ({ theme, onThemeClick, onChatClick
                         )}
                     </button>
                     <button
-                        onClick={() => setIsWatchPartyOpen(true)}
+                        onClick={() => {
+                            if (onWatchPartyClick) {
+                                onWatchPartyClick();
+                            } else {
+                                setIsWatchPartyOpen(true);
+                            }
+                        }}
                         className="flex items-center gap-1.5 px-3 py-1.5 bg-white/5 border border-white/10 text-white hover:bg-white/10 transition-all"
                         type="button"
                     >
@@ -302,10 +309,12 @@ export const Header: React.FC<HeaderProps> = ({ theme, onThemeClick, onChatClick
                     </button>
                 </div>
             </div>
-            <WatchPartyModal
-                isOpen={isWatchPartyOpen}
-                onClose={() => setIsWatchPartyOpen(false)}
-            />
+            {!onWatchPartyClick && (
+                <WatchPartyModal
+                    isOpen={isWatchPartyOpen}
+                    onClose={() => setIsWatchPartyOpen(false)}
+                />
+            )}
         </header>
     );
 };

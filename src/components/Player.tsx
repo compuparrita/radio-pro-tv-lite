@@ -178,6 +178,11 @@ export const Player: React.FC = () => {
 
         try {
             executeRemoteAction(action.action, seekSeconds);
+            if (action.action === 'play') {
+                setIsPlaying(true);
+            } else if (action.action === 'pause') {
+                setIsPlaying(false);
+            }
         } finally {
             remoteExecutionInProgressRef.current = null;
             clearRemoteExecutionRef();

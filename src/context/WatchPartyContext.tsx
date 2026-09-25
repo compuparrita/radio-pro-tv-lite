@@ -139,6 +139,7 @@ export function WatchPartyProvider({ children }: { children: ReactNode }) {
     const [remoteExecutionRef, setRemoteExecutionRef] = useState<string | null>(null);
     const [pendingAction, setPendingAction] = useState<WatchPartyAction | null>(null);
     const hasStartedSocket = useRef(false);
+    const activeSessionRef = useRef<{ roomCode: string; userName: string } | null>(null);
     const roomRef = useRef(room);
     roomRef.current = room;
     const lastAppliedMediaRef = useRef<string | null>(null);
@@ -175,10 +176,30 @@ export function WatchPartyProvider({ children }: { children: ReactNode }) {
     useEffect(() => {
         const cleanups: Array<() => void> = [];
 
-        cleanups.push(onWatchPartyConnectionStatus((status) => {
+        cleanups.push(onWatchPartyConnectionStatus(async (status) => {
             const connected = status === 'connected';
             setIsConnected(connected);
-            if (status === 'disconnected') clearRoomState();
+            if (connected && activeSessionRef.current) {
+                try {
+                    const response = await sendJoinRoom(activeSessionRef.current);
+                    if (response.success && response.room) {
+                        setRoom(response.room);
+                        setStateVersion(response.room.stateVersion);
+                        setMembers(response.room.members);
+                        setHostId(response.room.hostId);
+                        setIsHost(response.room.hostId === getWatchPartySocketId());
+                        const roomMedia = getMediaInfo(response.room.media);
+                        if (roomMedia) {
+                            setMediaInfo(roomMedia);
+                            if (response.room.hostId !== getWatchPartySocketId()) {
+                                openMedia(roomMedia);
+                            }
+                        }
+                    }
+                } catch (reconnectError) {
+                    console.warn('[WatchParty] Reconnect join error:', reconnectError);
+                }
+            }
         }));
 
         cleanups.push(registerMembersListener((event) => {
@@ -313,6 +334,7 @@ export function WatchPartyProvider({ children }: { children: ReactNode }) {
             setHostId(response.room.hostId);
             setRoomCode(response.roomCode ?? response.room.roomCode);
             setIsHost(true);
+            activeSessionRef.current = { roomCode: response.roomCode ?? response.room.roomCode, userName };
             return true;
         } catch (requestError) {
             setError({
@@ -349,6 +371,7 @@ export function WatchPartyProvider({ children }: { children: ReactNode }) {
             setRoomCode(response.room.roomCode);
             setIsHost(response.room.hostId === getWatchPartySocketId());
             if (roomMedia && response.room.hostId !== getWatchPartySocketId()) openMedia(roomMedia);
+            activeSessionRef.current = { roomCode: response.room.roomCode, userName };
             return true;
         } catch (requestError) {
             setError({
@@ -370,6 +393,7 @@ export function WatchPartyProvider({ children }: { children: ReactNode }) {
                 setError({ code: response.error ?? 'ROOM_LEAVE_FAILED', message: 'No se pudo salir de la sala.' });
                 return false;
             }
+            activeSessionRef.current = null;
             clearRoomState();
             return true;
         } catch (requestError) {
