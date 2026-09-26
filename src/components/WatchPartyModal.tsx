@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Check, Copy, HelpCircle, LogOut, PlusCircle, Users, X } from 'lucide-react';
+import { Check, Copy, HelpCircle, LogOut, PlusCircle, QrCode, Users, X } from 'lucide-react';
 import { useWatchParty } from '../context/WatchPartyContext';
 import { useRadio } from '../context/RadioContext';
 
@@ -80,17 +80,21 @@ function WatchPartyModal({ isOpen, onClose }: WatchPartyModalProps) {
             <section
                 aria-labelledby="watchparty-title"
                 aria-modal="true"
-                className="relative flex max-h-[84vh] w-full max-w-[460px] flex-col overflow-hidden rounded-[28px] border border-white/[0.09] bg-[#111318]/95 text-white shadow-[0_24px_100px_rgba(0,0,0,0.55)] backdrop-blur-xl"
+                className="relative flex max-h-[84vh] w-full max-w-[560px] flex-col overflow-hidden rounded-[28px] border border-white/[0.09] bg-[#111318]/95 text-white shadow-[0_24px_100px_rgba(0,0,0,0.55)] backdrop-blur-xl"
                 role="dialog"
                 onClick={(event) => event.stopPropagation()}
             >
                 <header className="flex items-start justify-between border-b border-white/[0.07] px-6 py-5">
                     <div>
-                        <h2 id="watchparty-title" className="text-xl font-semibold tracking-tight">WatchParty</h2>
+                        <h2 id="watchparty-title" className="text-xl font-semibold tracking-tight">
+                            {room && isHost ? 'Compartir sala' : 'WatchParty'}
+                        </h2>
                         <p className="mt-1 text-sm text-white/45">
-                            {room
-                                ? (isHost ? 'Comparte esta sala con tus amigos' : 'Conectado a la sala')
-                                : 'Disfruta y sincroniza contenido en grupo'}
+                            {room && isHost
+                                ? 'Invita a cualquier persona con un código o QR.'
+                                : room
+                                    ? 'Conectado a la sala'
+                                    : 'Disfruta y sincroniza contenido en grupo'}
                         </p>
                     </div>
                     <button
@@ -127,21 +131,29 @@ function WatchPartyModal({ isOpen, onClose }: WatchPartyModalProps) {
 
                                 {isHost ? (
                                     <>
-                                        <div className="mt-5 rounded-xl bg-black/20 px-4 py-4 text-center">
-                                            <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-white/35">{'Código de sala'}</p>
-                                            <p className="mt-2 font-mono text-3xl font-semibold tracking-[0.28em] text-white">
-                                                {roomCode ?? room.roomCode}
-                                            </p>
-                                        </div>
-                                        <div className="mt-3 flex flex-wrap justify-center gap-2">
-                                            <button className={secondaryButtonClassName} onClick={() => void handleCopyCode()} type="button">
-                                                {copied ? <Check aria-hidden="true" size={15} /> : <Copy aria-hidden="true" size={15} />}
-                                                {copied ? 'Copiado' : 'Copiar'}
-                                            </button>
-                                            <button className={secondaryButtonClassName} onClick={() => setIsHelpOpen(true)} type="button">
-                                                <HelpCircle aria-hidden="true" size={15} />
-                                                {'¿Cómo funciona?'}
-                                            </button>
+                                        <div className="mt-5 flex flex-col items-center gap-6 sm:flex-row sm:items-center sm:justify-center sm:gap-8">
+                                            <div className="flex shrink-0 flex-col items-center gap-2">
+                                                <div aria-label="Código QR disponible en la Fase 8.1" className="flex h-[120px] w-[120px] items-center justify-center rounded-xl bg-white text-zinc-900 shadow-inner" role="img">
+                                                    <QrCode aria-hidden="true" size={52} strokeWidth={1.5} />
+                                                </div>
+                                                <p className="text-center text-[11px] text-white/40">QR disponible en la Fase 8.1</p>
+                                            </div>
+                                            <div className="flex min-w-0 flex-col items-center text-center sm:items-start sm:text-left">
+                                                <p className="text-sm font-medium text-white/55">Código de sala</p>
+                                                <p className="mt-2 font-mono text-3xl font-semibold tracking-[0.24em] text-white">
+                                                    {roomCode ?? room.roomCode}
+                                                </p>
+                                                <div className="mt-4 flex flex-wrap justify-center gap-2 sm:justify-start">
+                                                    <button className={secondaryButtonClassName} onClick={() => void handleCopyCode()} type="button">
+                                                        {copied ? <Check aria-hidden="true" size={15} /> : <Copy aria-hidden="true" size={15} />}
+                                                        {copied ? 'Copiado' : 'Copiar código'}
+                                                    </button>
+                                                    <button className={secondaryButtonClassName} onClick={() => setIsHelpOpen(true)} type="button">
+                                                        <HelpCircle aria-hidden="true" size={15} />
+                                                        {'¿Cómo funciona?'}
+                                                    </button>
+                                                </div>
+                                            </div>
                                         </div>
                                         {copyError && <p className="mt-2 text-center text-xs text-red-300" role="alert">{copyError}</p>}
                                     </>
