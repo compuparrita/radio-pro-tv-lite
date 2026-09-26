@@ -17,12 +17,21 @@ import { UserProfileForm } from './components/UserProfileForm';
 import { HelpCircle } from 'lucide-react';
 import { GuestCinemaLayout } from './components/GuestCinemaLayout';
 
+const ROOM_CODE_PATTERN = /^[A-HJ-NP-Z2-9]{6}$/;
+
+function clearRoomInviteParameter() {
+    const url = new URL(window.location.href);
+    url.searchParams.delete('room');
+    window.history.replaceState(window.history.state, '', `${url.pathname}${url.search}${url.hash}`);
+}
+
 function AppContent() {
     const { room, isHost, isConnected } = useWatchParty();
     const [isManagerOpen, setIsManagerOpen] = useState(false);
     const [isChatOpen, setIsChatOpen] = useState(false);
     const [isWatchPartyOpen, setIsWatchPartyOpen] = useState(false);
     const [isGuestCinemaMode, setIsGuestCinemaMode] = useState(true);
+    const [pendingRoomInvite, setPendingRoomInvite] = useState<string | null>(null);
     const [theme, setTheme] = useState<'dark' | 'light' | 'youth'>(() => {
         const saved = localStorage.getItem('theme');
         return (saved as 'dark' | 'light' | 'youth') || 'light';
@@ -68,6 +77,40 @@ function AppContent() {
     useEffect(() => {
         setIsGuestCinemaMode(Boolean(room && !isHost));
     }, [room?.id, isHost]);
+
+    useEffect(() => {
+        const searchParams = new URLSearchParams(window.location.search);
+        const roomParameter = searchParams.get('room');
+        if (roomParameter === null) return;
+
+        const roomCode = roomParameter.trim().toUpperCase();
+        if (!ROOM_CODE_PATTERN.test(roomCode)) {
+            clearRoomInviteParameter();
+            return;
+        }
+
+        setPendingRoomInvite(roomCode);
+        setIsWatchPartyOpen(true);
+    }, []);
+
+    const handleRoomInviteCancel = () => {
+        clearRoomInviteParameter();
+        setPendingRoomInvite(null);
+        setIsWatchPartyOpen(false);
+    };
+
+    const handleRoomInviteJoined = () => {
+        clearRoomInviteParameter();
+        setPendingRoomInvite(null);
+    };
+
+    const handleWatchPartyModalClose = () => {
+        if (pendingRoomInvite) {
+            handleRoomInviteCancel();
+        } else {
+            setIsWatchPartyOpen(false);
+        }
+    };
 
     // Apply theme to body
     useEffect(() => {
@@ -250,6 +293,13 @@ function AppContent() {
                     onExitCinema={() => setIsGuestCinemaMode(false)}
                 />
                 <ChatModal externalOpen={isChatOpen} onOpenChange={setIsChatOpen} />
+                <WatchPartyModal
+                    isOpen={isWatchPartyOpen}
+                    onClose={handleWatchPartyModalClose}
+                    inviteCode={pendingRoomInvite}
+                    onInviteCancel={handleRoomInviteCancel}
+                    onInviteJoined={handleRoomInviteJoined}
+                />
             </>
         );
     }
@@ -368,7 +418,13 @@ function AppContent() {
             <StationManager isOpen={isManagerOpen} onClose={() => setIsManagerOpen(false)} />
             <ChatModal externalOpen={isChatOpen} onOpenChange={setIsChatOpen} />
             <GeneralHelpModal isOpen={isAppHelpOpen} onClose={() => setIsAppHelpOpen(false)} />
-            <WatchPartyModal isOpen={isWatchPartyOpen} onClose={() => setIsWatchPartyOpen(false)} />
+            <WatchPartyModal
+                isOpen={isWatchPartyOpen}
+                onClose={handleWatchPartyModalClose}
+                inviteCode={pendingRoomInvite}
+                onInviteCancel={handleRoomInviteCancel}
+                onInviteJoined={handleRoomInviteJoined}
+            />
             <div className="mobile-nav-container">
                 <MobileNav
                     onChatClick={() => setIsChatOpen(true)}

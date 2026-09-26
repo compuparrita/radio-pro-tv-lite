@@ -8,6 +8,9 @@ import { generateQrCodeMatrix } from '../utils/qrCode';
 interface WatchPartyModalProps {
     isOpen: boolean;
     onClose: () => void;
+    inviteCode?: string | null;
+    onInviteCancel?: () => void;
+    onInviteJoined?: () => void;
 }
 
 type WatchPartyTab = 'create' | 'join';
@@ -15,7 +18,7 @@ type WatchPartyTab = 'create' | 'join';
 const inputClassName = 'h-11 w-full rounded-xl border border-white/10 bg-white/[0.04] px-4 text-sm text-white placeholder:text-white/30 outline-none transition focus:border-cyan-300/60 focus:ring-2 focus:ring-cyan-300/10';
 const secondaryButtonClassName = 'inline-flex min-h-10 items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/[0.04] px-4 py-2 text-sm font-medium text-white/80 transition hover:bg-white/[0.08] hover:text-white focus:outline-none focus:ring-2 focus:ring-cyan-300/50';
 
-function WatchPartyModal({ isOpen, onClose }: WatchPartyModalProps) {
+function WatchPartyModal({ isOpen, onClose, inviteCode, onInviteCancel, onInviteJoined }: WatchPartyModalProps) {
     const { currentStation } = useRadio();
     const [activeTab, setActiveTab] = useState<WatchPartyTab>('create');
     const [roomName, setRoomName] = useState('');
@@ -80,6 +83,12 @@ function WatchPartyModal({ isOpen, onClose }: WatchPartyModalProps) {
         }
     };
 
+    const handleInviteJoin = async () => {
+        if (!inviteCode) return;
+        const joined = await joinRoom({ roomCode: inviteCode });
+        if (joined) onInviteJoined?.();
+    };
+
     const modalContent = (
         <div
             className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm"
@@ -95,15 +104,17 @@ function WatchPartyModal({ isOpen, onClose }: WatchPartyModalProps) {
                 <header className="flex items-start justify-between border-b border-white/[0.07] px-6 py-5">
                     <div>
                         <h2 id="watchparty-title" className="text-xl font-semibold tracking-tight">
-                            {room && isHost ? 'Compartir sala' : 'WatchParty'}
+                            {inviteCode ? 'Unirse a una sala' : room && isHost ? 'Compartir sala' : 'WatchParty'}
                         </h2>
-                        <p className="mt-1 text-sm text-white/45">
-                            {room && isHost
+                        {!inviteCode && (
+                            <p className="mt-1 text-sm text-white/45">
+                                {room && isHost
                                 ? 'Invita a cualquier persona con un código o QR.'
                                 : room
                                     ? 'Conectado a la sala'
                                     : 'Disfruta y sincroniza contenido en grupo'}
-                        </p>
+                            </p>
+                        )}
                     </div>
                     <button
                         aria-label="Cerrar"
@@ -122,7 +133,13 @@ function WatchPartyModal({ isOpen, onClose }: WatchPartyModalProps) {
                         </div>
                     )}
 
-                    {room ? (
+                    {inviteCode ? (
+                        <section className="rounded-2xl border border-white/[0.07] bg-white/[0.025] p-5 text-center">
+                            <p className="text-sm text-white/65">Has abierto una invitación de WatchParty.</p>
+                            <p className="mt-4 text-[11px] font-medium uppercase tracking-[0.16em] text-white/40">Código de sala</p>
+                            <p className="mt-2 font-mono text-3xl font-semibold tracking-[0.24em] text-white">{inviteCode}</p>
+                        </section>
+                    ) : room ? (
                         <>
                             <section className="rounded-2xl border border-white/[0.07] bg-white/[0.025] p-5">
                                 <div className="flex items-start justify-between gap-3">
@@ -279,7 +296,25 @@ function WatchPartyModal({ isOpen, onClose }: WatchPartyModalProps) {
                 </div>
 
                 <footer className="border-t border-white/[0.07] px-6 py-4">
-                    {room ? (
+                    {inviteCode ? (
+                        <div className="flex gap-3">
+                            <button
+                                className="min-h-11 flex-1 rounded-xl border border-white/10 bg-white/[0.04] text-sm font-medium text-white/75 transition hover:bg-white/[0.08] focus:outline-none focus:ring-2 focus:ring-white/20"
+                                onClick={onInviteCancel}
+                                type="button"
+                            >
+                                Cancelar
+                            </button>
+                            <button
+                                className="min-h-11 flex-1 rounded-xl bg-white text-sm font-semibold text-zinc-950 transition hover:bg-cyan-50 focus:outline-none focus:ring-2 focus:ring-cyan-200/70 disabled:cursor-wait disabled:opacity-55"
+                                disabled={isLoading}
+                                onClick={() => void handleInviteJoin()}
+                                type="button"
+                            >
+                                Unirse
+                            </button>
+                        </div>
+                    ) : room ? (
                         isHost ? (
                             <button
                                 className="min-h-11 w-full rounded-xl bg-white/[0.07] text-sm font-medium text-white/85 transition hover:bg-white/[0.11] focus:outline-none focus:ring-2 focus:ring-white/20 disabled:cursor-wait disabled:opacity-50"
