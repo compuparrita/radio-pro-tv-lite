@@ -43,12 +43,12 @@ export function UserProfileForm({ mode = 'setup', variant = 'page', onSaved, onC
     };
 
     return (
-        <main className={isCompact ? 'w-full text-white' : 'relative flex min-h-screen items-center justify-center overflow-hidden bg-[#090b10] px-5 py-10 text-white'}>
+        <main className={isCompact ? 'pointer-events-auto w-full touch-manipulation text-white' : 'pointer-events-auto relative flex min-h-screen touch-manipulation items-center justify-center overflow-hidden bg-[#090b10] px-5 py-10 text-white'}>
             {!isCompact && <div aria-hidden="true" className="pointer-events-none absolute -top-36 left-1/2 h-96 w-96 -translate-x-1/2 rounded-full bg-cyan-400/[0.08] blur-3xl" />}
             <form
                 className={isCompact
-                    ? 'relative w-full rounded-lg border border-white/[0.08] bg-white/[0.025] p-4'
-                    : 'relative w-full max-w-md rounded-[28px] border border-white/[0.08] bg-white/[0.035] p-7 shadow-[0_24px_90px_rgba(0,0,0,0.4)] backdrop-blur-xl sm:p-9'}
+                    ? 'pointer-events-auto relative w-full touch-manipulation rounded-lg border border-white/[0.08] bg-white/[0.025] p-4'
+                    : 'pointer-events-auto relative w-full max-w-md touch-manipulation rounded-[28px] border border-white/[0.08] bg-white/[0.035] p-7 shadow-[0_24px_90px_rgba(0,0,0,0.4)] backdrop-blur-xl sm:p-9'}
                 onSubmit={handleSubmit}
             >
                 {!isCompact && (

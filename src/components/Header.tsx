@@ -349,14 +349,17 @@ export const Header: React.FC<HeaderProps> = ({ theme, onThemeClick, onChatClick
             </div>
             {isProfileOpen && (
                 <div
-                    className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm"
-                    onClick={closeProfileDialog}
+                    className="pointer-events-auto fixed inset-0 z-[1000] flex touch-manipulation items-center justify-center bg-black/60 p-4 backdrop-blur-sm"
+                    onClick={(event) => {
+                        if (event.target === event.currentTarget) closeProfileDialog();
+                    }}
                 >
                     <section
                         aria-labelledby="profile-dialog-title"
                         aria-modal="true"
-                        className="w-full max-w-sm rounded-xl border border-cyan-200/15 bg-[var(--dark-surface)] p-5 text-[var(--text-primary)] shadow-2xl"
+                        className="pointer-events-auto relative z-[1001] w-full max-w-sm touch-manipulation rounded-xl border border-cyan-200/15 bg-[var(--dark-surface)] p-5 text-[var(--text-primary)] shadow-2xl"
                         onClick={(event) => event.stopPropagation()}
+                        onPointerDown={(event) => event.stopPropagation()}
                         role="dialog"
                     >
                         <div className="mb-4 flex items-center justify-between">
