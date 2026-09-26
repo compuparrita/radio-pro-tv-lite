@@ -125,7 +125,7 @@ export const Header: React.FC<HeaderProps> = ({ theme, onThemeClick, onChatClick
                 <div className="flex items-center gap-3">
                     <h1 className="text-2xl md:text-3xl lg:text-2xl font-black tracking-tighter text-transparent bg-clip-text bg-gradient-to-r from-[var(--primary-color)] via-[var(--secondary-color)] to-[var(--accent-color)] flex items-center gap-2">
                         <Radio size={28} className="text-[var(--primary-color)]" />
-                        <span className="inline">TV Radio <span className="text-[var(--text-primary)]">Streaming Pro</span></span>
+                        <span className="inline">TV Radio <span className="text-[var(--text-primary)]">Streaming Pro</span><br /><span className="text-[10px] font-semibold tracking-normal text-[var(--text-secondary)]">TV en vivo&nbsp;&nbsp;Radio<br />YouTube&nbsp;&nbsp;Cine compartido</span></span>
                     </h1>
                 </div>
                 <button

@@ -57,11 +57,11 @@ export function UserProfileForm({ mode = 'setup', variant = 'page', onSaved, onC
                     </div>
                 )}
                 <h1 className={isCompact ? 'text-lg font-semibold tracking-tight' : 'text-2xl font-semibold tracking-tight'}>
-                    {isEditing ? 'Editar perfil' : 'Tu perfil'}
+                    {isEditing ? 'Editar perfil' : 'Centro Multimedia'}
                 </h1>
-                {!isCompact && (
+                {!isEditing && (
                     <p className="mt-2 text-sm leading-6 text-white/50">
-                        Usa el mismo perfil para conversar, compartir salas y conservar tu actividad.
+                        Bienvenido. Tu perfil se utiliza para conversar, compartir salas y conservar tu actividad en este dispositivo.
                     </p>
                 )}
 
