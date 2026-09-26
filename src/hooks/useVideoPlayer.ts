@@ -338,6 +338,25 @@ export const useVideoPlayer = (
         if (playerType !== 'videojs' || !videoRef.current || !currentStation) return;
 
         const videoEl = videoRef.current;
+        const existingPlayer = videojsPlayerRef.current;
+        if (existingPlayer && existingPlayer.el() !== videoEl) {
+            console.info('[Bootstrap] replacing detached VideoJS element', {
+                stationId: currentStation.id,
+                previousConnected: Boolean(existingPlayer.el()?.isConnected),
+                nextConnected: videoEl.isConnected,
+            });
+            try {
+                existingPlayer.dispose();
+            } catch (disposeError) {
+                console.warn('[VideoPlayer] Error disposing replaced player:', disposeError);
+            }
+            videojsPlayerRef.current = null;
+        }
+
+        // Player.tsx renders a separate hidden video element while paused.
+        // Wait until playback mounts the visible element before creating VideoJS.
+        if (!isPlaying || videojsPlayerRef.current) return;
+
         let isCancelled = false;
 
         // Si no hay reproductor, lo inicializamos
@@ -350,6 +369,11 @@ export const useVideoPlayer = (
                 return;
             }
 
+            console.info('[Bootstrap] createPlayer', {
+                stationId: currentStation.id,
+                source: effectiveUrl,
+                elementConnected: videoEl.isConnected,
+            });
             console.log(`[VideoPlayer] NEW VideoJS init for: ${currentStation.name} (ID: ${currentStation.id})`);
             const player = videojs(videoEl, {
                 controls: true,
@@ -372,6 +396,15 @@ export const useVideoPlayer = (
 
             videojsPlayerRef.current = player;
             player.volume(volume);
+
+            player.one('canplay', () => {
+                console.info('[Bootstrap] firstCanPlay', {
+                    stationId: currentStation.id,
+                    source: player.currentSrc(),
+                    readyState: (videoEl as HTMLVideoElement).readyState,
+                    networkState: (videoEl as HTMLVideoElement).networkState,
+                });
+            });
 
             const logHlsEvent = (eventName: string) => {
                 const mediaElement = videoEl as HTMLVideoElement;
@@ -399,6 +432,7 @@ export const useVideoPlayer = (
                 finalUrl = `/proxy-stream?url=${encodeURIComponent(effectiveUrl)}`;
             }
 
+            console.info('[Bootstrap] assignSource', { stage: 'initial', stationId: currentStation.id, url: finalUrl });
             console.info('[HLS] source=', { stage: 'initial', url: finalUrl });
             player.src({ src: finalUrl, type: 'application/x-mpegURL' }); // Force initial source
             player.controls(true);
@@ -536,6 +570,7 @@ export const useVideoPlayer = (
                 };
                 player.on('play', setupVhsErrorHandling);
 
+                console.info('[Bootstrap] assignSource', { stage: 'ready', stationId: currentStation.id, url: finalUrl });
                 player.src({
                     src: finalUrl,
                     type: 'application/x-mpegURL'
@@ -561,7 +596,7 @@ export const useVideoPlayer = (
         return () => {
             isCancelled = true;
         };
-    }, [currentStation?.id, playerType]);
+    }, [currentStation?.id, playerType, effectiveUrl, isPlaying]);
 
     // 3. Control de Reproducción (Play/Pause/Volume)
     useEffect(() => {

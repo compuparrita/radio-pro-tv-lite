@@ -273,6 +273,10 @@ export const RadioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         if (lastStationId) {
             const savedStation = stations.find(s => s.id === lastStationId);
             if (savedStation) {
+                console.info('[Bootstrap] restoreStation', {
+                    stationId: savedStation.id,
+                    stationName: savedStation.name,
+                });
                 playStation(savedStation, false);
                 return;
             }
