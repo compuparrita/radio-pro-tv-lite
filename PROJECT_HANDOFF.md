@@ -96,6 +96,21 @@ Esperar al nodo visible antes de crear la instancia y descartar cualquier instan
 
 Commit: 4f9369e
 
+### WP-SYNC-001 (Resuelto)
+
+**Síntoma**
+Al recargar el navegador en canales de video/TV y dar play salía pantalla negra con letras (se escuchaba pero no se veía). Además, en WatchParty los invitados comenzaban a recargar el reproductor en bucle cada 3 segundos.
+
+**Causa**
+1. `Player.tsx` condicionaba el contenedor con `{hasVideo && isPlaying ?`, desmontando el reproductor en pausa e inicializando VideoJS sobre nodos efímeros con doble asignación de `player.src`.
+2. `WatchPartyContext.tsx` permitía a los invitados ejecutar `changeMedia` en cada render de heartbeat cada 3 segundos, forzando `setCurrentStation` en bucle.
+3. Se asumía erróneamente que YouTube siempre era live stream, disparando `goLive` forzado y buscando al final del video.
+
+**Solución**
+1. Mantener el reproductor montado de forma continua para medios con video (`{hasVideo ?`), controlando pausa/play a través de la API del reproductor sin desmontar el DOM ni asignar doble `src`.
+2. Restringir `changeMedia` exclusivamente al anfitrión (`isHost`) tanto en frontend como en el servidor Socket.io.
+3. Corregir la detección de transmisiones en vivo y aplicar ajuste suave de tasa de reproducción (`playbackRate`) para micro-desfases de 250ms a 1.5s, reservando seek directo para desfases mayores o pausas.
+
 ---
 
 ## Filosofía del proyecto

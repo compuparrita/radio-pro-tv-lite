@@ -281,7 +281,7 @@ export const Player: React.FC = () => {
                     </div>
                 </div>
 
-                {hasVideo && isPlaying ? (
+                {hasVideo ? (
                     <div key={`tech-container-${currentStation.id}-${playerType}`} className="absolute inset-0 bg-black flex items-center justify-center player-tech-container">
                         <div className="relative h-full w-full player-aspect-wrapper">
                             {playerType === 'iframe' ? (

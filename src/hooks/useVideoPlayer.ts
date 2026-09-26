@@ -154,7 +154,9 @@ export const useVideoPlayer = (
         if (playerType === 'videojs') {
             return Boolean(videojsPlayerRef.current?.liveTracker?.isLive?.());
         }
-        if (playerType === 'iframe' && isYouTube) return true;
+        if (playerType === 'iframe' && isYouTube) {
+            return ytPlayerRef.current?.getVideoData?.()?.isLive === true;
+        }
         const mediaElement = videoRef.current;
         return mediaElement instanceof HTMLMediaElement
             && !Number.isFinite(mediaElement.duration)
@@ -195,16 +197,34 @@ export const useVideoPlayer = (
             const hostTime = Math.max(0, heartbeat.currentTime + elapsed);
             const drift = hostTime - localTime;
             const absoluteDrift = Math.abs(drift);
-            if (absoluteDrift < 0.25) return;
+
+            if (absoluteDrift < 0.25) {
+                if (playerType === 'videojs' && videojsPlayerRef.current) {
+                    if (videojsPlayerRef.current.playbackRate?.() !== 1) videojsPlayerRef.current.playbackRate?.(1);
+                } else if (playerType === 'iframe' && isYouTube && ytPlayerRef.current) {
+                    if (ytPlayerRef.current.getPlaybackRate?.() !== 1) ytPlayerRef.current.setPlaybackRate?.(1);
+                } else if (videoRef.current instanceof HTMLMediaElement && videoRef.current.playbackRate !== 1) {
+                    videoRef.current.playbackRate = 1;
+                }
+                return;
+            }
 
             remoteSeekSuppressionRef.current = true;
             window.setTimeout(() => { remoteSeekSuppressionRef.current = false; }, 1500);
+
             if (heartbeat.isLive && isPlayerActuallyLive() && absoluteDrift >= 1) {
                 goLive();
-            } else if (absoluteDrift >= 2) {
+            } else if (!heartbeat.isPlaying || absoluteDrift >= 1.5) {
                 executeRemoteAction('seek', hostTime);
             } else {
-                executeRemoteAction('seek', Math.max(0, localTime + drift * 0.5));
+                const rate = drift > 0 ? 1.06 : 0.94;
+                if (playerType === 'videojs' && videojsPlayerRef.current) {
+                    videojsPlayerRef.current.playbackRate?.(rate);
+                } else if (playerType === 'iframe' && isYouTube && ytPlayerRef.current) {
+                    ytPlayerRef.current.setPlaybackRate?.(rate);
+                } else if (videoRef.current instanceof HTMLMediaElement) {
+                    videoRef.current.playbackRate = rate;
+                }
             }
         };
         window.addEventListener('watchparty:heartbeat:remote', handleHeartbeat);
@@ -338,24 +358,7 @@ export const useVideoPlayer = (
         if (playerType !== 'videojs' || !videoRef.current || !currentStation) return;
 
         const videoEl = videoRef.current;
-        const existingPlayer = videojsPlayerRef.current;
-        if (existingPlayer && existingPlayer.el() !== videoEl) {
-            console.info('[Bootstrap] replacing detached VideoJS element', {
-                stationId: currentStation.id,
-                previousConnected: Boolean(existingPlayer.el()?.isConnected),
-                nextConnected: videoEl.isConnected,
-            });
-            try {
-                existingPlayer.dispose();
-            } catch (disposeError) {
-                console.warn('[VideoPlayer] Error disposing replaced player:', disposeError);
-            }
-            videojsPlayerRef.current = null;
-        }
-
-        // Player.tsx renders a separate hidden video element while paused.
-        // Wait until playback mounts the visible element before creating VideoJS.
-        if (!isPlaying || videojsPlayerRef.current) return;
+        if (videojsPlayerRef.current) return;
 
         let isCancelled = false;
 
@@ -570,12 +573,7 @@ export const useVideoPlayer = (
                 };
                 player.on('play', setupVhsErrorHandling);
 
-                console.info('[Bootstrap] assignSource', { stage: 'ready', stationId: currentStation.id, url: finalUrl });
-                player.src({
-                    src: finalUrl,
-                    type: 'application/x-mpegURL'
-                });
-                console.info('[HLS] source=', { stage: 'ready', url: finalUrl });
+                console.info('[Bootstrap] playerReady', { stationId: currentStation.id, url: finalUrl });
                 runPendingRemoteAction(player);
             });
 
@@ -595,8 +593,16 @@ export const useVideoPlayer = (
 
         return () => {
             isCancelled = true;
+            if (videojsPlayerRef.current) {
+                try {
+                    videojsPlayerRef.current.dispose();
+                } catch (e) {
+                    console.warn('[VideoPlayer] Error disposing player:', e);
+                }
+                videojsPlayerRef.current = null;
+            }
         };
-    }, [currentStation?.id, playerType, effectiveUrl, isPlaying]);
+    }, [currentStation?.id, playerType, effectiveUrl]);
 
     // 3. Control de Reproducción (Play/Pause/Volume)
     useEffect(() => {
@@ -617,8 +623,15 @@ export const useVideoPlayer = (
             try {
                 if (isPlaying) {
                     if (playerType === 'videojs' && videojsPlayerRef.current) {
-                        if (videojsPlayerRef.current.src()) {
-                            await videojsPlayerRef.current.play();
+                        try {
+                            const playPromise = videojsPlayerRef.current.play();
+                            if (playPromise !== undefined) {
+                                await playPromise;
+                            }
+                        } catch (playErr: any) {
+                            if (playErr?.name !== 'AbortError') {
+                                console.warn('[VideoPlayer] VideoJS play error:', playErr);
+                            }
                         }
                     } else if (playerType === 'html5' && videoEl instanceof HTMLMediaElement) {
                         if (!videoEl.src && effectiveUrl) {
@@ -639,7 +652,11 @@ export const useVideoPlayer = (
                     }
                 } else {
                     if (playerType === 'videojs' && videojsPlayerRef.current) {
-                        videojsPlayerRef.current.pause();
+                        try {
+                            videojsPlayerRef.current.pause();
+                        } catch (e) {
+                            console.warn('[VideoPlayer] VideoJS pause error:', e);
+                        }
                     } else if (playerType === 'html5' && videoEl instanceof HTMLMediaElement) {
                         if (!videoEl.paused) {
                             videoEl.pause();

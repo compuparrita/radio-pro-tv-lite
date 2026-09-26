@@ -175,6 +175,17 @@ body.light-mode .glass {
   pointer-events: none !important;
 }
 
+.video-js {
+  width: 100% !important;
+  height: 100% !important;
+}
+
+.video-js .vjs-tech {
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: contain !important;
+}
+
 /* Allow controls to hide on inactivity - BUT keep the cursor visible */
 .video-js.vjs-user-inactive .vjs-control-bar {
   opacity: 0 !important;

@@ -141,7 +141,9 @@ function stationFromMedia(media: MediaInfo, stations: Station[]): Station {
 }
 
 export function WatchPartyProvider({ children }: { children: ReactNode }) {
-    const { currentStation, stations, setCurrentStation, setIsPlaying } = useRadio();
+    const { currentStation, stations, setCurrentStation, setIsPlaying, isPlaying } = useRadio();
+    const isPlayingRef = useRef(isPlaying);
+    isPlayingRef.current = isPlaying;
     const { profile } = useUserProfile();
     const [room, setRoom] = useState<WatchPartyRoomData | null>(null);
     const [members, setMembers] = useState<WatchPartyMember[]>([]);
@@ -195,7 +197,7 @@ export function WatchPartyProvider({ children }: { children: ReactNode }) {
         const onHeartbeat = (heartbeat: WatchPartyHeartbeat) => {
             const currentRoom = roomRef.current;
             if (!currentRoom || heartbeat.roomCode !== currentRoom.roomCode
-                || heartbeat.stateVersion !== currentRoom.stateVersion
+                || heartbeat.stateVersion < currentRoom.stateVersion
                 || !Number.isFinite(heartbeat.currentTime) || heartbeat.currentTime < 0) return;
 
             const stationId = typeof currentRoom.media?.stationId === 'string'
@@ -215,7 +217,7 @@ export function WatchPartyProvider({ children }: { children: ReactNode }) {
                 }
                 : roomState);
 
-            if (heartbeat.isPlaying !== currentRoom.playback.isPlaying) {
+            if (heartbeat.isPlaying !== isPlayingRef.current) {
                 const executionRef = `watchparty-heartbeat-${heartbeat.stateVersion}-${heartbeat.timestamp}`;
                 setRemoteExecutionRef(executionRef);
                 setPendingAction({
@@ -504,7 +506,7 @@ export function WatchPartyProvider({ children }: { children: ReactNode }) {
     }, [rejoinSavedRoom]);
 
     useEffect(() => {
-        if (!room || !currentStation) return;
+        if (!room || !currentStation || !isHost) return;
         if (remoteMediaStationRef.current === currentStation.id) {
             remoteMediaStationRef.current = null;
             return;
@@ -526,7 +528,7 @@ export function WatchPartyProvider({ children }: { children: ReactNode }) {
             console.warn('[WatchParty] Error al enviar cambio de medio:', err);
             if (lastSentMediaRef.current === mediaKey) lastSentMediaRef.current = null;
         });
-    }, [currentStation, room]);
+    }, [currentStation, room, isHost]);
 
     const clearError = useCallback(() => setError(null), []);
 

@@ -723,6 +723,11 @@ io.on('connection', (socket) => {
             return;
         }
 
+        if (room.hostId !== socket.id) {
+            emitWatchPartyError(socket, ack, 'NOT_HOST', 'Solo el anfitrión puede cambiar el medio de la sala');
+            return;
+        }
+
         const media = normalizeWatchPartyMedia(payload.media);
         if (!media) {
             emitWatchPartyError(socket, ack, 'INVALID_MEDIA', 'Datos del medio invalidos');
@@ -811,9 +816,10 @@ io.on('connection', (socket) => {
         if (!room || room.hostId !== socket.id
             || watchPartySocketRooms.get(socket.id) !== room.id
             || !socket.rooms.has(room.id)
-            || payload.stateVersion !== room.stateVersion
+            || payload.stateVersion < room.stateVersion
             || room.members.length < 2) return;
 
+        room.stateVersion = Math.max(room.stateVersion, payload.stateVersion);
         const heartbeat = {
             roomCode: room.roomCode,
             stateVersion: room.stateVersion,
