@@ -4,12 +4,11 @@ import { Player } from './Player';
 
 interface GuestCinemaLayoutProps {
     isConnected: boolean;
-    isLeaving: boolean;
     onChatClick: () => void;
-    onLeaveRoom: () => void;
+    onExitCinema: () => void;
 }
 
-export function GuestCinemaLayout({ isConnected, isLeaving, onChatClick, onLeaveRoom }: GuestCinemaLayoutProps) {
+export function GuestCinemaLayout({ isConnected, onChatClick, onExitCinema }: GuestCinemaLayoutProps) {
     const { members, mediaInfo, room } = useWatchParty();
     const host = members.find((member) => member.role === 'host')
         ?? room?.members.find((member) => member.role === 'host');
@@ -29,11 +28,10 @@ export function GuestCinemaLayout({ isConnected, isLeaving, onChatClick, onLeave
                             <span>{participantCount} {participantCount === 1 ? 'participante' : 'participantes'}</span>
                         </div>
                         <button
-                            aria-label={isLeaving ? 'Saliendo de la sala' : 'Salir de la sala'}
-                            className="rounded-full p-2 text-[var(--text-secondary)] transition hover:bg-white/5 hover:text-rose-300 disabled:cursor-wait disabled:opacity-50"
-                            disabled={isLeaving}
-                            onClick={onLeaveRoom}
-                            title="Salir de la sala"
+                            aria-label="Salir del Modo Cine"
+                            className="flex h-11 w-11 items-center justify-center rounded-full border border-white/10 text-[var(--text-secondary)] transition hover:bg-white/5 hover:text-cyan-200"
+                            onClick={onExitCinema}
+                            title="Salir del Modo Cine"
                             type="button"
                         >
                             <LogOut size={18} />

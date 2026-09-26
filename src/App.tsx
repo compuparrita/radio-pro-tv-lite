@@ -18,10 +18,11 @@ import { HelpCircle } from 'lucide-react';
 import { GuestCinemaLayout } from './components/GuestCinemaLayout';
 
 function AppContent() {
-    const { room, isHost, isConnected, isLoading, leaveRoom } = useWatchParty();
+    const { room, isHost, isConnected } = useWatchParty();
     const [isManagerOpen, setIsManagerOpen] = useState(false);
     const [isChatOpen, setIsChatOpen] = useState(false);
     const [isWatchPartyOpen, setIsWatchPartyOpen] = useState(false);
+    const [isGuestCinemaMode, setIsGuestCinemaMode] = useState(true);
     const [theme, setTheme] = useState<'dark' | 'light' | 'youth'>(() => {
         const saved = localStorage.getItem('theme');
         return (saved as 'dark' | 'light' | 'youth') || 'light';
@@ -62,7 +63,11 @@ function AppContent() {
     // Enable Smart TV remote control navigation
     useTVRemote();
 
-    const isGuestCinema = Boolean(room && !isHost);
+    const isGuestCinema = Boolean(room && !isHost && isGuestCinemaMode);
+
+    useEffect(() => {
+        setIsGuestCinemaMode(Boolean(room && !isHost));
+    }, [room?.id, isHost]);
 
     // Apply theme to body
     useEffect(() => {
@@ -241,9 +246,8 @@ function AppContent() {
             <>
                 <GuestCinemaLayout
                     isConnected={isConnected}
-                    isLeaving={isLoading}
                     onChatClick={() => setIsChatOpen(true)}
-                    onLeaveRoom={() => { void leaveRoom(); }}
+                    onExitCinema={() => setIsGuestCinemaMode(false)}
                 />
                 <ChatModal externalOpen={isChatOpen} onOpenChange={setIsChatOpen} />
             </>
