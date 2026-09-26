@@ -373,11 +373,33 @@ export const useVideoPlayer = (
             videojsPlayerRef.current = player;
             player.volume(volume);
 
+            const logHlsEvent = (eventName: string) => {
+                const mediaElement = videoEl as HTMLVideoElement;
+                console.info(`[HLS] ${eventName}`, {
+                    source: player.currentSrc(),
+                    readyState: mediaElement.readyState,
+                    networkState: mediaElement.networkState,
+                });
+            };
+            player.on('loadedmetadata', () => logHlsEvent('loadedmetadata'));
+            player.on('loadeddata', () => logHlsEvent('loadeddata'));
+            player.on('canplay', () => logHlsEvent('canplay'));
+            player.on('error', () => {
+                const mediaError = player.error();
+                console.error('[HLS] error code=', mediaError?.code, {
+                    message: mediaError?.message,
+                    source: player.currentSrc(),
+                    readyState: (videoEl as HTMLVideoElement).readyState,
+                    networkState: (videoEl as HTMLVideoElement).networkState,
+                });
+            });
+
             let finalUrl = effectiveUrl;
             if (currentStation.useProxy) {
                 finalUrl = `/proxy-stream?url=${encodeURIComponent(effectiveUrl)}`;
             }
 
+            console.info('[HLS] source=', { stage: 'initial', url: finalUrl });
             player.src({ src: finalUrl, type: 'application/x-mpegURL' }); // Force initial source
             player.controls(true);
             player.userActive(true);
@@ -518,6 +540,7 @@ export const useVideoPlayer = (
                     src: finalUrl,
                     type: 'application/x-mpegURL'
                 });
+                console.info('[HLS] source=', { stage: 'ready', url: finalUrl });
                 runPendingRemoteAction(player);
             });
 
