@@ -193,10 +193,43 @@ export function WatchPartyProvider({ children }: { children: ReactNode }) {
         if (!socket) return;
 
         const onHeartbeat = (heartbeat: WatchPartyHeartbeat) => {
-            if (!roomRef.current || heartbeat.roomCode !== roomRef.current.roomCode
-                || heartbeat.stateVersion !== roomRef.current.stateVersion
+            const currentRoom = roomRef.current;
+            if (!currentRoom || heartbeat.roomCode !== currentRoom.roomCode
+                || heartbeat.stateVersion !== currentRoom.stateVersion
                 || !Number.isFinite(heartbeat.currentTime) || heartbeat.currentTime < 0) return;
-            window.dispatchEvent(new CustomEvent('watchparty:heartbeat:remote', { detail: heartbeat }));
+
+            const stationId = typeof currentRoom.media?.stationId === 'string'
+                ? currentRoom.media.stationId
+                : undefined;
+            setStateVersion(heartbeat.stateVersion);
+            setRoom((roomState) => roomState?.id === currentRoom.id
+                ? {
+                    ...roomState,
+                    stateVersion: heartbeat.stateVersion,
+                    playback: {
+                        ...roomState.playback,
+                        currentTime: heartbeat.currentTime,
+                        isPlaying: heartbeat.isPlaying,
+                        updatedAt: heartbeat.timestamp,
+                    },
+                }
+                : roomState);
+
+            if (heartbeat.isPlaying !== currentRoom.playback.isPlaying) {
+                const executionRef = `watchparty-heartbeat-${heartbeat.stateVersion}-${heartbeat.timestamp}`;
+                setRemoteExecutionRef(executionRef);
+                setPendingAction({
+                    roomId: currentRoom.id,
+                    action: heartbeat.isPlaying ? 'play' : 'pause',
+                    payload: null,
+                    origin: executionRef,
+                    actionId: executionRef,
+                });
+            }
+
+            window.dispatchEvent(new CustomEvent('watchparty:heartbeat:remote', {
+                detail: { ...heartbeat, stationId },
+            }));
         };
         socket.on('watchparty:heartbeat', onHeartbeat);
         return () => socket.off('watchparty:heartbeat', onHeartbeat);
@@ -232,7 +265,7 @@ export function WatchPartyProvider({ children }: { children: ReactNode }) {
         return () => window.clearInterval(intervalId);
     }, [room, roomCode, isHost, isConnected, members, stateVersion, mediaInfo]);
 
-    const openMedia = useCallback((media: MediaInfo, silent = false, currentTime = 0, hostIsPlaying = false) => {
+    const openMedia = useCallback((media: MediaInfo, silent = false, currentTime = 0, hostIsPlaying = true) => {
         setMediaInfo(media);
         if (silent) {
             setIsPlaying(false);
@@ -249,13 +282,31 @@ export function WatchPartyProvider({ children }: { children: ReactNode }) {
         }
         const mediaKey = `${media.stationId}:${media.sourceUrl}`;
         lastSentMediaRef.current = mediaKey;
+
+        if (currentStation?.id === media.stationId) {
+            lastAppliedMediaRef.current = mediaKey;
+            if (!silent) {
+                setIsPlaying(hostIsPlaying);
+                const executionRef = `watchparty-same-station-${Date.now()}`;
+                setRemoteExecutionRef(executionRef);
+                setPendingAction({
+                    roomId: roomRef.current?.id ?? '',
+                    action: 'seek',
+                    payload: Math.max(0, currentTime),
+                    origin: executionRef,
+                    actionId: executionRef,
+                });
+            }
+            return;
+        }
+
         if (lastAppliedMediaRef.current === mediaKey) return;
         lastAppliedMediaRef.current = mediaKey;
 
         remoteMediaStationRef.current = media.stationId;
-        if (!silent) setIsPlaying(true);
+        if (!silent) setIsPlaying(hostIsPlaying);
         setCurrentStation(stationFromMedia(media, stations));
-    }, [setCurrentStation, setIsPlaying, stations]);
+    }, [currentStation?.id, setCurrentStation, setIsPlaying, stations]);
 
     const pauseForSilentJoin = useCallback(() => {
         const executionRef = `watchparty-initial-pause-${Date.now()}`;
@@ -404,7 +455,9 @@ export function WatchPartyProvider({ children }: { children: ReactNode }) {
             if (media) {
                 setMediaInfo(media);
                 lastSentMediaRef.current = `${media.stationId}:${media.sourceUrl}`;
-                if (!joiningRoomRef.current && roomRef.current?.hostId !== getWatchPartySocketId()) openMedia(media);
+                if (!joiningRoomRef.current && roomRef.current?.hostId !== getWatchPartySocketId()) {
+                    openMedia(media, false, event.currentTime, event.isPlaying);
+                }
             }
             setRoom((currentRoom) => currentRoom?.id === event.roomId
                 ? {
@@ -433,7 +486,7 @@ export function WatchPartyProvider({ children }: { children: ReactNode }) {
             const myId = getWatchPartySocketId();
             const isSender = Boolean(event.senderId && myId && event.senderId === myId);
             if (!isSender) {
-                openMedia(media);
+                openMedia(media, false, 0, true);
             }
         }));
 

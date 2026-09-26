@@ -173,8 +173,10 @@ export const useVideoPlayer = (
                 isPlaying: boolean;
                 isLive: boolean;
                 timestamp: number;
+                stationId?: string;
             }>).detail;
-            if (!heartbeat || !Number.isFinite(heartbeat.currentTime)) return;
+            if (!heartbeat || heartbeat.stationId !== currentStation?.id
+                || !Number.isFinite(heartbeat.currentTime)) return;
 
             let localTime: number | null = null;
             if (playerType === 'videojs') {
@@ -279,7 +281,7 @@ export const useVideoPlayer = (
                 videoEl.volume = volume;
                 videoEl.load();
 
-                if (isPlaying) {
+                if (isPlayingRef.current) {
                     videoEl.play().catch((err: any) => {
                         if (err.name !== 'AbortError') console.warn('[VideoPlayer] Autoplay failed:', err);
                     });
@@ -329,11 +331,11 @@ export const useVideoPlayer = (
                 videojsPlayerRef.current = null;
             }
         };
-    }, [currentStation?.id, playerType, effectiveUrl, isPlaying]);
+    }, [currentStation?.id, playerType, effectiveUrl]);
 
     // 2. Inicialización de Video.js (Para HLS / Video)
     useEffect(() => {
-        if (!isPlaying || playerType !== 'videojs' || !videoRef.current || !currentStation) return;
+        if (playerType !== 'videojs' || !videoRef.current || !currentStation) return;
 
         const videoEl = videoRef.current;
         let isCancelled = false;
@@ -351,7 +353,7 @@ export const useVideoPlayer = (
             console.log(`[VideoPlayer] NEW VideoJS init for: ${currentStation.name} (ID: ${currentStation.id})`);
             const player = videojs(videoEl, {
                 controls: true,
-                autoplay: isPlaying,
+                autoplay: isPlayingRef.current,
                 preload: 'auto',
                 fluid: false,
                 liveui: true,
@@ -536,7 +538,7 @@ export const useVideoPlayer = (
         return () => {
             isCancelled = true;
         };
-    }, [currentStation?.id, playerType, isPlaying]);
+    }, [currentStation?.id, playerType]);
 
     // 3. Control de Reproducción (Play/Pause/Volume)
     useEffect(() => {
@@ -649,7 +651,7 @@ export const useVideoPlayer = (
 
     // 4. YouTube Iframe API Sync (Magic Sync)
     useEffect(() => {
-        if (!isPlaying || !currentStation || playerType !== 'iframe' || !isYouTube || !ytId) {
+        if (!currentStation || playerType !== 'iframe' || !isYouTube || !ytId) {
             if (ytPlayerRef.current) {
                 try { ytPlayerRef.current.destroy(); } catch (e) { }
             }
@@ -808,7 +810,7 @@ export const useVideoPlayer = (
                 ytPlayerRef.current = null;
             }
         };
-    }, [currentStation?.id, playerType, isYouTube, ytId, isPlaying]);
+    }, [currentStation?.id, playerType, isYouTube, ytId]);
 
     return {
         videoRef,
