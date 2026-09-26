@@ -81,6 +81,23 @@ Validar sincronización con audio live, HLS live, TV, YouTube y video bajo deman
 
 ---
 
+## Incidentes históricos
+
+### HLS-001 (Resuelto)
+
+**Síntoma**
+El reproductor mostraba controles LIVE pero no video al abrir la aplicación.
+
+**Causa**
+VideoJS se inicializaba sobre un elemento <video> oculto que React reemplazaba durante el bootstrap.
+
+**Solución**
+Esperar al nodo visible antes de crear la instancia y descartar cualquier instancia asociada al nodo anterior.
+
+Commit: 4f9369e
+
+---
+
 ## Filosofía del proyecto
 
 > **Si se la complicamos, la gente jala de aquí.**
