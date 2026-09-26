@@ -281,7 +281,7 @@ export const Player: React.FC = () => {
                     </div>
                 </div>
 
-                {hasVideo ? (
+                {hasVideo && isPlaying ? (
                     <div key={`tech-container-${currentStation.id}-${playerType}`} className="absolute inset-0 bg-black flex items-center justify-center player-tech-container">
                         <div className="relative h-full w-full player-aspect-wrapper">
                             {playerType === 'iframe' ? (
@@ -394,9 +394,9 @@ export const Player: React.FC = () => {
                                     preload="metadata"
                                 />
                             </div>
-                        ) : (
+                        ) : isPlaying ? (
                             <audio ref={videoRef as any} style={{ display: 'none' }} playsInline preload="metadata" />
-                        )}
+                        ) : null}
 
                         {/* Audio Logo with pulsing effect */}
                         <div className="relative z-10">

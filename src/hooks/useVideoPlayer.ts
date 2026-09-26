@@ -326,11 +326,11 @@ export const useVideoPlayer = (
                 videojsPlayerRef.current = null;
             }
         };
-    }, [currentStation?.id, playerType, effectiveUrl]);
+    }, [currentStation?.id, playerType, effectiveUrl, isPlaying]);
 
     // 2. Inicialización de Video.js (Para HLS / Video)
     useEffect(() => {
-        if (playerType !== 'videojs' || !videoRef.current || !currentStation) return;
+        if (!isPlaying || playerType !== 'videojs' || !videoRef.current || !currentStation) return;
 
         const videoEl = videoRef.current;
         let isCancelled = false;
@@ -533,7 +533,7 @@ export const useVideoPlayer = (
         return () => {
             isCancelled = true;
         };
-    }, [currentStation?.id, playerType]);
+    }, [currentStation?.id, playerType, isPlaying]);
 
     // 3. Control de Reproducción (Play/Pause/Volume)
     useEffect(() => {
@@ -646,7 +646,7 @@ export const useVideoPlayer = (
 
     // 4. YouTube Iframe API Sync (Magic Sync)
     useEffect(() => {
-        if (!currentStation || playerType !== 'iframe' || !isYouTube || !ytId) {
+        if (!isPlaying || !currentStation || playerType !== 'iframe' || !isYouTube || !ytId) {
             if (ytPlayerRef.current) {
                 try { ytPlayerRef.current.destroy(); } catch (e) { }
             }
@@ -805,7 +805,7 @@ export const useVideoPlayer = (
                 ytPlayerRef.current = null;
             }
         };
-    }, [currentStation?.id, playerType, isYouTube, ytId]);
+    }, [currentStation?.id, playerType, isYouTube, ytId, isPlaying]);
 
     return {
         videoRef,
