@@ -96,10 +96,12 @@ function createMediaInfo(station: Station | null): MediaInfo | null {
     const sourceUrl = station.iframeUrl || station.url;
     if (!sourceUrl) return null;
     const isYt = station.id.startsWith('yt-') || /youtube(?:-nocookie)?\.com|youtu\.be/i.test(sourceUrl);
+    const isHls = /\.m3u8(?:$|[?#])|\/repretel-|\/proxy-stream/i.test(sourceUrl);
     const mediaType: MediaInfo['mediaType'] = isYt
         ? 'youtube'
-        : (station.type === 'audio' ? 'audio' : 'hls');
-    const isLive = Boolean((station as Station & { isLive?: boolean }).isLive ?? (mediaType === 'hls' || mediaType === 'audio'));
+        : (station.type === 'audio' ? 'audio' : isHls ? 'hls' : station.iframeUrl || station.embedCanal ? 'iframe' : 'video');
+    const isLive = mediaType !== 'youtube' && Boolean((station as Station & { isLive?: boolean }).isLive
+        ?? (mediaType === 'audio' || mediaType === 'hls' || mediaType === 'iframe'));
     return {
         stationId: station.id,
         mediaType,
@@ -192,7 +194,8 @@ export function WatchPartyProvider({ children }: { children: ReactNode }) {
 
         const onHeartbeat = (heartbeat: WatchPartyHeartbeat) => {
             if (!roomRef.current || heartbeat.roomCode !== roomRef.current.roomCode
-                || heartbeat.stateVersion < roomRef.current.stateVersion) return;
+                || heartbeat.stateVersion !== roomRef.current.stateVersion
+                || !Number.isFinite(heartbeat.currentTime) || heartbeat.currentTime < 0) return;
             window.dispatchEvent(new CustomEvent('watchparty:heartbeat:remote', { detail: heartbeat }));
         };
         socket.on('watchparty:heartbeat', onHeartbeat);
@@ -213,10 +216,13 @@ export function WatchPartyProvider({ children }: { children: ReactNode }) {
             if (!socket.connected || roomRef.current?.id !== room.id) return;
             const playback = roomRef.current.playback;
             const elapsed = playback.isPlaying ? Math.max(0, Date.now() - playback.updatedAt) / 1000 : 0;
+            const position = playback.currentTime + elapsed;
+            const currentStateVersion = roomRef.current.stateVersion ?? stateVersion;
+            if (!Number.isInteger(currentStateVersion) || !Number.isFinite(position)) return;
             socket.emit('watchparty:heartbeat', {
                 roomCode,
-                stateVersion,
-                currentTime: playback.currentTime + elapsed,
+                stateVersion: currentStateVersion,
+                currentTime: Math.max(0, position),
                 isPlaying: playback.isPlaying,
                 isLive: Boolean(mediaInfo?.isLive),
                 timestamp: Date.now(),

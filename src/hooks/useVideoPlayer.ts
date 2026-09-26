@@ -190,16 +190,19 @@ export const useVideoPlayer = (
             if (localTime === null) return;
 
             const elapsed = heartbeat.isPlaying ? Math.max(0, Date.now() - heartbeat.timestamp) / 1000 : 0;
-            const hostTime = heartbeat.currentTime + elapsed;
+            const hostTime = Math.max(0, heartbeat.currentTime + elapsed);
             const drift = hostTime - localTime;
-            if (Math.abs(drift) < 0.25) return;
+            const absoluteDrift = Math.abs(drift);
+            if (absoluteDrift < 0.25) return;
 
             remoteSeekSuppressionRef.current = true;
             window.setTimeout(() => { remoteSeekSuppressionRef.current = false; }, 1500);
-            if (heartbeat.isLive && isPlayerActuallyLive() && Math.abs(drift) >= 1) {
+            if (heartbeat.isLive && isPlayerActuallyLive() && absoluteDrift >= 1) {
                 goLive();
+            } else if (absoluteDrift >= 2) {
+                executeRemoteAction('seek', hostTime);
             } else {
-                executeRemoteAction('seek', localTime + (Math.abs(drift) >= 1 ? drift : drift * 0.5));
+                executeRemoteAction('seek', Math.max(0, localTime + drift * 0.5));
             }
         };
         window.addEventListener('watchparty:heartbeat:remote', handleHeartbeat);

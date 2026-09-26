@@ -757,6 +757,19 @@ io.on('connection', (socket) => {
             return;
         }
 
+        let seekSeconds = null;
+        if (action === 'seek') {
+            seekSeconds = typeof payload.payload === 'number'
+                ? payload.payload
+                : Number(payload.payload && typeof payload.payload === 'object'
+                    ? payload.payload.seconds ?? payload.payload.currentTime
+                    : payload.payload);
+            if (!Number.isFinite(seekSeconds) || seekSeconds < 0) {
+                emitWatchPartyError(socket, ack, 'INVALID_POSITION', 'La posición de reproducción no es válida');
+                return;
+            }
+        }
+
         room.stateVersion += 1;
         if (action === 'play') {
             room.playback.isPlaying = true;
@@ -765,13 +778,8 @@ io.on('connection', (socket) => {
             room.playback.isPlaying = false;
             room.playback.updatedAt = Date.now();
         } else if (action === 'seek') {
-            const seekSeconds = typeof payload.payload === 'number'
-                ? payload.payload
-                : Number(payload.payload && typeof payload.payload === 'object' ? payload.payload.seconds ?? payload.payload.currentTime : payload.payload);
-            if (Number.isFinite(seekSeconds)) {
-                room.playback.currentTime = seekSeconds;
-                room.playback.updatedAt = Date.now();
-            }
+            room.playback.currentTime = seekSeconds;
+            room.playback.updatedAt = Date.now();
         }
 
         const remoteExecutionRef = randomUUID();
@@ -794,6 +802,7 @@ io.on('connection', (socket) => {
             || typeof payload.roomCode !== 'string'
             || !Number.isInteger(payload.stateVersion)
             || !Number.isFinite(payload.currentTime)
+            || payload.currentTime < 0
             || typeof payload.isPlaying !== 'boolean'
             || typeof payload.isLive !== 'boolean'
             || !Number.isFinite(payload.timestamp)) return;
@@ -808,7 +817,7 @@ io.on('connection', (socket) => {
         const heartbeat = {
             roomCode: room.roomCode,
             stateVersion: room.stateVersion,
-            currentTime: Math.max(0, payload.currentTime),
+            currentTime: payload.currentTime,
             isPlaying: payload.isPlaying,
             isLive: payload.isLive,
             timestamp: payload.timestamp,
