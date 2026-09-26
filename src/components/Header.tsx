@@ -1,7 +1,9 @@
 import React, { useState } from 'react';
-import { Radio, Moon, Waves, Zap, MessageCircle, Antenna, Star, Monitor, ChevronDown } from 'lucide-react';
+import { Radio, Moon, Waves, Zap, MessageCircle, Antenna, Star, Monitor, ChevronDown, User, Pencil, Trash2, X } from 'lucide-react';
 import { useChat } from '../context/ChatContext';
 import { useRadio } from '../context/RadioContext';
+import { useUserProfile } from '../context/UserProfileContext';
+import { UserProfileForm } from './UserProfileForm';
 import WatchPartyModal from './WatchPartyModal';
 
 interface HeaderProps {
@@ -14,7 +16,10 @@ interface HeaderProps {
 export const Header: React.FC<HeaderProps> = ({ theme, onThemeClick, onChatClick, onWatchPartyClick }) => {
     const { unreadCount, onlineListeners, connectionStatus } = useChat();
     const { activeTab, setActiveTab, radioCategories, tvCategories, selectedCategory, setSelectedCategory } = useRadio();
+    const { profile, clearProfile } = useUserProfile();
     const [isWatchPartyOpen, setIsWatchPartyOpen] = useState(false);
+    const [isProfileOpen, setIsProfileOpen] = useState(false);
+    const [profileFormMode, setProfileFormMode] = useState<'setup' | 'edit' | null>(null);
     const [activeMenu, setActiveMenu] = React.useState<'radios' | 'tv' | null>(null);
     const [hoverProgressMenu, setHoverProgressMenu] = React.useState<'radios' | 'tv' | null>(null);
     const closeTimeoutRef = React.useRef<number | null>(null);
@@ -69,6 +74,30 @@ export const Header: React.FC<HeaderProps> = ({ theme, onThemeClick, onChatClick
         };
     }, []);
 
+    React.useEffect(() => {
+        if (!isProfileOpen) return;
+        const handleKeyDown = (event: KeyboardEvent) => {
+            if (event.key === 'Escape') {
+                setIsProfileOpen(false);
+                setProfileFormMode(null);
+            }
+        };
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [isProfileOpen]);
+
+    const handleClearProfile = () => {
+        if (!window.confirm('¿Borrar el perfil guardado en este dispositivo? No se borrarán tus favoritos ni tu historial.')) return;
+        clearProfile();
+        setIsProfileOpen(false);
+        setProfileFormMode(null);
+    };
+
+    const closeProfileDialog = () => {
+        setIsProfileOpen(false);
+        setProfileFormMode(null);
+    };
+
     // Close menu when clicking outside
     React.useEffect(() => {
         const handleClickOutside = () => {
@@ -99,6 +128,15 @@ export const Header: React.FC<HeaderProps> = ({ theme, onThemeClick, onChatClick
                         <span className="inline">TV Radio <span className="text-[var(--text-primary)]">Streaming Pro</span></span>
                     </h1>
                 </div>
+                <button
+                    onClick={() => setIsProfileOpen(true)}
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-white/5 border border-white/10 text-white hover:bg-white/10 transition-all"
+                    title="Administrar perfil local"
+                    type="button"
+                >
+                    <User size={16} />
+                    <span className="text-xs font-bold tracking-wider">Perfil</span>
+                </button>
 
                 {/* Navigation Filters - Desktop Only */}
                 <div className="hidden lg:flex items-center bg-white/5 p-1 border border-white/5 flex-shrink-0">
@@ -309,6 +347,82 @@ export const Header: React.FC<HeaderProps> = ({ theme, onThemeClick, onChatClick
                     </button>
                 </div>
             </div>
+            {isProfileOpen && (
+                <div
+                    className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm"
+                    onClick={closeProfileDialog}
+                >
+                    <section
+                        aria-labelledby="profile-dialog-title"
+                        aria-modal="true"
+                        className="w-full max-w-sm rounded-xl border border-cyan-200/15 bg-[var(--dark-surface)] p-5 text-[var(--text-primary)] shadow-2xl"
+                        onClick={(event) => event.stopPropagation()}
+                        role="dialog"
+                    >
+                        <div className="mb-4 flex items-center justify-between">
+                            <h2 className="text-base font-bold" id="profile-dialog-title">Perfil local</h2>
+                            <button
+                                aria-label="Cerrar"
+                                className="rounded-md p-1.5 text-[var(--text-secondary)] transition hover:bg-white/10 hover:text-white"
+                                onClick={closeProfileDialog}
+                                type="button"
+                            >
+                                <X size={18} />
+                            </button>
+                        </div>
+                        {profileFormMode ? (
+                            <UserProfileForm
+                                mode={profileFormMode}
+                                variant="modal"
+                                onCancel={() => setProfileFormMode(null)}
+                                onSaved={closeProfileDialog}
+                            />
+                        ) : profile ? (
+                            <>
+                                <dl className="space-y-3 rounded-lg border border-white/5 bg-black/10 p-4">
+                                    <div>
+                                        <dt className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-secondary)]">Nombre</dt>
+                                        <dd className="mt-0.5 text-sm font-semibold">{profile.name}</dd>
+                                    </div>
+                                    {profile.phone && (
+                                        <div>
+                                            <dt className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-secondary)]">Teléfono</dt>
+                                            <dd className="mt-0.5 text-sm">{profile.phone}</dd>
+                                        </div>
+                                    )}
+                                </dl>
+                                <div className="mt-4 flex flex-col gap-2">
+                                    <button
+                                        className="flex items-center justify-center gap-2 rounded-lg bg-cyan-300 px-3 py-2 text-sm font-bold text-slate-950 transition hover:bg-cyan-200"
+                                        onClick={() => setProfileFormMode('edit')}
+                                        type="button"
+                                    >
+                                        <Pencil size={15} /> Editar perfil
+                                    </button>
+                                    <button
+                                        className="flex items-center justify-center gap-2 rounded-lg border border-red-400/20 px-3 py-2 text-sm font-semibold text-red-300 transition hover:bg-red-400/10"
+                                        onClick={handleClearProfile}
+                                        type="button"
+                                    >
+                                        <Trash2 size={15} /> Borrar datos del dispositivo
+                                    </button>
+                                </div>
+                            </>
+                        ) : (
+                            <div>
+                                <p className="text-sm text-[var(--text-secondary)]">No hay un perfil guardado en este dispositivo.</p>
+                                <button
+                                    className="mt-4 w-full rounded-lg bg-cyan-300 px-3 py-2 text-sm font-bold text-slate-950 transition hover:bg-cyan-200"
+                                    onClick={() => setProfileFormMode('setup')}
+                                    type="button"
+                                >
+                                    Crear perfil
+                                </button>
+                            </div>
+                        )}
+                    </section>
+                </div>
+            )}
             {!onWatchPartyClick && (
                 <WatchPartyModal
                     isOpen={isWatchPartyOpen}
