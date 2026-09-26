@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { Settings } from 'lucide-react';
 import { RadioProvider } from './context/RadioContext';
 import { ChatProvider } from './context/ChatContext';
-import { WatchPartyProvider } from './context/WatchPartyContext';
+import { WatchPartyProvider, useWatchParty } from './context/WatchPartyContext';
 import { UserProfileProvider, useUserProfile } from './context/UserProfileContext';
 import { Header } from './components/Header';
 import { Player } from './components/Player';
@@ -15,8 +15,10 @@ import GeneralHelpModal from './components/GeneralHelpModal';
 import WatchPartyModal from './components/WatchPartyModal';
 import { UserProfileForm } from './components/UserProfileForm';
 import { HelpCircle } from 'lucide-react';
+import { GuestCinemaLayout } from './components/GuestCinemaLayout';
 
 function AppContent() {
+    const { room, isHost, isConnected, isLoading, leaveRoom } = useWatchParty();
     const [isManagerOpen, setIsManagerOpen] = useState(false);
     const [isChatOpen, setIsChatOpen] = useState(false);
     const [isWatchPartyOpen, setIsWatchPartyOpen] = useState(false);
@@ -59,6 +61,8 @@ function AppContent() {
 
     // Enable Smart TV remote control navigation
     useTVRemote();
+
+    const isGuestCinema = Boolean(room && !isHost);
 
     // Apply theme to body
     useEffect(() => {
@@ -231,6 +235,20 @@ function AppContent() {
             cinemaModeQuery.removeEventListener('change', handleOrientationChange);
         };
     }, []);
+
+    if (isGuestCinema) {
+        return (
+            <>
+                <GuestCinemaLayout
+                    isConnected={isConnected}
+                    isLeaving={isLoading}
+                    onChatClick={() => setIsChatOpen(true)}
+                    onLeaveRoom={() => { void leaveRoom(); }}
+                />
+                <ChatModal externalOpen={isChatOpen} onOpenChange={setIsChatOpen} />
+            </>
+        );
+    }
 
     return (
         <div className="min-h-screen pb-24 md:pb-2" style={{ overflow: 'visible' }}>
