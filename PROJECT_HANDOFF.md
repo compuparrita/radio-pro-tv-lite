@@ -9,13 +9,22 @@
 
 - **Proyecto:** RADIO PRO / Centro Multimedia
 - **Rama:** main
-- **HEAD:** `dfbaed2`
+- **HEAD de Fase 10.0:** `f1eaf5c`
 - **Árbol de trabajo:** ✅ Limpio
 - **ARCHITECTURE.md:** SSOT vigente
 
 ---
 
 ## Última fase completada
+
+### Fase 10.0 — Drift 2.0: sincronización inteligente
+
+**Commit de implementación:** `f1eaf5c`
+
+- `stateVersion` del heartbeat se toma del estado de sala vigente y solo se aceptan heartbeats con versión coincidente y posición válida.
+- Los medios live (audio, HLS y TV embebida) conservan la corrección hacia el live edge.
+- YouTube y VOD usan la posición del anfitrión; drift menor de 250 ms se ignora, de 250 ms a menos de 2 s se corrige suavemente y desde 2 s se hace seek directo.
+- El intervalo de heartbeat permanece en 3 segundos.
 
 ### Fase 9 — Chat contextual de WatchParty
 
@@ -45,21 +54,11 @@ Se reutiliza un único `ChatModal`.
 
 ## Próxima fase
 
-### Fase 10 — Sincronización avanzada (Drift 2.0)
+### Fase 10.1 — Validación multiprotocolo
 
-Pendientes:
+Validar sincronización con audio live, HLS live, TV, YouTube y video bajo demanda; medir el desfase real sin cambiar los umbrales hasta completar las pruebas.
 
-1. Actualizar `stateVersion` al aplicar acciones remotas.
-2. Separar VOD y Live para la corrección de posición.
-3. Revisar heartbeats (3 s) y drift.
-4. Pruebas por tipo de medio:
-   - Audio en vivo
-   - HLS en vivo
-   - YouTube
-   - Video bajo demanda
-5. Medir desfase real antes de modificar tolerancias.
-
-> Importante: esta fase fue pospuesta deliberadamente y aún no debe mezclarse con cambios de UX.
+> La fase 10.1 se limita a validación y no requiere cambios de UX.
 
 ---
 
