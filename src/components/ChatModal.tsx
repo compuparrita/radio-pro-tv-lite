@@ -2,12 +2,14 @@ import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { MessageCircle, X, Send, Users, Wifi, WifiOff, Trash2, HelpCircle, Bell, BellOff, Menu, ChevronDown, CheckSquare, Clock, Paperclip, FileText, Download, ExternalLink, Music, Loader2, Mic, CheckCheck, Play, Pause, Smile } from 'lucide-react';
 import { useChat } from '../context/ChatContext';
+import { useWatchPartyChat } from '../context/WatchPartyChatContext';
 import { useRadio } from '../context/RadioContext';
 import HelpModal from './HelpModal';
 
 interface ChatModalProps {
     externalOpen?: boolean;
     onOpenChange?: (open: boolean) => void;
+    roomCode?: string | null;
 }
 
 interface YouTubeCardProps {
@@ -743,26 +745,39 @@ const MessageText = ({ text, msg, stations, playStation, setIsOpen, isOwnMessage
     );
 };
 
-export const ChatModal: React.FC<ChatModalProps> = ({ externalOpen, onOpenChange }) => {
+export const ChatModal: React.FC<ChatModalProps> = ({ externalOpen, onOpenChange, roomCode }) => {
     const {
-        messages,
-        onlineListeners,
-        connectionStatus,
+        messages: globalMessages,
+        onlineListeners: globalOnlineListeners,
+        connectionStatus: globalConnectionStatus,
         userIdentity,
-        sendMessage,
+        sendMessage: sendGlobalMessage,
         isIdentified,
-        clearMessages,
-        deleteMessage,
-        deleteMultipleMessages,
-        error: contextError,
-        setModalOpen,
+        clearMessages: clearGlobalMessages,
+        deleteMessage: deleteGlobalMessage,
+        deleteMultipleMessages: deleteGlobalMultipleMessages,
+        error: globalContextError,
+        setModalOpen: setGlobalModalOpen,
         notificationsEnabled,
         isNotificationsMuted,
         toggleNotifications,
         typingUsers,
-        broadcastTyping,
+        broadcastTyping: broadcastGlobalTyping,
         currentUserId
     } = useChat();
+
+    const roomChat = useWatchPartyChat();
+    const isRoomChat = Boolean(roomCode);
+    const messages = isRoomChat ? roomChat.messages : globalMessages;
+    const onlineListeners = isRoomChat ? roomChat.participantCount : globalOnlineListeners;
+    const connectionStatus = isRoomChat ? roomChat.connectionStatus : globalConnectionStatus;
+    const sendMessage = isRoomChat ? roomChat.sendMessage : sendGlobalMessage;
+    const clearMessages = isRoomChat ? () => {} : clearGlobalMessages;
+    const deleteMessage = isRoomChat ? async () => {} : deleteGlobalMessage;
+    const deleteMultipleMessages = isRoomChat ? async () => {} : deleteGlobalMultipleMessages;
+    const contextError = isRoomChat ? roomChat.error : globalContextError;
+    const broadcastTyping = isRoomChat ? () => {} : broadcastGlobalTyping;
+    const chatTypingUsers = isRoomChat ? [] : typingUsers;
 
     const { stations, playStation } = useRadio();
 
@@ -932,7 +947,7 @@ export const ChatModal: React.FC<ChatModalProps> = ({ externalOpen, onOpenChange
         } else {
             document.body.style.overflow = '';
         }
-    }, [messages, isOpen, typingUsers]);
+    }, [messages, isOpen, chatTypingUsers]);
 
     // Sync with external control
     useEffect(() => {
@@ -943,9 +958,16 @@ export const ChatModal: React.FC<ChatModalProps> = ({ externalOpen, onOpenChange
 
     // Notify parent and context when modal opens/closes
     useEffect(() => {
-        setModalOpen(isOpen);
+        setGlobalModalOpen(isRoomChat ? false : isOpen);
         onOpenChange?.(isOpen);
-    }, [isOpen, setModalOpen, onOpenChange]);
+    }, [isOpen, isRoomChat, setGlobalModalOpen, onOpenChange]);
+
+    useEffect(() => {
+        setIsMenuOpen(false);
+        setActiveMenuCoords(null);
+        setIsMultiSelectMode(false);
+        setSelectedMessageIds([]);
+    }, [roomCode]);
 
 const compressImageFile = (file: File): Promise<{ data: string; previewUrl: string; size: number }> => {
     return new Promise((resolve) => {
@@ -1260,7 +1282,11 @@ const compressImageFile = (file: File): Promise<{ data: string; previewUrl: stri
                     }
 
                     if (audioAttachment) {
-                        await sendMessage('', audioAttachment);
+                        try {
+                            await sendMessage('', audioAttachment);
+                        } catch (sendError) {
+                            setError(sendError instanceof Error ? sendError.message : 'No se pudo enviar la nota de voz.');
+                        }
                     }
                 } else {
                     setPendingFile({
@@ -1390,7 +1416,12 @@ const compressImageFile = (file: File): Promise<{ data: string; previewUrl: stri
             setPendingFile(null);
         }
 
-        await sendMessage(trimmedMessage, attachment);
+        try {
+            await sendMessage(trimmedMessage, attachment);
+        } catch (sendError) {
+            setError(sendError instanceof Error ? sendError.message : 'No se pudo enviar el mensaje.');
+            return;
+        }
         setCurrentMessage('');
         if (inputRef.current) {
             inputRef.current.style.height = 'auto';
@@ -1586,7 +1617,7 @@ const compressImageFile = (file: File): Promise<{ data: string; previewUrl: stri
                         </div>
 
                         {/* Header */}
-                        {isMultiSelectMode ? (
+                        {isMultiSelectMode && !isRoomChat ? (
                             /* WhatsApp-style selection action bar */
                             <div className="p-2 border-b border-[var(--dark-border)] flex items-center justify-between bg-[var(--dark-surface)] rounded-none animate-in fade-in duration-150">
                                 <div className="flex items-center gap-3">
@@ -1652,7 +1683,7 @@ const compressImageFile = (file: File): Promise<{ data: string; previewUrl: stri
                                                 <span>Guía y Ayuda</span>
                                             </button>
 
-                                            <button
+                                            {!isRoomChat && <button
                                                 onClick={() => {
                                                     setIsMenuOpen(false);
                                                     clearMessages();
@@ -1661,12 +1692,15 @@ const compressImageFile = (file: File): Promise<{ data: string; previewUrl: stri
                                             >
                                                 <Trash2 size={16} className="text-amber-400" />
                                                 <span>Limpiar Historial</span>
-                                            </button>
+                                            </button>}
 
                                         </div>
                                     )}
 
                                     <div>
+                                        <span className="block text-[10px] font-semibold uppercase tracking-wide text-white/75">
+                                            {isRoomChat ? '💬 Chat de la sala' : '🌍 Chat general'}
+                                        </span>
                                         <h3 className="text-white font-bold text-sm drop-shadow-md">
                                             {isIdentified && userIdentity ? userIdentity.name : 'Chat en Vivo'}
                                         </h3>
@@ -1872,13 +1906,13 @@ const compressImageFile = (file: File): Promise<{ data: string; previewUrl: stri
                                         })
                                     )}
                                     {/* Typing Indicator */}
-                                    {typingUsers.length > 0 && (
+                                    {chatTypingUsers.length > 0 && (
                                         <div className="flex items-end gap-2 px-2 pb-1">
                                             <div className="flex items-center gap-1.5 bg-[var(--dark-surface)] border border-[var(--dark-border)] rounded-2xl rounded-bl-sm px-3 py-2 max-w-[70%]">
                                                 <span className="text-xs text-[var(--text-secondary)] mr-1">
-                                                    {typingUsers.length === 1
-                                                        ? typingUsers[0]
-                                                        : `${typingUsers.slice(0, 2).join(' y ')}${typingUsers.length > 2 ? ` +${typingUsers.length - 2}` : ''}`}
+                                                    {chatTypingUsers.length === 1
+                                                        ? chatTypingUsers[0]
+                                                        : `${chatTypingUsers.slice(0, 2).join(' y ')}${chatTypingUsers.length > 2 ? ` +${chatTypingUsers.length - 2}` : ''}`}
                                                 </span>
                                                 <span className="flex items-center gap-0.5 text-[var(--text-secondary)]">
                                                     <span className="typing-dot" />
@@ -2199,7 +2233,7 @@ const compressImageFile = (file: File): Promise<{ data: string; previewUrl: stri
                 del modal animado (animate-slide-in-right usa transform CSS,
                 lo que atrapa position:fixed dentro de él).
             ────────────────────────────────────────────────────────────────────── */}
-            {activeMenuCoords && createPortal(
+            {activeMenuCoords && !isRoomChat && createPortal(
                 <div
                     data-message-menu
                     onClick={(e) => e.stopPropagation()}

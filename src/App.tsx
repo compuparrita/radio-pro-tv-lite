@@ -3,6 +3,7 @@ import { Settings } from 'lucide-react';
 import { RadioProvider } from './context/RadioContext';
 import { ChatProvider } from './context/ChatContext';
 import { WatchPartyProvider, useWatchParty } from './context/WatchPartyContext';
+import { WatchPartyChatProvider } from './context/WatchPartyChatContext';
 import { UserProfileProvider, useUserProfile } from './context/UserProfileContext';
 import { Header } from './components/Header';
 import { Player } from './components/Player';
@@ -26,7 +27,7 @@ function clearRoomInviteParameter() {
 }
 
 function AppContent() {
-    const { room, isHost, isConnected } = useWatchParty();
+    const { room, roomCode, isHost, isConnected } = useWatchParty();
     const [isManagerOpen, setIsManagerOpen] = useState(false);
     const [isChatOpen, setIsChatOpen] = useState(false);
     const [isWatchPartyOpen, setIsWatchPartyOpen] = useState(false);
@@ -292,7 +293,7 @@ function AppContent() {
                     onChatClick={() => setIsChatOpen(true)}
                     onExitCinema={() => setIsGuestCinemaMode(false)}
                 />
-                <ChatModal externalOpen={isChatOpen} onOpenChange={setIsChatOpen} />
+                <ChatModal externalOpen={isChatOpen} onOpenChange={setIsChatOpen} roomCode={roomCode} />
                 <WatchPartyModal
                     isOpen={isWatchPartyOpen}
                     onClose={handleWatchPartyModalClose}
@@ -416,7 +417,7 @@ function AppContent() {
             </div>
 
             <StationManager isOpen={isManagerOpen} onClose={() => setIsManagerOpen(false)} />
-            <ChatModal externalOpen={isChatOpen} onOpenChange={setIsChatOpen} />
+            <ChatModal externalOpen={isChatOpen} onOpenChange={setIsChatOpen} roomCode={roomCode} />
             <GeneralHelpModal isOpen={isAppHelpOpen} onClose={() => setIsAppHelpOpen(false)} />
             <WatchPartyModal
                 isOpen={isWatchPartyOpen}
@@ -447,7 +448,9 @@ function App() {
             <RadioProvider>
                 <ChatProvider>
                     <WatchPartyProvider>
-                        <UserProfileGate />
+                        <WatchPartyChatProvider>
+                            <UserProfileGate />
+                        </WatchPartyChatProvider>
                     </WatchPartyProvider>
                 </ChatProvider>
             </RadioProvider>

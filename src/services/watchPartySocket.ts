@@ -1,6 +1,7 @@
 import type { Socket } from 'socket.io-client';
 import { socketService } from './socketService';
 import type { WatchPartyAction, WatchPartyMember } from '../types/watchparty';
+import type { ChatMessage } from '../types/chat';
 
 export interface WatchPartyRoomData {
     id: string;
@@ -48,6 +49,17 @@ export interface WatchPartyResponse {
     left?: boolean;
     deleted?: boolean;
     hostTransferred?: boolean;
+}
+
+export interface WatchPartyChatMessage extends ChatMessage {
+    roomCode: string;
+}
+
+export interface WatchPartyChatResponse {
+    success: boolean;
+    error?: string;
+    messages?: WatchPartyChatMessage[];
+    message?: WatchPartyChatMessage;
 }
 
 export interface WatchPartyBroadcastAction {
@@ -178,6 +190,44 @@ export function registerMediaListener(callback: (event: WatchPartyMediaEvent) =>
     const socket = getOrCreateSocket();
     socket.on('watchparty:media', callback);
     return () => socket.off('watchparty:media', callback);
+}
+
+export function registerRoomChatMessageListener(callback: (event: WatchPartyChatMessage) => void): () => void {
+    const socket = getOrCreateSocket();
+    socket.on('watchparty:chat:message', callback);
+    return () => socket.off('watchparty:chat:message', callback);
+}
+
+export async function fetchRoomChatHistory(roomCode: string): Promise<WatchPartyChatResponse> {
+    const socket = await waitForConnection(getOrCreateSocket());
+    return new Promise((resolve, reject) => {
+        socket.timeout(10000).emit('watchparty:chat:history:get', { roomCode }, (timeoutError: Error | null, response: WatchPartyChatResponse) => {
+            if (timeoutError) {
+                reject(new Error('No se pudo cargar el historial de la sala'));
+                return;
+            }
+            resolve(response);
+        });
+    });
+}
+
+export async function sendRoomChatMessage(payload: {
+    roomCode: string;
+    message: string;
+    mediaTitle?: string;
+    mediaAuthor?: string;
+    mediaThumbnail?: string;
+}): Promise<WatchPartyChatResponse> {
+    const socket = await waitForConnection(getOrCreateSocket());
+    return new Promise((resolve, reject) => {
+        socket.timeout(10000).emit('watchparty:chat:send', payload, (timeoutError: Error | null, response: WatchPartyChatResponse) => {
+            if (timeoutError) {
+                reject(new Error('No se pudo enviar el mensaje a la sala'));
+                return;
+            }
+            resolve(response);
+        });
+    });
 }
 
 export function createRoom(payload: WatchPartyCreatePayload): Promise<WatchPartyResponse> {

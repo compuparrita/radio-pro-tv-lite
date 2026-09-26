@@ -91,6 +91,7 @@ class RoomManager {
                 updatedAt: now,
             },
             members: [host],
+            chatMessages: [],
             createdAt: now,
         };
 
@@ -638,6 +639,74 @@ io.on('connection', (socket) => {
             watchPartySocketRooms.delete(socket.id);
             emitWatchPartyError(socket, ack, 'ROOM_OPERATION_FAILED', 'No se pudo unir a la sala');
         }
+    });
+
+    socket.on('watchparty:chat:history:get', (payload, ack) => {
+        const roomCode = typeof payload?.roomCode === 'string' ? payload.roomCode.trim().toUpperCase() : '';
+        const roomId = watchPartySocketRooms.get(socket.id);
+        const room = roomId ? roomManager.getRoomById(roomId) : null;
+        if (!room || room.roomCode !== roomCode || !socket.rooms.has(room.id)) {
+            if (typeof ack === 'function') ack({ success: false, error: 'NOT_IN_ROOM', messages: [] });
+            return;
+        }
+
+        if (typeof ack === 'function') {
+            ack({ success: true, messages: room.chatMessages || [] });
+        }
+    });
+
+    socket.on('watchparty:chat:send', (payload, ack) => {
+        const roomCode = typeof payload?.roomCode === 'string' ? payload.roomCode.trim().toUpperCase() : '';
+        const roomId = watchPartySocketRooms.get(socket.id);
+        const room = roomId ? roomManager.getRoomById(roomId) : null;
+        if (!room || room.roomCode !== roomCode || !socket.rooms.has(room.id)) {
+            if (typeof ack === 'function') ack({ success: false, error: 'NOT_IN_ROOM' });
+            return;
+        }
+
+        const member = room.members.find((candidate) => candidate.socketId === socket.id);
+        const messageText = typeof payload.message === 'string' ? sanitizeMessage(payload.message) : '';
+        const mediaTitle = typeof payload.mediaTitle === 'string' ? sanitizeMessage(payload.mediaTitle.slice(0, 200)) : '';
+        const mediaAuthor = typeof payload.mediaAuthor === 'string' ? sanitizeMessage(payload.mediaAuthor.slice(0, 100)) : '';
+        const mediaThumbnail = typeof payload.mediaThumbnail === 'string' ? payload.mediaThumbnail.trim() : '';
+        const hasValidMediaUrl = !mediaThumbnail
+            || mediaThumbnail.length <= 2500000
+            && ((mediaThumbnail.startsWith('/') && !mediaThumbnail.startsWith('//'))
+                || mediaThumbnail.startsWith('data:image/')
+                || mediaThumbnail.startsWith('data:audio/')
+                || /^https?:\/\//i.test(mediaThumbnail));
+
+        if (!member || (!messageText && !mediaThumbnail) || messageText.length > 500 || !hasValidMediaUrl) {
+            if (typeof ack === 'function') ack({ success: false, error: 'INVALID_MESSAGE' });
+            return;
+        }
+
+        const now = Date.now();
+        const recentChatTimes = (socket.data.watchPartyChatTimes || [])
+            .filter((timestamp) => now - timestamp < RATE_LIMIT_WINDOW);
+        if (recentChatTimes.length >= MAX_MESSAGES_PER_MINUTE) {
+            socket.data.watchPartyChatTimes = recentChatTimes;
+            if (typeof ack === 'function') ack({ success: false, error: 'RATE_LIMITED' });
+            return;
+        }
+        recentChatTimes.push(now);
+        socket.data.watchPartyChatTimes = recentChatTimes;
+
+        const roomMessage = {
+            id: randomUUID(),
+            roomCode: room.roomCode,
+            userId: member.userId,
+            userName: member.userName,
+            message: messageText || mediaTitle || 'Archivo adjunto',
+            timestamp: now,
+            ...(mediaTitle ? { mediaTitle } : {}),
+            ...(mediaAuthor ? { mediaAuthor } : {}),
+            ...(mediaThumbnail ? { mediaThumbnail } : {}),
+        };
+        if (!Array.isArray(room.chatMessages)) room.chatMessages = [];
+        room.chatMessages.push(roomMessage);
+        io.to(room.id).emit('watchparty:chat:message', roomMessage);
+        if (typeof ack === 'function') ack({ success: true, message: roomMessage });
     });
 
     socket.on('watchparty:change_media', (payload, ack) => {
