@@ -4,7 +4,7 @@ import { Moon, Waves, Zap } from 'lucide-react';
 type Theme = 'dark' | 'light' | 'youth';
 
 export const ThemeToggle: React.FC = () => {
-    const [theme, setTheme] = useState<Theme>('dark');
+    const [theme, setTheme] = useState<Theme>('light');
 
     useEffect(() => {
         const savedTheme = localStorage.getItem('theme') as Theme;

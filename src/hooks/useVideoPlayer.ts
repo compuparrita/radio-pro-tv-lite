@@ -139,9 +139,26 @@ export const useVideoPlayer = (
             return;
         }
         const mediaElement = videoRef.current;
-        if (mediaElement instanceof HTMLMediaElement && Number.isFinite(mediaElement.duration)) {
-            mediaElement.currentTime = mediaElement.duration;
+        if (mediaElement instanceof HTMLMediaElement) {
+            const seekable = mediaElement.seekable;
+            if (seekable.length > 0) {
+                mediaElement.currentTime = seekable.end(seekable.length - 1);
+            } else if (Number.isFinite(mediaElement.duration)) {
+                mediaElement.currentTime = mediaElement.duration;
+            }
         }
+    };
+
+    const isPlayerActuallyLive = () => {
+        if (currentStation?.type === 'audio') return true;
+        if (playerType === 'videojs') {
+            return Boolean(videojsPlayerRef.current?.liveTracker?.isLive?.());
+        }
+        if (playerType === 'iframe' && isYouTube) return true;
+        const mediaElement = videoRef.current;
+        return mediaElement instanceof HTMLMediaElement
+            && !Number.isFinite(mediaElement.duration)
+            && mediaElement.seekable.length > 0;
     };
 
     const reportSeek = (seconds: number) => {
@@ -179,7 +196,7 @@ export const useVideoPlayer = (
 
             remoteSeekSuppressionRef.current = true;
             window.setTimeout(() => { remoteSeekSuppressionRef.current = false; }, 1500);
-            if (heartbeat.isLive && Math.abs(drift) >= 1) {
+            if (heartbeat.isLive && isPlayerActuallyLive() && Math.abs(drift) >= 1) {
                 goLive();
             } else {
                 executeRemoteAction('seek', localTime + (Math.abs(drift) >= 1 ? drift : drift * 0.5));

@@ -22,7 +22,7 @@ function AppContent() {
     const [isWatchPartyOpen, setIsWatchPartyOpen] = useState(false);
     const [theme, setTheme] = useState<'dark' | 'light' | 'youth'>(() => {
         const saved = localStorage.getItem('theme');
-        return (saved as 'dark' | 'light' | 'youth') || 'dark';
+        return (saved as 'dark' | 'light' | 'youth') || 'light';
     });
     const [isAppHelpOpen, setIsAppHelpOpen] = useState(false);
     const [sidebarWidth, setSidebarWidth] = useState(() => {

@@ -804,6 +804,52 @@ io.on('connection', (socket) => {
 });
 
 // Health check endpoint
+app.get('/api/yt-search', async (req, res) => {
+    const query = String(req.query.q || '').trim();
+    if (!query || query.length > 200) {
+        return res.status(400).json({ error: 'A search query between 1 and 200 characters is required.' });
+    }
+
+    try {
+        const youtubeResponse = await fetch(`https://www.youtube.com/results?search_query=${encodeURIComponent(query)}`, {
+            headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/131.0.0.0 Safari/537.36' },
+            signal: AbortSignal.timeout(10000)
+        });
+        if (!youtubeResponse.ok) throw new Error(`YouTube returned HTTP ${youtubeResponse.status}`);
+        const html = await youtubeResponse.text();
+        const match = html.match(/ytInitialData\s*=\s*(\{[\s\S]*?\})\s*;\s*<\/script>/);
+        if (!match) throw new Error('YouTube search data was not present in the response');
+
+        const initialData = JSON.parse(match[1]);
+        const videos = [];
+        const visit = (value) => {
+            if (!value || typeof value !== 'object' || videos.length >= 20) return;
+            if (value.videoRenderer) {
+                const video = value.videoRenderer;
+                const videoId = video.videoId;
+                const title = (video.title?.runs || []).map((run) => run.text || '').join('');
+                if (videoId && title) {
+                    videos.push({
+                        videoId,
+                        title,
+                        url: `https://www.youtube.com/watch?v=${videoId}`,
+                        thumbnail: video.thumbnail?.thumbnails?.at(-1)?.url || `https://img.youtube.com/vi/${videoId}/mqdefault.jpg`,
+                        uploaderName: (video.ownerText?.runs || []).map((run) => run.text || '').join('') || 'YouTube',
+                        shortBylineText: (video.publishedTimeText?.runs || []).map((run) => run.text || '').join('')
+                    });
+                    return;
+                }
+            }
+            for (const child of Object.values(value)) visit(child);
+        };
+        visit(initialData);
+        return res.json(videos);
+    } catch (error) {
+        console.error('[yt-search] Search failed:', error.message);
+        return res.status(502).json({ error: 'YouTube search is temporarily unavailable.' });
+    }
+});
+
 app.get('/health', (req, res) => {
     res.json({
         status: 'ok',

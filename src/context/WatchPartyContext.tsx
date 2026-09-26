@@ -366,6 +366,7 @@ export function WatchPartyProvider({ children }: { children: ReactNode }) {
             setRoom((currentRoom) => currentRoom?.id === event.roomId
                 ? {
                     ...currentRoom,
+                    stateVersion: event.stateVersion,
                     playback: {
                         ...currentRoom.playback,
                         ...(event.action === 'play' ? { isPlaying: true } : {}),
