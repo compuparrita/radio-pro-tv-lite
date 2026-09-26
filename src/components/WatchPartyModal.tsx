@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Check, Copy, HelpCircle, LogOut, PlusCircle, QrCode, Users, X } from 'lucide-react';
+import { Check, Copy, HelpCircle, LogOut, PlusCircle, Users, X } from 'lucide-react';
 import { useWatchParty } from '../context/WatchPartyContext';
 import { useRadio } from '../context/RadioContext';
+import { generateQrCodeMatrix } from '../utils/qrCode';
 
 interface WatchPartyModalProps {
     isOpen: boolean;
@@ -38,6 +39,13 @@ function WatchPartyModal({ isOpen, onClose }: WatchPartyModalProps) {
         needsSyncPlayback,
         syncPlayback,
     } = useWatchParty();
+    const activeRoomCode = roomCode ?? room?.roomCode;
+    const inviteUrl = activeRoomCode ? `${window.location.origin}/?room=${activeRoomCode}` : '';
+    const qrMatrix = room && isHost && inviteUrl ? generateQrCodeMatrix(inviteUrl) : null;
+    const qrSvgSize = qrMatrix ? qrMatrix.length + 8 : 0;
+    const qrSvgPath = qrMatrix
+        ? qrMatrix.flatMap((row, y) => row.flatMap((dark, x) => dark ? [`M${x + 4} ${y + 4}h1v1h-1z`] : [])).join(' ')
+        : '';
 
     useEffect(() => {
         if (isOpen && !wasOpen.current) {
@@ -133,10 +141,23 @@ function WatchPartyModal({ isOpen, onClose }: WatchPartyModalProps) {
                                     <>
                                         <div className="mt-5 flex flex-col items-center gap-6 sm:flex-row sm:items-center sm:justify-center sm:gap-8">
                                             <div className="flex shrink-0 flex-col items-center gap-2">
-                                                <div aria-label="Código QR disponible en la Fase 8.1" className="flex h-[120px] w-[120px] items-center justify-center rounded-xl bg-white text-zinc-900 shadow-inner" role="img">
-                                                    <QrCode aria-hidden="true" size={52} strokeWidth={1.5} />
-                                                </div>
-                                                <p className="text-center text-[11px] text-white/40">QR disponible en la Fase 8.1</p>
+                                                {qrMatrix ? (
+                                                    <svg
+                                                        aria-label="Código QR para unirse a la sala"
+                                                        className="h-[120px] w-[120px] rounded-xl bg-white shadow-inner"
+                                                        role="img"
+                                                        shapeRendering="crispEdges"
+                                                        viewBox={`0 0 ${qrSvgSize} ${qrSvgSize}`}
+                                                    >
+                                                        <rect fill="white" height={qrSvgSize} width={qrSvgSize} />
+                                                        <path d={qrSvgPath} fill="black" />
+                                                    </svg>
+                                                ) : (
+                                                    <div aria-label="No se pudo generar el código QR" className="flex h-[120px] w-[120px] items-center justify-center rounded-xl bg-white text-center text-xs text-zinc-600 shadow-inner" role="img">
+                                                        QR no disponible
+                                                    </div>
+                                                )}
+                                                <p className="text-center text-[11px] text-white/40">Escanear para unirse</p>
                                             </div>
                                             <div className="flex min-w-0 flex-col items-center text-center sm:items-start sm:text-left">
                                                 <p className="text-sm font-medium text-white/55">Código de sala</p>
