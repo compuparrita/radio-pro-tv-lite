@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import videojs from 'video.js';
 import 'video.js/dist/video-js.css';
 import { Station } from '../types';
+import { registerPlayerTimeProvider, unregisterPlayerTimeProvider } from '../utils/playerTimeBridge';
 
 type PlayerType = 'html5' | 'videojs' | 'iframe' | null;
 
@@ -35,6 +36,9 @@ export const useVideoPlayer = (
     const pendingRemoteActionRef = useRef<{ action: WatchPartyPlaybackAction; seconds?: number } | null>(null);
     const lastYouTubeTimeRef = useRef<number | null>(null);
     const remoteSeekSuppressionRef = useRef(false);
+    const driftRateResetTimerRef = useRef<number | null>(null);
+    const driftSeekResultTimerRef = useRef<number | null>(null);
+    const latestDriftRef = useRef<number | null>(null);
 
     useEffect(() => {
         isPlayingRef.current = isPlaying;
@@ -149,87 +153,10 @@ export const useVideoPlayer = (
         }
     };
 
-    const isPlayerActuallyLive = () => {
-        if (currentStation?.type === 'audio') return true;
-        if (playerType === 'videojs') {
-            return Boolean(videojsPlayerRef.current?.liveTracker?.isLive?.());
-        }
-        if (playerType === 'iframe' && isYouTube) {
-            return ytPlayerRef.current?.getVideoData?.()?.isLive === true;
-        }
-        const mediaElement = videoRef.current;
-        return mediaElement instanceof HTMLMediaElement
-            && !Number.isFinite(mediaElement.duration)
-            && mediaElement.seekable.length > 0;
-    };
-
     const reportSeek = (seconds: number) => {
         if (remoteSeekSuppressionRef.current) return;
         onSeek?.(seconds);
     };
-
-    useEffect(() => {
-        const handleHeartbeat = (event: Event) => {
-            const heartbeat = (event as CustomEvent<{
-                currentTime: number;
-                isPlaying: boolean;
-                isLive: boolean;
-                timestamp: number;
-                stationId?: string;
-            }>).detail;
-            if (!heartbeat || heartbeat.stationId !== currentStation?.id
-                || !Number.isFinite(heartbeat.currentTime)) return;
-
-            let localTime: number | null = null;
-            if (playerType === 'videojs') {
-                const value = Number(videojsPlayerRef.current?.currentTime?.());
-                if (Number.isFinite(value)) localTime = value;
-            } else if (playerType === 'iframe' && isYouTube) {
-                const value = Number(ytPlayerRef.current?.getCurrentTime?.());
-                if (Number.isFinite(value)) localTime = value;
-            } else if (videoRef.current instanceof HTMLMediaElement) {
-                const value = videoRef.current.currentTime;
-                if (Number.isFinite(value)) localTime = value;
-            }
-            if (localTime === null) return;
-
-            const elapsed = heartbeat.isPlaying ? Math.max(0, Date.now() - heartbeat.timestamp) / 1000 : 0;
-            const hostTime = Math.max(0, heartbeat.currentTime + elapsed);
-            const drift = hostTime - localTime;
-            const absoluteDrift = Math.abs(drift);
-
-            if (absoluteDrift < 0.25) {
-                if (playerType === 'videojs' && videojsPlayerRef.current) {
-                    if (videojsPlayerRef.current.playbackRate?.() !== 1) videojsPlayerRef.current.playbackRate?.(1);
-                } else if (playerType === 'iframe' && isYouTube && ytPlayerRef.current) {
-                    if (ytPlayerRef.current.getPlaybackRate?.() !== 1) ytPlayerRef.current.setPlaybackRate?.(1);
-                } else if (videoRef.current instanceof HTMLMediaElement && videoRef.current.playbackRate !== 1) {
-                    videoRef.current.playbackRate = 1;
-                }
-                return;
-            }
-
-            remoteSeekSuppressionRef.current = true;
-            window.setTimeout(() => { remoteSeekSuppressionRef.current = false; }, 1500);
-
-            if (heartbeat.isLive && isPlayerActuallyLive() && absoluteDrift >= 1) {
-                goLive();
-            } else if (!heartbeat.isPlaying || absoluteDrift >= 1.5) {
-                executeRemoteAction('seek', hostTime);
-            } else {
-                const rate = drift > 0 ? 1.06 : 0.94;
-                if (playerType === 'videojs' && videojsPlayerRef.current) {
-                    videojsPlayerRef.current.playbackRate?.(rate);
-                } else if (playerType === 'iframe' && isYouTube && ytPlayerRef.current) {
-                    ytPlayerRef.current.setPlaybackRate?.(rate);
-                } else if (videoRef.current instanceof HTMLMediaElement) {
-                    videoRef.current.playbackRate = rate;
-                }
-            }
-        };
-        window.addEventListener('watchparty:heartbeat:remote', handleHeartbeat);
-        return () => window.removeEventListener('watchparty:heartbeat:remote', handleHeartbeat);
-    });
 
     const runPendingRemoteAction = (player: any, isYouTubePlayer = false) => {
         const pending = pendingRemoteActionRef.current;
@@ -271,7 +198,163 @@ export const useVideoPlayer = (
         isAutoModeRef.current = isAutoMode;
     }, [isAutoMode]);
 
+    // Register this player as the time provider for WatchParty heartbeats.
+    // Allows the host to send the REAL currentTime instead of extrapolating from React state.
+    useEffect(() => {
+        const provider = (): number | null => {
+            if (playerType === 'videojs' && videojsPlayerRef.current) {
+                const v = Number(videojsPlayerRef.current.currentTime?.());
+                return Number.isFinite(v) ? v : null;
+            }
+            if (playerType === 'iframe' && isYouTube && ytPlayerRef.current) {
+                const v = Number(ytPlayerRef.current.getCurrentTime?.());
+                return Number.isFinite(v) ? v : null;
+            }
+            if (videoRef.current instanceof HTMLMediaElement) {
+                const v = videoRef.current.currentTime;
+                return Number.isFinite(v) ? v : null;
+            }
+            return null;
+        };
+        registerPlayerTimeProvider(provider);
+        return () => unregisterPlayerTimeProvider();
+    }, [playerType, isYouTube]);
+
     // 1. Manejo de cambio de estación (Source/Tech Change)
+    // Guests correct their local player from the host heartbeat without emitting a WatchParty action.
+    useEffect(() => {
+        type RemoteHeartbeat = {
+            currentTime: number;
+            isPlaying: boolean;
+            stationId?: string;
+        };
+
+        const getPlayer = () => {
+            if (playerType === 'videojs') {
+                const player = videojsPlayerRef.current;
+                if (!player) return null;
+                return {
+                    currentTime: () => Number(player.currentTime?.()),
+                    isPlaying: () => !player.paused?.(),
+                    setPlaybackRate: (rate: number) => player.playbackRate?.(rate),
+                    seek: (seconds: number) => player.currentTime?.(seconds),
+                    onSeeked: (callback: () => void) => player.one?.('seeked', callback),
+                    supportsSeeked: true,
+                };
+            }
+
+            if (playerType === 'iframe' && isYouTube) {
+                const player = ytPlayerRef.current;
+                if (!player || !youtubeReadyRef.current) return null;
+                return {
+                    currentTime: () => Number(player.getCurrentTime?.()),
+                    isPlaying: () => player.getPlayerState?.() === 1,
+                    setPlaybackRate: (rate: number) => player.setPlaybackRate?.(rate),
+                    seek: (seconds: number) => player.seekTo?.(seconds, true),
+                    onSeeked: undefined,
+                    supportsSeeked: false,
+                };
+            }
+
+            const mediaElement = videoRef.current;
+            if (mediaElement instanceof HTMLMediaElement) {
+                return {
+                    currentTime: () => mediaElement.currentTime,
+                    isPlaying: () => !mediaElement.paused,
+                    setPlaybackRate: (rate: number) => { mediaElement.playbackRate = rate; },
+                    seek: (seconds: number) => { mediaElement.currentTime = seconds; },
+                    onSeeked: (callback: () => void) => mediaElement.addEventListener('seeked', callback, { once: true }),
+                    supportsSeeked: true,
+                };
+            }
+
+            return null;
+        };
+
+        const clearRateCorrection = () => {
+            if (driftRateResetTimerRef.current !== null) {
+                window.clearTimeout(driftRateResetTimerRef.current);
+                driftRateResetTimerRef.current = null;
+            }
+            getPlayer()?.setPlaybackRate(1);
+        };
+
+        const logDrift = (remote: number, local: number, drift: number, action: 'none' | 'rate' | 'seek') => {
+            console.info(`[WatchParty Drift] remote=${remote.toFixed(3)} local=${local.toFixed(3)} drift=${drift.toFixed(3)} action=${action}`);
+        };
+
+        const onRemoteHeartbeat = (event: Event) => {
+            const heartbeat = (event as CustomEvent<RemoteHeartbeat>).detail;
+            if (!heartbeat || !Number.isFinite(heartbeat.currentTime)
+                || (heartbeat.stationId && heartbeat.stationId !== currentStation?.id)) return;
+
+            const player = getPlayer();
+            if (!player || player.isPlaying() !== heartbeat.isPlaying) return;
+
+            const localTime = player.currentTime();
+            if (!Number.isFinite(localTime)) return;
+
+            const drift = heartbeat.currentTime - localTime;
+            const absoluteDrift = Math.abs(drift);
+            latestDriftRef.current = drift;
+
+            if (absoluteDrift < 0.25) {
+                logDrift(heartbeat.currentTime, localTime, drift, 'none');
+                return;
+            }
+
+            if (absoluteDrift < 1) {
+                logDrift(heartbeat.currentTime, localTime, drift, 'rate');
+                if (driftRateResetTimerRef.current !== null) return;
+
+                player.setPlaybackRate(drift > 0 ? 1.03 : 0.97);
+                driftRateResetTimerRef.current = window.setTimeout(() => {
+                    getPlayer()?.setPlaybackRate(1);
+                    driftRateResetTimerRef.current = null;
+                }, 1000);
+                return;
+            }
+
+            clearRateCorrection();
+            if (driftSeekResultTimerRef.current !== null) {
+                window.clearTimeout(driftSeekResultTimerRef.current);
+                driftSeekResultTimerRef.current = null;
+            }
+
+            remoteSeekSuppressionRef.current = true;
+            player.seek(heartbeat.currentTime);
+            logDrift(heartbeat.currentTime, localTime, drift, 'seek');
+
+            const logSeekResult = () => {
+                const correctedTime = getPlayer()?.currentTime();
+                if (typeof correctedTime === 'number' && Number.isFinite(correctedTime)) {
+                    console.info(`[WatchParty Drift] remote=${heartbeat.currentTime.toFixed(3)} local=${correctedTime.toFixed(3)} drift=${(heartbeat.currentTime - correctedTime).toFixed(3)} action=seek`);
+                }
+            };
+
+            if (player.supportsSeeked) {
+                player.onSeeked?.(logSeekResult);
+            } else {
+                // The YouTube iframe API has no seeked event; check the real player position once it applies the seek.
+                driftSeekResultTimerRef.current = window.setTimeout(() => {
+                    remoteSeekSuppressionRef.current = false;
+                    logSeekResult();
+                    driftSeekResultTimerRef.current = null;
+                }, 250);
+            }
+        };
+
+        window.addEventListener('watchparty:heartbeat:remote', onRemoteHeartbeat);
+        return () => {
+            window.removeEventListener('watchparty:heartbeat:remote', onRemoteHeartbeat);
+            clearRateCorrection();
+            if (driftSeekResultTimerRef.current !== null) {
+                window.clearTimeout(driftSeekResultTimerRef.current);
+                driftSeekResultTimerRef.current = null;
+            }
+        };
+    }, [currentStation?.id, playerType, isYouTube]);
+
     useEffect(() => {
         if (!currentStation || !videoRef.current) return;
 
