@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import { useRadio } from '../context/RadioContext';
+import { useWatchParty } from '../context/WatchPartyContext';
 
 /**
  * Hook for Smart TV remote control navigation
@@ -7,7 +8,22 @@ import { useRadio } from '../context/RadioContext';
  * - Up/Down arrows: Scroll page
  */
 export const useTVRemote = () => {
-    const { nextStation, prevStation, togglePlay } = useRadio();
+    const { nextStation, prevStation, togglePlay, isPlaying } = useRadio();
+    const { room, isHost, sendAction } = useWatchParty();
+
+    const togglePlayback = () => {
+        if (room && !isHost) {
+            void sendAction(isPlaying ? 'pause' : 'play', null).then((response) => {
+                if (!response.success) {
+                    console.warn('[WatchParty] No se autorizó la acción de reproducción:', response.error);
+                }
+            }).catch((sendError) => {
+                console.warn('[WatchParty] No se pudo enviar la acción de reproducción:', sendError);
+            });
+            return;
+        }
+        togglePlay();
+    };
 
     useEffect(() => {
         const handleKeyDown = (e: KeyboardEvent) => {
@@ -48,7 +64,7 @@ export const useTVRemote = () => {
                 case 'MediaPlay':
                 case 'MediaPause':
                     e.preventDefault();
-                    togglePlay();
+                    togglePlayback();
                     break;
 
                 case 'Enter':
@@ -57,7 +73,7 @@ export const useTVRemote = () => {
                     // If a button or link is focused, let standard browser click happen
                     if (!isButtonFocused && !isModalOpen) {
                         e.preventDefault();
-                        togglePlay();
+                        togglePlayback();
                     }
                     break;
 
@@ -73,5 +89,5 @@ export const useTVRemote = () => {
         return () => {
             window.removeEventListener('keydown', handleKeyDown);
         };
-    }, [nextStation, prevStation, togglePlay]);
+    }, [nextStation, prevStation, togglePlayback]);
 };

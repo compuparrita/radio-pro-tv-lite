@@ -13,7 +13,21 @@ interface MobileNavProps {
 export const MobileNav: React.FC<MobileNavProps> = ({ onChatClick, onThemeClick, onWatchPartyClick }) => {
     const { isPlaying, togglePlay, nextStation, prevStation } = useRadio();
     const { unreadCount, onlineListeners, connectionStatus } = useChat();
-    const { room } = useWatchParty();
+    const { room, isHost, sendAction } = useWatchParty();
+
+    const handleTogglePlayback = () => {
+        if (room && !isHost) {
+            void sendAction(isPlaying ? 'pause' : 'play', null).then((response) => {
+                if (!response.success) {
+                    console.warn('[WatchParty] No se autorizó la acción de reproducción:', response.error);
+                }
+            }).catch((sendError) => {
+                console.warn('[WatchParty] No se pudo enviar la acción de reproducción:', sendError);
+            });
+            return;
+        }
+        togglePlay();
+    };
 
     const [isVisible, setIsVisible] = useState(true);
     const lastScrollY = useRef(0);
@@ -84,7 +98,7 @@ export const MobileNav: React.FC<MobileNavProps> = ({ onChatClick, onThemeClick,
 
                     {/* Play/Pause */}
                     <button
-                        onClick={togglePlay}
+                        onClick={handleTogglePlayback}
                         className="flex flex-col items-center justify-center gap-1 active:opacity-50 transition-opacity"
                         title={isPlaying ? 'Pausar' : 'Reproducir'}
                     >

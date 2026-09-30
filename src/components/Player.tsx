@@ -10,6 +10,7 @@ import { QualitySelectorPortal } from './QualitySelectorPortal';
 export const Player: React.FC = () => {
     const {
         room: watchPartyRoom,
+        isHost,
         remoteExecutionRef,
         consumePendingAction,
         clearRemoteExecutionRef,
@@ -53,6 +54,22 @@ export const Player: React.FC = () => {
         suppressedLocalActionRef.current = action;
         suppressionTimeoutRef.current = window.setTimeout(clearSuppressedAction, 5000);
     }, [clearSuppressedAction]);
+
+    const handleTogglePlayback = useCallback(() => {
+        const watchParty = watchPartyRef.current;
+        if (watchParty.watchPartyRoom && !isHost) {
+            const action = isPlaying ? 'pause' : 'play';
+            void watchParty.sendAction(action, null).then((response) => {
+                if (!response.success) {
+                    console.warn('[WatchParty] No se autorizó la acción de reproducción:', response.error);
+                }
+            }).catch((sendError) => {
+                console.warn('[WatchParty] No se pudo enviar la acción de reproducción:', sendError);
+            });
+            return;
+        }
+        togglePlay();
+    }, [isHost, isPlaying, togglePlay]);
 
     useEffect(() => () => {
         if (suppressionTimeoutRef.current !== null) window.clearTimeout(suppressionTimeoutRef.current);
@@ -436,7 +453,7 @@ export const Player: React.FC = () => {
                         </button>
 
                         <button
-                            onClick={togglePlay}
+                            onClick={handleTogglePlayback}
                             className="w-12 h-12 md:w-10 md:h-10 bg-gradient-to-br from-[var(--primary-color)] to-[var(--accent-color)] text-white flex items-center justify-center hover:scale-105 active:scale-95 transition-all rounded-none tv-focus-primary"
                             title="Play/Pause (Enter / Espacio)"
                         >
