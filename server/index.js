@@ -386,6 +386,36 @@ function normalizeWatchPartyMedia(media) {
 
     const validTypes = ['youtube', 'hls', 'video', 'audio', 'iframe'];
     const mediaType = validTypes.includes(media.mediaType) ? media.mediaType : 'video';
+    const suppliedCapabilities = media.watchPartyCapabilities;
+    const hasExplicitCapabilities = suppliedCapabilities
+        && typeof suppliedCapabilities === 'object'
+        && ['playPause', 'seek', 'positionSync', 'driftCorrection']
+            .every((key) => typeof suppliedCapabilities[key] === 'boolean');
+    const legacyLiveStream = /\.m3u8(?:$|[?#])|\/repretel-|\/proxy-stream/i.test(sourceUrl);
+    const positionSyncFallback = !legacyLiveStream && (mediaType === 'youtube' || mediaType === 'video');
+    const watchPartyCapabilities = hasExplicitCapabilities
+        ? {
+            playPause: suppliedCapabilities.playPause,
+            seek: suppliedCapabilities.seek,
+            positionSync: suppliedCapabilities.positionSync,
+            driftCorrection: suppliedCapabilities.driftCorrection,
+        }
+        : {
+            playPause: true,
+            seek: positionSyncFallback,
+            positionSync: positionSyncFallback,
+            driftCorrection: positionSyncFallback,
+        };
+
+    console.info('[WP SERVER CAPABILITY TRACE]', {
+        source: 'media-ingress',
+        stationId,
+        mediaType,
+        isLive: Boolean(media.isLive),
+        url: sourceUrl,
+        suppliedCapabilities: hasExplicitCapabilities ? suppliedCapabilities : null,
+        capabilities: watchPartyCapabilities,
+    });
 
     return {
         stationId,
@@ -393,6 +423,23 @@ function normalizeWatchPartyMedia(media) {
         sourceUrl,
         title,
         isLive: Boolean(media.isLive),
+        watchPartyCapabilities,
+    };
+}
+
+function watchPartyMediaSupportsPositionSync(media) {
+    const capabilities = media?.watchPartyCapabilities;
+    if (typeof capabilities?.seek === 'boolean' && typeof capabilities?.positionSync === 'boolean') {
+        return capabilities.seek && capabilities.positionSync;
+    }
+    return media?.mediaType === 'youtube' || media?.mediaType === 'video';
+}
+
+function getWatchPartyRoomSnapshot(room) {
+    if (watchPartyMediaSupportsPositionSync(room.media)) return room;
+    return {
+        ...room,
+        playback: { ...room.playback, currentTime: 0 },
     };
 }
 
@@ -409,7 +456,7 @@ function emitWatchPartyState(socket, room) {
         roomId: room.id,
         stateVersion: room.stateVersion,
         isPlaying: room.playback.isPlaying,
-        currentTime: room.playback.currentTime,
+        currentTime: watchPartyMediaSupportsPositionSync(room.media) ? room.playback.currentTime : 0,
         media: room.media,
     });
 }
@@ -632,7 +679,7 @@ io.on('connection', (socket) => {
             emitWatchPartyMembers(result.room);
             emitWatchPartyState(socket, result.room);
 
-            if (typeof ack === 'function') ack({ success: true, room: result.room });
+            if (typeof ack === 'function') ack({ success: true, room: getWatchPartyRoomSnapshot(result.room) });
         } catch (error) {
             console.error('Error joining WatchParty room:', error);
             roomManager.leaveRoom({ socketId: socket.id });
@@ -762,6 +809,27 @@ io.on('connection', (socket) => {
             return;
         }
 
+        if (room.hostId !== socket.id) {
+            const isPlayPause = action === 'play' || action === 'pause';
+            const isYouTubeSeek = action === 'seek' && room.media?.mediaType === 'youtube';
+            if (!isPlayPause && !isYouTubeSeek) {
+                emitWatchPartyError(
+                    socket,
+                    ack,
+                    'NOT_HOST',
+                    action === 'seek'
+                        ? 'Los invitados solo pueden cambiar la posición en videos de YouTube'
+                        : 'Solo el anfitrión puede realizar esta acción'
+                );
+                return;
+            }
+        }
+
+        if (action === 'seek' && !watchPartyMediaSupportsPositionSync(room.media)) {
+            emitWatchPartyError(socket, ack, 'POSITION_SYNC_UNSUPPORTED', 'El medio de la sala no admite sincronizaciÃ³n de posiciÃ³n');
+            return;
+        }
+
         let seekSeconds = null;
         if (action === 'seek') {
             seekSeconds = typeof payload.payload === 'number'
@@ -775,6 +843,7 @@ io.on('connection', (socket) => {
             }
         }
 
+        const stateVersionBefore = room.stateVersion;
         room.stateVersion += 1;
         if (action === 'play') {
             room.playback.isPlaying = true;
@@ -787,6 +856,18 @@ io.on('connection', (socket) => {
             room.playback.updatedAt = Date.now();
         }
 
+        const actionPosition = action === 'seek' ? seekSeconds : room.playback.currentTime;
+        if (action === 'play' || action === 'pause' || action === 'seek') {
+            console.info('[WP SERVER ACTION]', {
+                socket: socket.id,
+                role: room.hostId === socket.id ? 'host' : 'guest',
+                action,
+                position: actionPosition,
+                stateVersionBefore,
+                stateVersionAfter: room.stateVersion,
+            });
+        }
+
         const remoteExecutionRef = randomUUID();
         const broadcast = {
             roomId,
@@ -796,6 +877,13 @@ io.on('connection', (socket) => {
             remoteExecutionRef,
         };
         io.to(roomId).emit('watchparty:broadcast:action', broadcast);
+        if (action === 'play' || action === 'pause' || action === 'seek') {
+            console.info('[WP SERVER BROADCAST]', {
+                action,
+                position: actionPosition,
+                stateVersion: room.stateVersion,
+            });
+        }
 
         if (typeof ack === 'function') {
             ack({ success: true, ...broadcast });
@@ -806,29 +894,46 @@ io.on('connection', (socket) => {
         if (!payload || typeof payload !== 'object' || Array.isArray(payload)
             || typeof payload.roomCode !== 'string'
             || !Number.isInteger(payload.stateVersion)
-            || !Number.isFinite(payload.currentTime)
-            || payload.currentTime < 0
             || typeof payload.isPlaying !== 'boolean'
-            || typeof payload.isLive !== 'boolean'
             || !Number.isFinite(payload.timestamp)) return;
 
         const room = roomManager.getRoomByCode(payload.roomCode.trim().toUpperCase());
+        const positionSync = watchPartyMediaSupportsPositionSync(room?.media);
+        if (room?.hostId === socket.id) {
+            console.info('[WP SERVER HEARTBEAT]', {
+                socket: socket.id,
+                roomId: room?.id ?? null,
+                mediaType: room?.media?.mediaType ?? null,
+                isLive: room?.media?.isLive ?? null,
+                url: room?.media?.sourceUrl ?? null,
+                capabilities: room?.media?.watchPartyCapabilities ?? null,
+                isPlaying: payload.isPlaying,
+                positionSync,
+                ...(positionSync ? { currentTime: payload.currentTime } : {}),
+                stateVersion: payload.stateVersion,
+            });
+        }
         if (!room || room.hostId !== socket.id
             || watchPartySocketRooms.get(socket.id) !== room.id
             || !socket.rooms.has(room.id)
             || payload.stateVersion < room.stateVersion
             || room.members.length < 2) return;
 
+        if (positionSync && (!Number.isFinite(payload.currentTime)
+            || payload.currentTime < 0 || typeof payload.isLive !== 'boolean')) return;
+
         room.stateVersion = Math.max(room.stateVersion, payload.stateVersion);
         const heartbeat = {
             roomCode: room.roomCode,
             stateVersion: room.stateVersion,
-            currentTime: payload.currentTime,
             isPlaying: payload.isPlaying,
-            isLive: payload.isLive,
             timestamp: payload.timestamp,
         };
-        room.playback.currentTime = heartbeat.currentTime;
+        if (positionSync) {
+            heartbeat.currentTime = payload.currentTime;
+            heartbeat.isLive = payload.isLive;
+            room.playback.currentTime = heartbeat.currentTime;
+        }
         room.playback.isPlaying = heartbeat.isPlaying;
         room.playback.updatedAt = Date.now();
         socket.to(room.id).emit('watchparty:heartbeat', heartbeat);

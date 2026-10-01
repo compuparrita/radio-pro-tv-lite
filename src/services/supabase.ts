@@ -27,7 +27,7 @@ export async function fetchStationsFromCloud(): Promise<Station[]> {
             return [];
         }
 
-        return data.map((row) => ({
+        return data.map((row: any) => ({
             id: row.id,
             name: row.name || '',
             url: row.url || '',
@@ -152,7 +152,7 @@ export async function fetchChatHistoryFromCloud(limit: number = 50): Promise<Cha
         if (!data) return [];
 
         // Los ordenamos cronológicamente (más antiguo a más reciente)
-        const messages: ChatMessage[] = data.map((row) => ({
+        const messages: ChatMessage[] = data.map((row: any) => ({
             id: row.id,
             userId: row.user_id || '',
             userName: row.user_name || 'Anónimo',
@@ -307,7 +307,7 @@ export function subscribeToChatMessages(
         .on(
             'postgres_changes',
             { event: 'INSERT', schema: 'public', table: 'messages' },
-            (payload) => {
+            (payload: any) => {
                 const row = payload.new;
                 if (row) {
                     onNewMessage({
@@ -326,14 +326,14 @@ export function subscribeToChatMessages(
         .on(
             'postgres_changes',
             { event: 'DELETE', schema: 'public', table: 'messages' },
-            (payload) => {
+            (payload: any) => {
                 const oldRow = payload.old;
                 if (oldRow && oldRow.id && onDeleteMessage) {
                     onDeleteMessage(oldRow.id);
                 }
             }
         )
-        .subscribe((status) => {
+        .subscribe((status: any) => {
             if (onStatusChange) {
                 onStatusChange(status as any);
             }
@@ -364,7 +364,7 @@ export function subscribeToOnlineListeners(
             const count = Object.keys(state).length;
             onCountChange(count);
         })
-        .subscribe(async (status) => {
+        .subscribe(async (status: any) => {
             if (onStatusChange) {
                 onStatusChange(status as any);
             }
@@ -423,16 +423,16 @@ export function subscribeToTypingEvents(
 ): () => void {
     chatEventsChannel = supabase.channel('chat-events');
     chatEventsChannel
-        .on('broadcast', { event: 'typing' }, ({ payload }) => {
+        .on('broadcast', { event: 'typing' }, ({ payload }: { payload: any }) => {
             if (payload) onTypingChange(payload);
         })
-        .on('broadcast', { event: 'delete_message' }, ({ payload }) => {
+        .on('broadcast', { event: 'delete_message' }, ({ payload }: { payload: any }) => {
             if (payload && onDeleteMessage) onDeleteMessage(payload);
         })
-        .on('broadcast', { event: 'clear_messages' }, ({ payload }) => {
+        .on('broadcast', { event: 'clear_messages' }, ({ payload }: { payload: any }) => {
             if (payload && onClearMessages) onClearMessages(payload);
         })
-        .subscribe((status) => {
+        .subscribe((status: any) => {
             if (onStatusChange) {
                 onStatusChange(status as any);
             }
@@ -483,7 +483,7 @@ export async function fetchUserFavoritesFromCloud(userId: string): Promise<strin
             return [];
         }
 
-        return data ? data.map(r => r.station_id) : [];
+        return data ? data.map((r: any) => r.station_id) : [];
     } catch (err) {
         console.warn('[Supabase] Error de red al consultar favoritos:', err);
         return [];

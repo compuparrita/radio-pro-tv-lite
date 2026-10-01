@@ -1,8 +1,9 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import videojs from 'video.js';
 import 'video.js/dist/video-js.css';
 import { Station } from '../types';
 import { registerPlayerTimeProvider, unregisterPlayerTimeProvider } from '../utils/playerTimeBridge';
+import { resolveWatchPartyMediaCapabilities } from '../utils/watchPartyMediaCapabilities';
 
 type PlayerType = 'html5' | 'videojs' | 'iframe' | null;
 
@@ -26,6 +27,11 @@ export const useVideoPlayer = (
     onSeek?: (seconds: number) => void
 ) => {
     const videoRef = useRef<HTMLElement | null>(null);
+    const [videoElement, setVideoElement] = useState<HTMLElement | null>(null);
+    const setVideoElementRef = useCallback((element: HTMLElement | null) => {
+        videoRef.current = element;
+        setVideoElement(element);
+    }, []);
     const videojsPlayerRef = useRef<any>(null);
     const ytPlayerRef = useRef<any>(null);
     const lastStationIdRef = useRef<string | null>(null);
@@ -33,10 +39,10 @@ export const useVideoPlayer = (
     const retryCountRef = useRef<number>(0);
     const isPlayingRef = useRef(isPlaying);
     const youtubeReadyRef = useRef(false);
-    const pendingRemoteActionRef = useRef<{ action: WatchPartyPlaybackAction; seconds?: number } | null>(null);
+    const pendingRemoteActionRef = useRef<{ action: WatchPartyPlaybackAction; seconds?: number; mediaKey: string } | null>(null);
     const lastYouTubeTimeRef = useRef<number | null>(null);
     const remoteSeekSuppressionRef = useRef(false);
-    const driftRateResetTimerRef = useRef<number | null>(null);
+    const driftRateRef = useRef<number | null>(null);
     const driftSeekResultTimerRef = useRef<number | null>(null);
     const latestDriftRef = useRef<number | null>(null);
 
@@ -59,20 +65,28 @@ export const useVideoPlayer = (
 
     const extractYouTubeId = (url?: string): string | null => {
         if (!url) return null;
+        const match = url.match(/(?:youtu\.be\/|youtube(?:-nocookie)?\.com\/(?:embed\/|v\/|watch\?.*?v=|shorts\/|live\/))([a-zA-Z0-9_-]{11})/i);
+        if (match) return match[1];
         if (url.includes('youtube.com/embed/')) {
-            return url.split('/embed/')[1]?.split('?')[0] || null;
+            return url.split('/embed/')[1]?.split('?')[0]?.split('&')[0] || null;
+        }
+        if (url.includes('youtube-nocookie.com/embed/')) {
+            return url.split('/embed/')[1]?.split('?')[0]?.split('&')[0] || null;
         }
         if (url.includes('youtube.com/watch')) {
-            return url.split('v=')[1]?.split('&')[0] || null;
+            return url.split('v=')[1]?.split('&')[0]?.split('#')[0] || null;
         }
         if (url.includes('youtu.be/')) {
-            return url.split('youtu.be/')[1]?.split('?')[0] || null;
+            return url.split('youtu.be/')[1]?.split('?')[0]?.split('&')[0] || null;
         }
         return null;
     };
 
     const ytId = extractYouTubeId(currentStation?.iframeUrl) || extractYouTubeId(currentStation?.url) || (currentStation?.id?.startsWith('yt-') ? currentStation.id.replace('yt-', '') : null);
     const isYouTube = !!ytId;
+    const currentMediaKey = currentStation
+        ? `${currentStation.id}:${currentStation.url}:${currentStation.iframeUrl ?? ''}`
+        : '';
 
     const applyRemoteAction = (player: any, action: WatchPartyPlaybackAction, seconds?: number) => {
         try {
@@ -92,13 +106,15 @@ export const useVideoPlayer = (
     };
 
     const executeRemoteAction = (action: WatchPartyPlaybackAction, seconds?: number) => {
+        if (action === 'seek' && (!watchPartyCapabilities.seek || !watchPartyCapabilities.positionSync)) return;
+        if ((action === 'play' || action === 'pause') && !watchPartyCapabilities.playPause) return;
         if (action === 'play') isPlayingRef.current = true;
         if (action === 'pause') isPlayingRef.current = false;
 
         if (playerType === 'videojs') {
             const player = videojsPlayerRef.current;
             if (!player) {
-                pendingRemoteActionRef.current = { action, seconds };
+                pendingRemoteActionRef.current = { action, seconds, mediaKey: currentMediaKey };
                 return;
             }
             player.ready(() => applyRemoteAction(player, action, seconds));
@@ -108,12 +124,37 @@ export const useVideoPlayer = (
         if (playerType === 'iframe' && isYouTube) {
             const player = ytPlayerRef.current;
             if (!player || !youtubeReadyRef.current) {
-                pendingRemoteActionRef.current = { action, seconds };
+                const prev = pendingRemoteActionRef.current;
+                pendingRemoteActionRef.current = {
+                    action: action === 'seek' ? (prev?.action === 'play' || prev?.action === 'pause' ? prev.action : action) : action,
+                    seconds: Number.isFinite(seconds) ? seconds : prev?.seconds,
+                    mediaKey: currentMediaKey,
+                };
                 return;
             }
-            if (action === 'play') player.playVideo();
-            else if (action === 'pause') player.pauseVideo();
-            else if (Number.isFinite(seconds)) player.seekTo(seconds, true);
+            if (action === 'seek' && Number.isFinite(seconds)) {
+                remoteSeekSuppressionRef.current = true;
+                player.seekTo(seconds, true);
+                if (driftSeekResultTimerRef.current !== null) {
+                    window.clearTimeout(driftSeekResultTimerRef.current);
+                }
+                driftSeekResultTimerRef.current = window.setTimeout(() => {
+                    remoteSeekSuppressionRef.current = false;
+                    driftSeekResultTimerRef.current = null;
+                }, 2000);
+            } else if (action === 'play') {
+                if (Number.isFinite(seconds)) {
+                    remoteSeekSuppressionRef.current = true;
+                    player.seekTo(seconds, true);
+                }
+                player.playVideo();
+            } else if (action === 'pause') {
+                if (Number.isFinite(seconds)) {
+                    remoteSeekSuppressionRef.current = true;
+                    player.seekTo(seconds, true);
+                }
+                player.pauseVideo();
+            }
             return;
         }
 
@@ -154,7 +195,7 @@ export const useVideoPlayer = (
     };
 
     const reportSeek = (seconds: number) => {
-        if (remoteSeekSuppressionRef.current) return;
+        if (remoteSeekSuppressionRef.current || !watchPartyCapabilities.seek) return;
         onSeek?.(seconds);
     };
 
@@ -162,10 +203,25 @@ export const useVideoPlayer = (
         const pending = pendingRemoteActionRef.current;
         if (!pending) return;
         pendingRemoteActionRef.current = null;
+        if (pending.mediaKey !== currentMediaKey
+            || (pending.action === 'seek' && (!watchPartyCapabilities.seek || !watchPartyCapabilities.positionSync))) return;
         if (isYouTubePlayer) {
-            if (pending.action === 'play') player.playVideo();
-            else if (pending.action === 'pause') player.pauseVideo();
-            else if (Number.isFinite(pending.seconds)) player.seekTo(pending.seconds, true);
+            if (Number.isFinite(pending.seconds)) {
+                remoteSeekSuppressionRef.current = true;
+                player.seekTo(pending.seconds, true);
+                if (driftSeekResultTimerRef.current !== null) {
+                    window.clearTimeout(driftSeekResultTimerRef.current);
+                }
+                driftSeekResultTimerRef.current = window.setTimeout(() => {
+                    remoteSeekSuppressionRef.current = false;
+                    driftSeekResultTimerRef.current = null;
+                }, 2000);
+            }
+            if (pending.action === 'play') {
+                player.playVideo();
+            } else if (pending.action === 'pause') {
+                player.pauseVideo();
+            }
         } else {
             applyRemoteAction(player, pending.action, pending.seconds);
         }
@@ -182,6 +238,10 @@ export const useVideoPlayer = (
         effectiveUrl.includes('.m3u8') ||
         effectiveUrl.includes('/repretel-') ||
         isM3u8Iframe
+    );
+    const watchPartyCapabilities = resolveWatchPartyMediaCapabilities(
+        currentStation,
+        isHls ? { playPause: true, seek: false, positionSync: false, driftCorrection: false } : undefined,
     );
     const playerType: PlayerType = isIframe ? 'iframe' : (isHls ? 'videojs' : 'html5');
     const hasVideo = currentStation?.type === 'video' || isYouTube || isHls || isIframe;
@@ -272,10 +332,8 @@ export const useVideoPlayer = (
         };
 
         const clearRateCorrection = () => {
-            if (driftRateResetTimerRef.current !== null) {
-                window.clearTimeout(driftRateResetTimerRef.current);
-                driftRateResetTimerRef.current = null;
-            }
+            if (driftRateRef.current === null) return;
+            driftRateRef.current = null;
             getPlayer()?.setPlaybackRate(1);
         };
 
@@ -284,9 +342,11 @@ export const useVideoPlayer = (
         };
 
         const onRemoteHeartbeat = (event: Event) => {
+            if (!watchPartyCapabilities.positionSync || !watchPartyCapabilities.driftCorrection) return;
             const heartbeat = (event as CustomEvent<RemoteHeartbeat>).detail;
             if (!heartbeat || !Number.isFinite(heartbeat.currentTime)
                 || (heartbeat.stationId && heartbeat.stationId !== currentStation?.id)) return;
+            if (!heartbeat.isPlaying) return;
 
             const player = getPlayer();
             if (!player || player.isPlaying() !== heartbeat.isPlaying) return;
@@ -298,20 +358,21 @@ export const useVideoPlayer = (
             const absoluteDrift = Math.abs(drift);
             latestDriftRef.current = drift;
 
-            if (absoluteDrift < 0.25) {
-                logDrift(heartbeat.currentTime, localTime, drift, 'none');
-                return;
-            }
-
-            if (absoluteDrift < 1) {
-                logDrift(heartbeat.currentTime, localTime, drift, 'rate');
-                if (driftRateResetTimerRef.current !== null) return;
-
-                player.setPlaybackRate(drift > 0 ? 1.03 : 0.97);
-                driftRateResetTimerRef.current = window.setTimeout(() => {
-                    getPlayer()?.setPlaybackRate(1);
-                    driftRateResetTimerRef.current = null;
-                }, 1000);
+            // Micro-drift under 1.5 seconds is normal network variance in watchparty
+            if (absoluteDrift < 1.5) {
+                if (player.supportsSeeked) {
+                    const correctionRate = drift > 0 ? 1.03 : 0.97;
+                    if (driftRateRef.current !== correctionRate) {
+                        player.setPlaybackRate(correctionRate);
+                        driftRateRef.current = correctionRate;
+                        logDrift(heartbeat.currentTime, localTime, drift, 'rate');
+                    } else {
+                        logDrift(heartbeat.currentTime, localTime, drift, 'none');
+                    }
+                } else {
+                    // YouTube rejects non-standard rates (1.03/0.97); sub-1.5s difference is left uninterrupted
+                    logDrift(heartbeat.currentTime, localTime, drift, 'none');
+                }
                 return;
             }
 
@@ -333,14 +394,17 @@ export const useVideoPlayer = (
             };
 
             if (player.supportsSeeked) {
-                player.onSeeked?.(logSeekResult);
+                player.onSeeked?.(() => {
+                    remoteSeekSuppressionRef.current = false;
+                    logSeekResult();
+                });
             } else {
-                // The YouTube iframe API has no seeked event; check the real player position once it applies the seek.
+                // The YouTube iframe API has no seeked event; suppress seek reporting for 2000ms to allow buffering to complete without feedback
                 driftSeekResultTimerRef.current = window.setTimeout(() => {
                     remoteSeekSuppressionRef.current = false;
                     logSeekResult();
                     driftSeekResultTimerRef.current = null;
-                }, 250);
+                }, 2000);
             }
         };
 
@@ -353,12 +417,12 @@ export const useVideoPlayer = (
                 driftSeekResultTimerRef.current = null;
             }
         };
-    }, [currentStation?.id, playerType, isYouTube]);
+    }, [currentMediaKey, playerType, isYouTube, watchPartyCapabilities.positionSync, watchPartyCapabilities.driftCorrection]);
 
     useEffect(() => {
-        if (!currentStation || !videoRef.current) return;
+        if (!currentStation || !videoElement) return;
 
-        const videoEl = videoRef.current;
+        const videoEl = videoElement;
         const stationId = currentStation.id;
         let isCancelled = false;
 
@@ -434,20 +498,20 @@ export const useVideoPlayer = (
                 videojsPlayerRef.current = null;
             }
         };
-    }, [currentStation?.id, playerType, effectiveUrl]);
+    }, [currentStation?.id, playerType, effectiveUrl, videoElement]);
 
     // 2. Inicialización de Video.js (Para HLS / Video)
     useEffect(() => {
-        if (playerType !== 'videojs' || !videoRef.current || !currentStation) return;
+        if (playerType !== 'videojs' || !videoElement || !currentStation) return;
 
-        const videoEl = videoRef.current;
+        const videoEl = videoElement;
         if (videojsPlayerRef.current) return;
 
         let isCancelled = false;
 
         // Si no hay reproductor, lo inicializamos
-        addTrackedTimeout(() => {
-            if (isCancelled || videojsPlayerRef.current || !videoRef.current) return;
+        const initializePlayer = () => {
+            if (isCancelled || videojsPlayerRef.current || videoRef.current !== videoEl) return;
 
             // Verificamos si el elemento realmente está en el DOM
             if (!document.body.contains(videoEl)) {
@@ -672,7 +736,8 @@ export const useVideoPlayer = (
                     }, 0);
                 }
             });
-        }, 0); // No delay needed, React key change ensures fresh DOM
+        };
+        initializePlayer();
 
         return () => {
             isCancelled = true;
@@ -685,16 +750,20 @@ export const useVideoPlayer = (
                 videojsPlayerRef.current = null;
             }
         };
-    }, [currentStation?.id, playerType, effectiveUrl]);
+    }, [currentStation?.id, playerType, effectiveUrl, videoElement]);
 
     // 3. Control de Reproducción (Play/Pause/Volume)
     useEffect(() => {
-        const videoEl = videoRef.current;
+        const videoEl = videoElement;
         if (!videoEl) return;
 
         // Volume
         if (playerType === 'videojs' && videojsPlayerRef.current) {
             videojsPlayerRef.current.volume(volume);
+        } else if (playerType === 'iframe' && isYouTube && ytPlayerRef.current?.setVolume) {
+            try {
+                ytPlayerRef.current.setVolume(Math.round(volume * 100));
+            } catch (e) {}
         } else if (videoEl instanceof HTMLMediaElement) {
             videoEl.volume = volume;
         }
@@ -758,7 +827,7 @@ export const useVideoPlayer = (
         };
 
         handlePlayback();
-    }, [isPlaying, volume, playerType, effectiveUrl, isYouTube]);
+    }, [isPlaying, volume, playerType, effectiveUrl, isYouTube, videoElement]);
 
     /**
      * Set quality level manually
@@ -809,40 +878,14 @@ export const useVideoPlayer = (
 
     // 4. YouTube Iframe API Sync (Magic Sync)
     useEffect(() => {
-        if (!currentStation || playerType !== 'iframe' || !isYouTube || !ytId) {
-            if (ytPlayerRef.current) {
-                try { ytPlayerRef.current.destroy(); } catch (e) { }
-            }
+        if (!currentStation || playerType !== 'iframe' || !isYouTube || !ytId || !videoElement) {
             ytPlayerRef.current = null;
             youtubeReadyRef.current = false;
             return;
         }
 
-        // BYPASS: If the station change was already reported by the player, don't re-init
-        if (ytPlayerRef.current && currentStation.id === lastReportedIdRef.current) {
-            return;
-        }
-
-        // NAVIGATION: If player exists but ID is different (manual change from sidebar)
-        if (ytPlayerRef.current && (window as any).YT && (window as any).YT.Player) {
-            const player = ytPlayerRef.current;
-            try {
-                const videoData = player.getVideoData();
-                const currentId = videoData?.video_id;
-
-                if (ytId && currentId !== ytId) {
-                    console.log(`[VideoPlayer] Manual navigation: ${currentId} -> ${ytId}`);
-                    player.loadVideoById(ytId);
-                    lastReportedIdRef.current = currentStation.id;
-                    return; // Early return, don't re-init
-                }
-            } catch (e) {
-                console.warn('[VideoPlayer] Manual navigation failed, re-initializing:', e);
-            }
-        }
-
-        const videoEl = videoRef.current;
-        if (!videoEl || !(videoEl instanceof HTMLIFrameElement)) return;
+        const currentIframe = videoElement;
+        if (!(currentIframe instanceof HTMLIFrameElement)) return;
 
         let isCancelled = false;
 
@@ -851,36 +894,34 @@ export const useVideoPlayer = (
             const YT = (window as any).YT;
             if (!YT || !YT.Player) return;
 
-            // Cleanup previous instance if any
-            if (ytPlayerRef.current) {
-                try { ytPlayerRef.current.destroy(); } catch (e) { }
-                ytPlayerRef.current = null;
-            }
+            ytPlayerRef.current = null;
             youtubeReadyRef.current = false;
 
             try {
-                // Use youtube-nocookie and add widget_referrer for better embedding compatibility
-                // Solo activamos autoplay en el src inicial si el usuario realmente está en reproducción
-                const autoPlayFlag = isPlayingRef.current ? 1 : 0;
-                const initialUrl = `https://www.youtube-nocookie.com/embed/${ytId}?autoplay=${autoPlayFlag}&enablejsapi=1&origin=${window.location.origin}&widget_referrer=${encodeURIComponent(window.location.href)}&rel=0`;
-                videoEl.src = initialUrl;
-
-                ytPlayerRef.current = new (window as any).YT.Player(videoEl, {
+                ytPlayerRef.current = new YT.Player(currentIframe, {
                     events: {
                         onReady: (event: any) => {
                             if (isCancelled) return;
                             youtubeReadyRef.current = true;
-                            // Si al estar listo el reproductor NO debe sonar, asegurar pausa
-                            if (!isPlayingRef.current) {
-                                try {
-                                    event.target.pauseVideo();
-                                } catch (e) {}
+                            lastReportedIdRef.current = currentStation.id;
+                            try {
+                                event.target.setVolume(Math.round(volume * 100));
+                            } catch (e) {}
+
+                            const pending = pendingRemoteActionRef.current;
+                            if (pending) {
+                                runPendingRemoteAction(event.target, true);
                             } else {
-                                try {
-                                    event.target.playVideo();
-                                } catch (e) {}
+                                if (!isPlayingRef.current) {
+                                    try {
+                                        event.target.pauseVideo();
+                                    } catch (e) {}
+                                } else {
+                                    try {
+                                        event.target.playVideo();
+                                    } catch (e) {}
+                                }
                             }
-                            runPendingRemoteAction(event.target, true);
                         },
                         onStateChange: (event: any) => {
                             if (isCancelled) return;
@@ -900,7 +941,6 @@ export const useVideoPlayer = (
                             }
                             // YT.PlayerState.PLAYING = 1
                             if (event.data === 1) {
-                                // Si empezó a sonar por error al cargar pero isPlayingRef es falso, detener de inmediato
                                 if (!isPlayingRef.current) {
                                     try {
                                         event.target.pauseVideo();
@@ -908,7 +948,7 @@ export const useVideoPlayer = (
                                     return;
                                 }
                                 const player = event.target;
-                                const videoData = player.getVideoData();
+                                const videoData = player.getVideoData?.();
                                 const realTitle = videoData?.title;
                                 const currentId = videoData?.video_id;
 
@@ -957,21 +997,25 @@ export const useVideoPlayer = (
                 initYt();
             };
         } else {
-            addTrackedTimeout(initYt, 500);
+            initYt();
         }
 
         return () => {
             isCancelled = true;
             youtubeReadyRef.current = false;
-            if (ytPlayerRef.current && currentStation?.id !== lastReportedIdRef.current) {
-                try { ytPlayerRef.current.destroy(); } catch (e) { }
-                ytPlayerRef.current = null;
+            if (ytPlayerRef.current) {
+                const el = ytPlayerRef.current.getIframe?.() || videoRef.current;
+                if (!el || !document.body.contains(el)) {
+                    try { ytPlayerRef.current.destroy(); } catch (e) { }
+                    ytPlayerRef.current = null;
+                }
             }
         };
-    }, [currentStation?.id, playerType, isYouTube, ytId]);
+    }, [currentStation?.id, playerType, isYouTube, ytId, videoElement]);
 
     return {
         videoRef,
+        setVideoElementRef,
         playerType,
         hasVideo,
         error,

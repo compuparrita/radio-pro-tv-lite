@@ -1,4 +1,4 @@
-import { LogOut, MessageCircle, Users } from 'lucide-react';
+import { LogOut, MessageCircle, Play, Users } from 'lucide-react';
 import { useWatchParty } from '../context/WatchPartyContext';
 import { Player } from './Player';
 
@@ -9,7 +9,7 @@ interface GuestCinemaLayoutProps {
 }
 
 export function GuestCinemaLayout({ isConnected, onChatClick, onExitCinema }: GuestCinemaLayoutProps) {
-    const { members, mediaInfo, room } = useWatchParty();
+    const { members, mediaInfo, room, needsSyncPlayback, syncPlayback } = useWatchParty();
     const host = members.find((member) => member.role === 'host')
         ?? room?.members.find((member) => member.role === 'host');
     const participantCount = members.length || room?.members.length || 0;
@@ -38,6 +38,31 @@ export function GuestCinemaLayout({ isConnected, onChatClick, onExitCinema }: Gu
                         </button>
                     </div>
                 </header>
+
+                {needsSyncPlayback && (
+                    <aside aria-label="Sincronización requerida" className="rounded-2xl border border-cyan-400/30 bg-gradient-to-r from-cyan-950/60 to-slate-900/60 p-4 shadow-xl backdrop-blur-md">
+                        <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+                            <div className="flex items-center gap-3 text-center sm:text-left">
+                                <span className="flex h-3 w-3 relative">
+                                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-75"></span>
+                                    <span className="relative inline-flex rounded-full h-3 w-3 bg-cyan-500"></span>
+                                </span>
+                                <div>
+                                    <h3 className="font-semibold text-white text-sm">El anfitrión está reproduciendo</h3>
+                                    <p className="text-xs text-white/60">Haz clic en sincronizar para ver y escuchar en tiempo real con el grupo.</p>
+                                </div>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={syncPlayback}
+                                className="shrink-0 flex items-center gap-2 rounded-full bg-cyan-400 hover:bg-cyan-300 px-5 py-2 text-xs font-bold text-slate-950 transition hover:scale-105 active:scale-95 shadow-md cursor-pointer"
+                            >
+                                <Play size={14} fill="currentColor" />
+                                Sincronizar ahora
+                            </button>
+                        </div>
+                    </aside>
+                )}
 
                 <section className="w-full flex-1" aria-label="Cine compartido">
                     <Player />

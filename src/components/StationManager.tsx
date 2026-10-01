@@ -399,8 +399,8 @@ export const StationManager: React.FC<StationManagerProps> = ({ isOpen, onClose 
     };
 
     return (
-        <div className="fixed inset-0 z-[2000] flex items-end sm:items-center justify-center bg-black/80 backdrop-blur-md sm:p-4 sm:pt-4 animate-in fade-in duration-300">
-            <div className="bg-[var(--dark-surface)] w-full h-[90vh] sm:h-auto sm:max-h-[85vh] sm:max-w-4xl shadow-[0_0_50px_rgba(0,0,0,0.5)] overflow-hidden flex flex-col border border-white/5">
+        <div className="fixed inset-0 z-[2000] flex items-center justify-center bg-black/80 backdrop-blur-md p-3 sm:p-4 animate-in fade-in duration-300">
+            <div className="bg-[var(--dark-surface)] w-full h-[90dvh] max-h-[90vh] sm:h-auto sm:max-h-[85vh] sm:max-w-4xl shadow-[0_0_50px_rgba(0,0,0,0.5)] overflow-hidden flex flex-col border border-white/5">
                 <div className="p-1 border-b border-white/5 flex justify-between items-center bg-white/5 flex-shrink-0">
                     <div className="flex items-center gap-4">
                         <h2 className="text-lg font-bold flex items-center gap-2">

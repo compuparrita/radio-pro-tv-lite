@@ -5,6 +5,7 @@ import { useWatchParty } from '../context/WatchPartyContext';
 import { useVideoPlayer } from '../hooks/useVideoPlayer';
 import { QualitySelector } from './QualitySelector';
 import { QualitySelectorPortal } from './QualitySelectorPortal';
+import { getPlayerCurrentTime } from '../utils/playerTimeBridge';
 
 
 export const Player: React.FC = () => {
@@ -15,6 +16,8 @@ export const Player: React.FC = () => {
         consumePendingAction,
         clearRemoteExecutionRef,
         sendAction,
+        needsSyncPlayback,
+        syncPlayback,
     } = useWatchParty();
     const {
         currentStation,
@@ -38,8 +41,16 @@ export const Player: React.FC = () => {
     const lastReportedPlaybackRef = useRef<boolean | null>(isPlaying);
     const observedPlaybackRef = useRef(isPlaying);
     const lastReportedSeekRef = useRef<number | null>(null);
-    const watchPartyRef = useRef({ watchPartyRoom, remoteExecutionRef, sendAction });
-    watchPartyRef.current = { watchPartyRoom, remoteExecutionRef, sendAction };
+    const watchPartyRef = useRef({ watchPartyRoom, remoteExecutionRef, sendAction, isHost, needsSyncPlayback, syncPlayback });
+    watchPartyRef.current = { watchPartyRoom, remoteExecutionRef, sendAction, isHost, needsSyncPlayback, syncPlayback };
+    const externalIframeTraceRef = useRef({
+        stationId: currentStation?.id,
+        stationName: currentStation?.name,
+        isPlaying,
+        iframeUrl: currentStation?.iframeUrl,
+        embedCanal: currentStation?.embedCanal,
+        src: undefined as string | undefined,
+    });
 
     const clearSuppressedAction = useCallback(() => {
         suppressedLocalActionRef.current = null;
@@ -57,19 +68,12 @@ export const Player: React.FC = () => {
 
     const handleTogglePlayback = useCallback(() => {
         const watchParty = watchPartyRef.current;
-        if (watchParty.watchPartyRoom && !isHost) {
-            const action = isPlaying ? 'pause' : 'play';
-            void watchParty.sendAction(action, null).then((response) => {
-                if (!response.success) {
-                    console.warn('[WatchParty] No se autorizó la acción de reproducción:', response.error);
-                }
-            }).catch((sendError) => {
-                console.warn('[WatchParty] No se pudo enviar la acción de reproducción:', sendError);
-            });
+        if (watchParty.watchPartyRoom && !isHost && watchParty.needsSyncPlayback) {
+            watchParty.syncPlayback();
             return;
         }
         togglePlay();
-    }, [isHost, isPlaying, togglePlay]);
+    }, [isHost, togglePlay]);
 
     useEffect(() => () => {
         if (suppressionTimeoutRef.current !== null) window.clearTimeout(suppressionTimeoutRef.current);
@@ -100,6 +104,14 @@ export const Player: React.FC = () => {
     const handlePlayStateChange = useCallback((playing: boolean) => {
         const action = playing ? 'play' : 'pause';
         const suppressed = suppressedLocalActionRef.current === action;
+        const source = suppressed || remoteExecutionInProgressRef.current || watchPartyRef.current.remoteExecutionRef
+            ? 'remote'
+            : 'local';
+        console.info(playing ? '[WP LOCAL PLAY]' : '[WP LOCAL PAUSE]', {
+            role: watchPartyRef.current.watchPartyRoom ? (watchPartyRef.current.isHost ? 'host' : 'guest') : 'none',
+            currentTime: getPlayerCurrentTime(),
+            source,
+        });
         if (suppressed) clearSuppressedAction();
 
         if (playing !== isPlayingRef.current) {
@@ -125,7 +137,16 @@ export const Player: React.FC = () => {
         if (suppressed) clearSuppressedAction();
 
         const watchParty = watchPartyRef.current;
-        if (!suppressed
+        const isYtStation = Boolean(
+            currentStation?.id?.startsWith('yt-')
+            || currentStation?.url?.includes('youtube')
+            || currentStation?.url?.includes('youtu.be')
+            || currentStation?.iframeUrl?.includes('youtube')
+            || currentStation?.iframeUrl?.includes('youtu.be')
+        );
+        const canSeek = watchParty.isHost || isYtStation;
+        if (canSeek
+            && !suppressed
             && !remoteExecutionInProgressRef.current
             && !watchParty.remoteExecutionRef
             && watchParty.watchPartyRoom
@@ -135,10 +156,11 @@ export const Player: React.FC = () => {
                 console.warn('[WatchParty] No se pudo enviar la posicion:', sendError);
             });
         }
-    }, [clearSuppressedAction]);
+    }, [clearSuppressedAction, currentStation]);
 
     const {
         videoRef,
+        setVideoElementRef,
         playerType,
         hasVideo,
         error,
@@ -156,6 +178,92 @@ export const Player: React.FC = () => {
         setCurrentStation,
         handleLocalSeek
     );
+
+    const extractYouTubeId = (url?: string): string | null => {
+        if (!url) return null;
+        const match = url.match(/(?:youtu\.be\/|youtube(?:-nocookie)?\.com\/(?:embed\/|v\/|watch\?.*?v=|shorts\/|live\/))([a-zA-Z0-9_-]{11})/i);
+        if (match) return match[1];
+        if (url.includes('youtube.com/embed/')) return url.split('/embed/')[1]?.split('?')[0]?.split('&')[0] || null;
+        if (url.includes('youtube-nocookie.com/embed/')) return url.split('/embed/')[1]?.split('?')[0]?.split('&')[0] || null;
+        if (url.includes('youtube.com/watch')) return url.split('v=')[1]?.split('&')[0]?.split('#')[0] || null;
+        if (url.includes('youtu.be/')) return url.split('youtu.be/')[1]?.split('?')[0]?.split('&')[0] || null;
+        return null;
+    };
+
+    const ytId = extractYouTubeId(currentStation?.iframeUrl)
+        || extractYouTubeId(currentStation?.url)
+        || (currentStation?.id?.startsWith('yt-') ? currentStation.id.replace('yt-', '') : null);
+
+    const youtubeEmbedSrc = ytId
+        ? `https://www.youtube-nocookie.com/embed/${ytId}?autoplay=1&enablejsapi=1&origin=${encodeURIComponent(window.location.origin)}&widget_referrer=${encodeURIComponent(window.location.href)}&rel=0&playsinline=1`
+        : '';
+
+    const externalIframeBaseSrc = currentStation?.iframeUrl || (currentStation?.embedCanal
+        ? `https://embed.saohgdasregions.fun/embed2/${currentStation.embedCanal}.html`
+        : '');
+    const externalIframeSrc = externalIframeBaseSrc
+        ? (externalIframeBaseSrc.includes('autoplay') ? externalIframeBaseSrc : `${externalIframeBaseSrc}${externalIframeBaseSrc.includes('?') ? '&' : '?'}autoplay=1`)
+        : undefined;
+    externalIframeTraceRef.current = {
+        stationId: currentStation?.id,
+        stationName: currentStation?.name,
+        isPlaying,
+        iframeUrl: currentStation?.iframeUrl,
+        embedCanal: currentStation?.embedCanal,
+        src: externalIframeSrc,
+    };
+
+    const setExternalIframeRef = useCallback((element: HTMLIFrameElement | null) => {
+        setVideoElementRef(element);
+        const trace = externalIframeTraceRef.current;
+        if (element) {
+            console.info('[External iframe] iframe mounted', {
+                stationId: trace.stationId,
+                stationName: trace.stationName,
+                isPlaying: trace.isPlaying,
+                iframeUrl: trace.iframeUrl,
+                embedCanal: trace.embedCanal,
+                src: trace.src,
+                mounted: true,
+            });
+        } else {
+            console.info('[External iframe] iframe unmounted', {
+                stationId: trace.stationId,
+                stationName: trace.stationName,
+                isPlaying: trace.isPlaying,
+                iframeUrl: trace.iframeUrl,
+                embedCanal: trace.embedCanal,
+                src: trace.src,
+                mounted: false,
+            });
+        }
+    }, [setVideoElementRef]);
+
+    const handleExternalIframeLoad = useCallback((event: React.SyntheticEvent<HTMLIFrameElement>) => {
+        const iframe = event.currentTarget;
+        const trace = externalIframeTraceRef.current;
+        let contentHref: string | null = null;
+        let contentHrefError: string | null = null;
+        try {
+            contentHref = iframe.contentWindow?.location.href ?? null;
+        } catch (error) {
+            contentHrefError = error instanceof Error ? error.message : String(error);
+        }
+        console.info('[External iframe] iframe loaded', {
+            stationId: trace.stationId,
+            stationName: trace.stationName,
+            isPlaying: trace.isPlaying,
+            iframeUrl: trace.iframeUrl,
+            embedCanal: trace.embedCanal,
+            src: trace.src,
+            contentWindowLocation: contentHref,
+            contentWindowLocationError: contentHrefError,
+            clientWidth: iframe.clientWidth,
+            clientHeight: iframe.clientHeight,
+            offsetWidth: iframe.offsetWidth,
+            offsetHeight: iframe.offsetHeight,
+        });
+    }, []);
 
     useEffect(() => {
         const action = consumePendingAction();
@@ -194,6 +302,20 @@ export const Player: React.FC = () => {
         if (action.action === 'pause') lastReportedPlaybackRef.current = false;
 
         try {
+            const currentTime = getPlayerCurrentTime();
+            const role = watchPartyRoom ? (isHost ? 'host' : 'guest') : 'none';
+            console.info('[WP Remote Execute]', {
+                role,
+                action: action.action,
+                position: action.action === 'seek' ? seekSeconds : currentTime,
+                currentTime,
+                isPlaying,
+            });
+            if (action.action === 'play') {
+                console.info('[WP PLAY CALL]', { role, source: 'remote', currentTime });
+            } else if (action.action === 'pause') {
+                console.info('[WP PAUSE CALL]', { role, source: 'remote', currentTime });
+            }
             executeRemoteAction(action.action, seekSeconds);
             if (action.action === 'play') {
                 setIsPlaying(true);
@@ -306,37 +428,54 @@ export const Player: React.FC = () => {
                                     /* YouTube Player managed by YouTube IFrame API */
                                     <div className="relative h-full w-full">
                                         <iframe
-                                            ref={videoRef as any}
-                                            key={`iframe-yt-${currentStation.id}`}
+                                            id={`youtube-player-${currentStation.id}`}
+                                            ref={setVideoElementRef as any}
+                                            key={`iframe-yt-${currentStation.id}-${ytId}`}
+                                            src={youtubeEmbedSrc}
                                             className="w-full h-full border-0"
                                             allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
                                             allowFullScreen
                                             title={currentStation.name}
                                         />
-                                        {!isPlaying && (
+                                        {needsSyncPlayback && !isHost ? (
+                                            <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/75 backdrop-blur-sm z-20 p-4">
+                                                <div className="flex flex-col items-center max-w-sm text-center">
+                                                    <p className="text-white text-base font-semibold mb-1">
+                                                        Transmisión en directo del anfitrión
+                                                    </p>
+                                                    <p className="text-white/60 text-xs mb-4">
+                                                        Pulsa para sincronizarte al instante con la sala
+                                                    </p>
+                                                    <button
+                                                        onClick={() => syncPlayback()}
+                                                        type="button"
+                                                        className="px-6 py-2.5 rounded-full bg-cyan-400 hover:bg-cyan-300 text-slate-950 font-bold text-sm shadow-[0_4px_20px_rgba(34,211,238,0.4)] transition hover:scale-105 active:scale-95 flex items-center gap-2 cursor-pointer"
+                                                    >
+                                                        <Play size={16} fill="currentColor" />
+                                                        Sincronizar ahora
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        ) : !isPlaying ? (
                                             <div className="absolute inset-0 flex flex-col items-center justify-center bg-[var(--dark-bg)] bg-gradient-to-b from-black/20 to-black/60 z-10 pointer-events-none">
                                                 <img
                                                     src={currentStation.logo || 'https://picsum.photos/seed/radio-streaming-pro/150/150.jpg'}
                                                     alt={currentStation.name}
-                                                    className="w-32 h-32 md:w-44 md:h-44 object-contain rounded-full border-[6px] md:border-[10px] border-[var(--primary-color)] opacity-60 p-2 md:p-3 bg-white/5"
+                                                    className="w-24 h-24 md:w-32 md:h-32 object-contain rounded-full border-[4px] md:border-[6px] border-[var(--primary-color)] opacity-60 p-2 bg-white/5"
                                                     onError={(e) => { (e.target as HTMLImageElement).src = "https://picsum.photos/seed/radio-streaming-pro/150/150.jpg" }}
                                                 />
-                                                <p className="mt-4 text-[var(--text-secondary)] font-medium">Pausado</p>
+                                                <p className="mt-3 text-[var(--text-secondary)] text-sm font-medium">Pausado</p>
                                             </div>
-                                        )}
+                                        ) : null}
                                     </div>
                                 ) : (
                                     /* General TV / Embed iFrame (e.g. ksdjugfssddeports.com, tvporinternet2.com, etc.) */
                                     isPlaying ? (
                                         <iframe
-                                            ref={videoRef as any}
+                                            ref={setExternalIframeRef}
                                             key={`iframe-${currentStation.id}`}
-                                            src={(() => {
-                                                const src = currentStation.iframeUrl || (currentStation.embedCanal ? `https://embed.saohgdasregions.fun/embed2/${currentStation.embedCanal}.html` : '');
-                                                if (!src) return undefined;
-                                                const separator = src.includes('?') ? '&' : '?';
-                                                return `${src}${separator}autoplay=1&muted=0&mute=0&volume=100`;
-                                            })()}
+                                            src={externalIframeSrc}
+                                            onLoad={handleExternalIframeLoad}
                                             className="w-full h-full border-0"
                                             allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
                                             allowFullScreen
@@ -360,7 +499,7 @@ export const Player: React.FC = () => {
                                 <>
                                     <div data-vjs-player={playerType === 'videojs' ? true : undefined} className="h-full w-full relative">
                                         <video
-                                            ref={videoRef as any}
+                                            ref={setVideoElementRef as any}
                                             className={`${playerType === 'videojs' ? 'video-js vjs-big-play-centered' : ''} w-full h-full object-contain`}
                                             playsInline
                                             preload="metadata"
@@ -405,14 +544,14 @@ export const Player: React.FC = () => {
                         {playerType === 'videojs' ? (
                             <div data-vjs-player className="hidden pointer-events-none opacity-0 h-0 w-0">
                                 <video
-                                    ref={videoRef as any}
+                                    ref={setVideoElementRef as any}
                                     className="video-js"
                                     playsInline
                                     preload="metadata"
                                 />
                             </div>
                         ) : isPlaying ? (
-                            <audio ref={videoRef as any} style={{ display: 'none' }} playsInline preload="metadata" />
+                            <audio ref={setVideoElementRef as any} style={{ display: 'none' }} playsInline preload="metadata" />
                         ) : null}
 
                         {/* Audio Logo with pulsing effect */}

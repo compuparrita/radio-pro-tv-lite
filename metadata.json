@@ -1,0 +1,6 @@
+{
+  "name": "Radio Streaming Pro",
+  "description": "Centro multimedia de radio y televisión en vivo con Cine Compartido (WatchParty)",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

@@ -1,11 +1,22 @@
 import type { Station } from '../types';
+import type { WatchPartyMediaCapabilities, WatchPartyMediaType } from '../utils/watchPartyMediaCapabilities';
 
 export interface MediaInfo {
     stationId: string;
-    mediaType: 'youtube' | 'hls' | 'video' | 'audio' | 'iframe';
+    mediaType: WatchPartyMediaType;
     sourceUrl: string;
     title: string;
     isLive: boolean;
+    watchPartyCapabilities?: Partial<WatchPartyMediaCapabilities>;
+}
+
+export interface WatchPartyHeartbeat {
+    roomCode: string;
+    stateVersion: number;
+    currentTime?: number;
+    isPlaying: boolean;
+    isLive?: boolean;
+    timestamp: number;
 }
 
 export interface WatchPartyMember {

@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Radio, Moon, Waves, Zap, MessageCircle, Antenna, Star, Monitor, ChevronDown, User, Pencil, Trash2, X } from 'lucide-react';
 import { useChat } from '../context/ChatContext';
 import { useRadio } from '../context/RadioContext';
@@ -123,21 +124,14 @@ export const Header: React.FC<HeaderProps> = ({ theme, onThemeClick, onChatClick
             <div className="max-w-[1700px] mx-auto flex flex-col items-center lg:flex-row lg:justify-between lg:items-center px-[10px] gap-4">
                 {/* Logo & Title */}
                 <div className="flex items-center gap-3">
-                    <h1 className="text-2xl md:text-3xl lg:text-2xl font-black tracking-tighter text-transparent bg-clip-text bg-gradient-to-r from-[var(--primary-color)] via-[var(--secondary-color)] to-[var(--accent-color)] flex items-center gap-2">
-                        <Radio size={28} className="text-[var(--primary-color)]" />
-                        <span className="inline">TV Radio <span className="text-[var(--text-primary)]">Streaming Pro</span><br /><span className="text-[10px] font-semibold tracking-normal text-[var(--text-secondary)]">TV en vivo&nbsp;&nbsp;Radio<br />YouTube&nbsp;&nbsp;Cine compartido</span></span>
+                    <h1 className="text-2xl md:text-3xl lg:text-2xl font-black tracking-tighter text-transparent bg-clip-text bg-gradient-to-r from-[var(--primary-color)] via-[var(--secondary-color)] to-[var(--accent-color)]">
+                        <span className="flex items-center gap-2">
+                            <Radio size={28} className="shrink-0 text-[var(--primary-color)]" />
+                            <span>TV Radio <span className="text-[var(--text-primary)]">Streaming Pro</span></span>
+                        </span>
+                       {/* <span className="block pl-9 text-[10px] font-semibold tracking-normal text-[var(--text-secondary)]">TV en vivo • Radio • YouTube • Cine compartido</span> */}
                     </h1>
                 </div>
-                <button
-                    onClick={() => setIsProfileOpen(true)}
-                    className="flex items-center gap-1.5 px-3 py-1.5 bg-white/5 border border-white/10 text-white hover:bg-white/10 transition-all"
-                    title="Administrar perfil local"
-                    type="button"
-                >
-                    <User size={16} />
-                    <span className="text-xs font-bold tracking-wider">Perfil</span>
-                </button>
-
                 {/* Navigation Filters - Desktop Only */}
                 <div className="hidden lg:flex items-center bg-white/5 p-1 border border-white/5 flex-shrink-0">
                     <div
@@ -345,11 +339,20 @@ export const Header: React.FC<HeaderProps> = ({ theme, onThemeClick, onChatClick
                     >
                         <span className="text-xs font-bold tracking-wider">🎬 Cine</span>
                     </button>
+					<button
+                    onClick={() => setIsProfileOpen(true)}
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-white/5 border border-white/10 text-white hover:bg-white/10 transition-all"
+                    title="Administrar perfil local"
+                    type="button"
+                >
+                    <User size={16} />
+                    <span className="text-xs font-bold tracking-wider">Perfil</span>
+                </button>
                 </div>
             </div>
-            {isProfileOpen && (
+            {isProfileOpen && createPortal(
                 <div
-                    className="pointer-events-auto fixed inset-0 z-[1000] flex touch-manipulation items-center justify-center bg-black/60 p-4 backdrop-blur-sm"
+                    className="pointer-events-auto fixed inset-0 z-[2147483647] flex touch-manipulation items-center justify-center overflow-y-auto bg-black/60 p-4 backdrop-blur-sm"
                     onClick={(event) => {
                         if (event.target === event.currentTarget) closeProfileDialog();
                     }}
@@ -357,7 +360,7 @@ export const Header: React.FC<HeaderProps> = ({ theme, onThemeClick, onChatClick
                     <section
                         aria-labelledby="profile-dialog-title"
                         aria-modal="true"
-                        className="pointer-events-auto relative z-[1001] w-full max-w-sm touch-manipulation rounded-xl border border-cyan-200/15 bg-[var(--dark-surface)] p-5 text-[var(--text-primary)] shadow-2xl"
+                        className="pointer-events-auto relative z-[2147483647] my-auto max-h-[calc(100dvh-2rem)] w-full max-w-sm touch-manipulation overflow-y-auto rounded-xl border border-cyan-200/15 bg-[var(--dark-surface)] p-5 text-[var(--text-primary)] shadow-2xl"
                         onClick={(event) => event.stopPropagation()}
                         onPointerDown={(event) => event.stopPropagation()}
                         role="dialog"
@@ -424,7 +427,8 @@ export const Header: React.FC<HeaderProps> = ({ theme, onThemeClick, onChatClick
                             </div>
                         )}
                     </section>
-                </div>
+                </div>,
+                document.body
             )}
             {!onWatchPartyClick && (
                 <WatchPartyModal

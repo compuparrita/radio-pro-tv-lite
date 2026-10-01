@@ -5,6 +5,7 @@ export interface Station {
     logo: string;
     country: string;
     type: 'audio' | 'video';
+    watchPartyCapabilities?: Partial<import('./utils/watchPartyMediaCapabilities').WatchPartyMediaCapabilities>;
     iframeUrl?: string;
     useProxy?: boolean;
     category?: string;

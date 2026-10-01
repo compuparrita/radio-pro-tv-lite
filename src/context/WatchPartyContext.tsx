@@ -32,6 +32,9 @@ import {
     type WatchPartyRoomData,
     type WatchPartyResponse,
 } from '../services/watchPartySocket';
+import type { WatchPartyHeartbeat } from '../types/watchparty';
+import { getPlayerCurrentTime } from '../utils/playerTimeBridge';
+import { resolveWatchPartyMediaCapabilities, resolveWatchPartyMediaType } from '../utils/watchPartyMediaCapabilities';
 
 interface WatchPartyContextValue {
     room: WatchPartyRoomData | null;
@@ -60,13 +63,16 @@ interface WatchPartyContextValue {
 
 const WatchPartyContext = createContext<WatchPartyContextValue | undefined>(undefined);
 
-interface WatchPartyHeartbeat {
-    roomCode: string;
-    stateVersion: number;
-    currentTime: number;
-    isPlaying: boolean;
-    isLive: boolean;
-    timestamp: number;
+function getActionPosition(payload: unknown): number | null {
+    if (typeof payload === 'number' && Number.isFinite(payload)) return payload;
+    if (payload && typeof payload === 'object') {
+        const value = (payload as { seconds?: unknown; currentTime?: unknown }).seconds
+            ?? (payload as { currentTime?: unknown }).currentTime;
+        const position = Number(value);
+        return Number.isFinite(position) ? position : null;
+    }
+    const position = Number(payload);
+    return Number.isFinite(position) ? position : null;
 }
 
 function getMediaInfo(value: unknown): MediaInfo | null {
@@ -78,43 +84,73 @@ function getMediaInfo(value: unknown): MediaInfo | null {
     const mediaType = (media.mediaType && validTypes.includes(media.mediaType))
         ? media.mediaType
         : 'video';
-    return {
+    const normalized = {
         stationId: media.stationId,
         mediaType: mediaType as MediaInfo['mediaType'],
         sourceUrl: media.sourceUrl,
         title: typeof media.title === 'string' ? media.title : 'Emisión',
         isLive: Boolean(media.isLive),
     };
+    return {
+        ...normalized,
+        watchPartyCapabilities: resolveWatchPartyMediaCapabilities(normalized, media.watchPartyCapabilities),
+    };
 }
 
 function getYouTubeId(sourceUrl: string): string | null {
-    return sourceUrl.match(/(?:youtube(?:-nocookie)?\.com\/(?:embed\/|watch\?v=)|youtu\.be\/)([^?&/]+)/i)?.[1] ?? null;
+    if (!sourceUrl) return null;
+    const match = sourceUrl.match(/(?:youtu\.be\/|youtube(?:-nocookie)?\.com\/(?:embed\/|v\/|watch\?.*?v=|shorts\/|live\/))([a-zA-Z0-9_-]{11})/i);
+    return match ? match[1] : null;
 }
 
 function createMediaInfo(station: Station | null): MediaInfo | null {
     if (!station) return null;
     const sourceUrl = station.iframeUrl || station.url;
     if (!sourceUrl) return null;
-    const isYt = station.id.startsWith('yt-') || /youtube(?:-nocookie)?\.com|youtu\.be/i.test(sourceUrl);
-    const isHls = /\.m3u8(?:$|[?#])|\/repretel-|\/proxy-stream/i.test(sourceUrl);
-    const mediaType: MediaInfo['mediaType'] = isYt
-        ? 'youtube'
-        : (station.type === 'audio' ? 'audio' : isHls ? 'hls' : station.iframeUrl || station.embedCanal ? 'iframe' : 'video');
+    const mediaType = resolveWatchPartyMediaType({
+        id: station.id,
+        sourceUrl,
+        type: station.type,
+        iframeUrl: station.iframeUrl || station.embedCanal,
+    });
     const isLive = mediaType !== 'youtube' && Boolean((station as Station & { isLive?: boolean }).isLive
         ?? (mediaType === 'audio' || mediaType === 'hls' || mediaType === 'iframe'));
-    return {
+    const normalized = {
         stationId: station.id,
         mediaType,
         sourceUrl,
         title: station.name || 'Emisión',
         isLive,
     };
+    const watchPartyCapabilities = resolveWatchPartyMediaCapabilities({
+        ...normalized,
+        id: station.id,
+        type: station.type,
+        iframeUrl: station.iframeUrl,
+    }, station.watchPartyCapabilities);
+    console.info('[WP CAPABILITY TRACE]', {
+        source: 'client-station',
+        stationId: station.id,
+        mediaType,
+        isLive,
+        url: sourceUrl,
+        explicitCapabilities: station.watchPartyCapabilities ?? null,
+        capabilities: watchPartyCapabilities,
+    });
+    return {
+        ...normalized,
+        watchPartyCapabilities,
+    };
 }
 
 function stationFromMedia(media: MediaInfo, stations: Station[]): Station {
     const knownStation = stations.find((station) => station.id === media.stationId);
     if (knownStation) {
-        const station = { ...knownStation, name: media.title || knownStation.name };
+        const station = {
+            ...knownStation,
+            name: media.title || knownStation.name,
+            watchPartyCapabilities: media.watchPartyCapabilities,
+        };
         if (media.mediaType === 'youtube') {
             const videoId = getYouTubeId(media.sourceUrl);
             station.url = media.sourceUrl;
@@ -131,6 +167,7 @@ function stationFromMedia(media: MediaInfo, stations: Station[]): Station {
         logo: '',
         country: '',
         type: isAudio ? 'audio' : 'video',
+        watchPartyCapabilities: media.watchPartyCapabilities,
     };
 
     if (media.mediaType === 'youtube') {
@@ -185,6 +222,7 @@ export function WatchPartyProvider({ children }: { children: ReactNode }) {
     const remoteMediaStationRef = useRef<string | null>(null);
     const commandLockRef = useRef(false);
     const commandLockReleaseRef = useRef<(() => void) | null>(null);
+    const pausedCurrentTimeRef = useRef<number | null>(null);
     useEffect(() => {
         const socket = (socketService as unknown as { socket: {
             connected: boolean;
@@ -196,9 +234,23 @@ export function WatchPartyProvider({ children }: { children: ReactNode }) {
 
         const onHeartbeat = (heartbeat: WatchPartyHeartbeat) => {
             const currentRoom = roomRef.current;
+            const capabilities = resolveWatchPartyMediaCapabilities(getMediaInfo(currentRoom?.media));
+            console.info('[WP HEARTBEAT IN]', {
+                role: currentRoom?.hostId === getWatchPartySocketId() ? 'host' : 'guest',
+                isPlaying: heartbeat.isPlaying,
+                positionSync: capabilities.positionSync,
+                mediaType: currentRoom?.media?.mediaType ?? null,
+                isLive: currentRoom?.media?.isLive ?? null,
+                url: currentRoom?.media?.sourceUrl ?? null,
+                capabilities: currentRoom?.media?.watchPartyCapabilities ?? null,
+                ...(capabilities.positionSync ? { currentTime: heartbeat.currentTime } : {}),
+                stateVersion: heartbeat.stateVersion,
+                timestamp: heartbeat.timestamp,
+            });
             if (!currentRoom || heartbeat.roomCode !== currentRoom.roomCode
                 || heartbeat.stateVersion < currentRoom.stateVersion
-                || !Number.isFinite(heartbeat.currentTime) || heartbeat.currentTime < 0) return;
+                || (capabilities.positionSync
+                    && (!Number.isFinite(heartbeat.currentTime) || (heartbeat.currentTime as number) < 0))) return;
 
             const stationId = typeof currentRoom.media?.stationId === 'string'
                 ? currentRoom.media.stationId
@@ -210,7 +262,7 @@ export function WatchPartyProvider({ children }: { children: ReactNode }) {
                     stateVersion: heartbeat.stateVersion,
                     playback: {
                         ...roomState.playback,
-                        currentTime: heartbeat.currentTime,
+                        ...(capabilities.positionSync ? { currentTime: heartbeat.currentTime } : {}),
                         isPlaying: heartbeat.isPlaying,
                         updatedAt: heartbeat.timestamp,
                     },
@@ -219,26 +271,42 @@ export function WatchPartyProvider({ children }: { children: ReactNode }) {
 
             if (heartbeat.isPlaying !== isPlayingRef.current) {
                 const executionRef = `watchparty-heartbeat-${heartbeat.stateVersion}-${heartbeat.timestamp}`;
+                const action = heartbeat.isPlaying ? 'play' : 'pause';
+                console.info('[WP HEARTBEAT ACTION]', {
+                    action,
+                    previousIsPlaying: isPlayingRef.current,
+                    newIsPlaying: heartbeat.isPlaying,
+                    stateVersion: heartbeat.stateVersion,
+                });
+                console.info('[WP PendingAction]', {
+                    role: currentRoom.hostId === getWatchPartySocketId() ? 'host' : 'guest',
+                    source: 'heartbeat',
+                    action,
+                    ...(capabilities.positionSync ? { position: heartbeat.currentTime } : {}),
+                    stateVersion: heartbeat.stateVersion,
+                });
                 setRemoteExecutionRef(executionRef);
                 setPendingAction({
                     roomId: currentRoom.id,
-                    action: heartbeat.isPlaying ? 'play' : 'pause',
+                    action,
                     payload: null,
                     origin: executionRef,
                     actionId: executionRef,
                 });
             }
 
-            window.dispatchEvent(new CustomEvent('watchparty:heartbeat:remote', {
-                detail: { ...heartbeat, stationId },
-            }));
+            if (capabilities.driftCorrection) {
+                window.dispatchEvent(new CustomEvent('watchparty:heartbeat:remote', {
+                    detail: { ...heartbeat, stationId },
+                }));
+            }
         };
         socket.on('watchparty:heartbeat', onHeartbeat);
         return () => socket.off('watchparty:heartbeat', onHeartbeat);
     }, [isConnected]);
 
     useEffect(() => {
-        if (!room || !roomCode || !isHost || !isConnected
+        if (!room || !roomCode || !isHost || !isConnected || !isPlaying
             || members.filter((member) => member.role === 'guest').length === 0) return;
 
         const socket = (socketService as unknown as { socket: {
@@ -249,55 +317,78 @@ export function WatchPartyProvider({ children }: { children: ReactNode }) {
 
         const emitHeartbeat = () => {
             if (!socket.connected || roomRef.current?.id !== room.id) return;
-            const playback = roomRef.current.playback;
-            const elapsed = playback.isPlaying ? Math.max(0, Date.now() - playback.updatedAt) / 1000 : 0;
-            const position = playback.currentTime + elapsed;
+            const currentRoom = roomRef.current;
+            const playback = currentRoom.playback;
+            const capabilities = resolveWatchPartyMediaCapabilities(getMediaInfo(currentRoom.media));
             const currentStateVersion = roomRef.current.stateVersion ?? stateVersion;
-            if (!Number.isInteger(currentStateVersion) || !Number.isFinite(position)) return;
-            socket.emit('watchparty:heartbeat', {
+            if (!Number.isInteger(currentStateVersion)) return;
+            const heartbeat: WatchPartyHeartbeat = {
                 roomCode,
                 stateVersion: currentStateVersion,
-                currentTime: Math.max(0, position),
                 isPlaying: playback.isPlaying,
-                isLive: Boolean(mediaInfo?.isLive),
                 timestamp: Date.now(),
-            });
+            };
+            if (capabilities.positionSync) {
+                // Prefer the REAL player time over stale React state extrapolation.
+                // This eliminates drift caused by React state not tracking currentTime continuously.
+                const realTime = getPlayerCurrentTime();
+                const position = playback.isPlaying && realTime !== null
+                    ? realTime
+                    : playback.currentTime + (playback.isPlaying
+                        ? Math.max(0, Date.now() - playback.updatedAt) / 1000
+                        : 0);
+                if (!Number.isFinite(position)) return;
+                heartbeat.currentTime = Math.max(0, position);
+                heartbeat.isLive = Boolean(mediaInfo?.isLive);
+            }
+            socket.emit('watchparty:heartbeat', heartbeat);
         };
-        const intervalId = window.setInterval(emitHeartbeat, 3000);
+        // 2-second interval gives guests tighter sync for video channels
+        const intervalId = window.setInterval(emitHeartbeat, 2000);
         return () => window.clearInterval(intervalId);
-    }, [room, roomCode, isHost, isConnected, members, stateVersion, mediaInfo]);
+    }, [room, roomCode, isHost, isConnected, isPlaying, members, stateVersion, mediaInfo]);
 
     const openMedia = useCallback((media: MediaInfo, silent = false, currentTime = 0, hostIsPlaying = true) => {
+        const capabilities = resolveWatchPartyMediaCapabilities(media);
+        const mediaKey = `${media.stationId}:${media.sourceUrl}`;
         setMediaInfo(media);
+        setPendingAction((pending) => pending?.action === 'seek' ? null : pending);
+        setRemoteExecutionRef(null);
         if (silent) {
             setIsPlaying(false);
-            const executionRef = `watchparty-initial-sync-${Date.now()}`;
-            setRemoteExecutionRef(executionRef);
-            window.setTimeout(() => setPendingAction({
-                roomId: roomRef.current?.id ?? '',
-                action: 'seek',
-                payload: Math.max(0, currentTime),
-                origin: executionRef,
-                actionId: executionRef,
-            }), 0);
+            if (capabilities.positionSync) {
+                const executionRef = `watchparty-initial-sync-${Date.now()}`;
+                setRemoteExecutionRef(executionRef);
+                window.setTimeout(() => {
+                    if (lastAppliedMediaRef.current !== mediaKey) return;
+                    setPendingAction({
+                        roomId: roomRef.current?.id ?? '',
+                        action: 'seek',
+                        payload: Math.max(0, currentTime),
+                        origin: executionRef,
+                        actionId: executionRef,
+                    });
+                }, 0);
+            }
             setNeedsSyncPlayback(hostIsPlaying);
         }
-        const mediaKey = `${media.stationId}:${media.sourceUrl}`;
         lastSentMediaRef.current = mediaKey;
 
         if (currentStation?.id === media.stationId) {
             lastAppliedMediaRef.current = mediaKey;
             if (!silent) {
                 setIsPlaying(hostIsPlaying);
-                const executionRef = `watchparty-same-station-${Date.now()}`;
-                setRemoteExecutionRef(executionRef);
-                setPendingAction({
-                    roomId: roomRef.current?.id ?? '',
-                    action: 'seek',
-                    payload: Math.max(0, currentTime),
-                    origin: executionRef,
-                    actionId: executionRef,
-                });
+                if (capabilities.positionSync) {
+                    const executionRef = `watchparty-same-station-${Date.now()}`;
+                    setRemoteExecutionRef(executionRef);
+                    setPendingAction({
+                        roomId: roomRef.current?.id ?? '',
+                        action: 'seek',
+                        payload: Math.max(0, currentTime),
+                        origin: executionRef,
+                        actionId: executionRef,
+                    });
+                }
             }
             return;
         }
@@ -306,7 +397,20 @@ export function WatchPartyProvider({ children }: { children: ReactNode }) {
         lastAppliedMediaRef.current = mediaKey;
 
         remoteMediaStationRef.current = media.stationId;
-        if (!silent) setIsPlaying(hostIsPlaying);
+        if (!silent) {
+            setIsPlaying(hostIsPlaying);
+            if (capabilities.positionSync && Number.isFinite(currentTime) && currentTime > 0) {
+                const executionRef = `watchparty-station-change-${Date.now()}`;
+                setRemoteExecutionRef(executionRef);
+                setPendingAction({
+                    roomId: roomRef.current?.id ?? '',
+                    action: hostIsPlaying ? 'play' : 'pause',
+                    payload: Math.max(0, currentTime),
+                    origin: executionRef,
+                    actionId: executionRef,
+                });
+            }
+        }
         setCurrentStation(stationFromMedia(media, stations));
     }, [currentStation?.id, setCurrentStation, setIsPlaying, stations]);
 
@@ -339,6 +443,7 @@ export function WatchPartyProvider({ children }: { children: ReactNode }) {
         setStateVersion(0);
         setRemoteExecutionRef(null);
         setPendingAction(null);
+        pausedCurrentTimeRef.current = null;
     }, []);
 
     const persistSession = useCallback((nextRoomCode: string, role: 'host' | 'guest') => {
@@ -377,8 +482,16 @@ export function WatchPartyProvider({ children }: { children: ReactNode }) {
             persistSession(joinedRoom.roomCode, isCurrentHost ? 'host' : 'guest');
             const roomMedia = getMediaInfo(joinedRoom.media);
             if (!isCurrentHost) {
-                if (roomMedia) openMedia(roomMedia, true, joinedRoom.playback.currentTime, joinedRoom.playback.isPlaying);
-                else pauseForSilentJoin();
+                if (roomMedia) {
+                    // Compensate for time elapsed since the server last received a heartbeat.
+                    const serverElapsed = joinedRoom.playback.isPlaying
+                        ? Math.max(0, Date.now() - (joinedRoom.playback.updatedAt || Date.now())) / 1000
+                        : 0;
+                    const compensatedTime = Math.max(0, joinedRoom.playback.currentTime + serverElapsed);
+                    openMedia(roomMedia, true, compensatedTime, joinedRoom.playback.isPlaying);
+                } else {
+                    pauseForSilentJoin();
+                }
             }
         } catch {
             // Keep the saved session so a later Socket.IO reconnect can retry.
@@ -421,7 +534,33 @@ export function WatchPartyProvider({ children }: { children: ReactNode }) {
         cleanups.push(registerErrorListener(setError));
 
         cleanups.push(registerActionListener((event) => {
+            const actionRoom = roomRef.current;
+            const actionCapabilities = resolveWatchPartyMediaCapabilities(getMediaInfo(actionRoom?.media));
+            const eventPosition = event.action === 'seek'
+                ? getActionPosition(event.payload)
+                : getPlayerCurrentTime() ?? actionRoom?.playback.currentTime ?? null;
+            const eventSender = (event as typeof event & { senderId?: string; senderSocketId?: string });
+            console.info('[WP Broadcast IN]', {
+                role: actionRoom?.hostId === getWatchPartySocketId() ? 'host' : 'guest',
+                action: event.action,
+                position: eventPosition,
+                stateVersion: event.stateVersion,
+                fromSocket: eventSender.senderSocketId ?? eventSender.senderId ?? 'not-in-payload',
+            });
             setStateVersion(event.stateVersion);
+            if (event.action === 'seek' && (!actionCapabilities.seek || !actionCapabilities.positionSync)) return;
+            let pauseSnapshot: number | null = null;
+            if (actionRoom?.id === event.roomId && event.action === 'pause' && actionCapabilities.positionSync) {
+                const isCurrentHost = actionRoom.hostId === getWatchPartySocketId();
+                const playerTime = isCurrentHost ? getPlayerCurrentTime() : null;
+                const candidate = playerTime ?? actionRoom.playback.currentTime;
+                if (Number.isFinite(candidate) && candidate >= 0) {
+                    pauseSnapshot = candidate;
+                    pausedCurrentTimeRef.current = candidate;
+                }
+            } else if (actionRoom?.id === event.roomId && event.action === 'play') {
+                pausedCurrentTimeRef.current = null;
+            }
             setRoom((currentRoom) => currentRoom?.id === event.roomId
                 ? {
                     ...currentRoom,
@@ -430,6 +569,9 @@ export function WatchPartyProvider({ children }: { children: ReactNode }) {
                         ...currentRoom.playback,
                         ...(event.action === 'play' ? { isPlaying: true } : {}),
                         ...(event.action === 'pause' ? { isPlaying: false } : {}),
+                        ...(event.action === 'pause' && pauseSnapshot !== null
+                            ? { currentTime: pauseSnapshot }
+                            : {}),
                         ...(event.action === 'seek' ? {
                             currentTime: typeof event.payload === 'number'
                                 ? event.payload
@@ -442,6 +584,13 @@ export function WatchPartyProvider({ children }: { children: ReactNode }) {
                 }
                 : currentRoom);
             setRemoteExecutionRef(event.remoteExecutionRef);
+            console.info('[WP PendingAction]', {
+                role: actionRoom?.hostId === getWatchPartySocketId() ? 'host' : 'guest',
+                source: 'broadcast',
+                action: event.action,
+                position: eventPosition,
+                stateVersion: event.stateVersion,
+            });
             setPendingAction({
                 roomId: event.roomId,
                 action: event.action,
@@ -454,11 +603,13 @@ export function WatchPartyProvider({ children }: { children: ReactNode }) {
         cleanups.push(registerStateListener((event) => {
             setStateVersion(event.stateVersion);
             const media = getMediaInfo((event as typeof event & { media?: unknown }).media);
+            const stateMedia = media ?? getMediaInfo(roomRef.current?.media);
+            const capabilities = resolveWatchPartyMediaCapabilities(stateMedia);
             if (media) {
                 setMediaInfo(media);
                 lastSentMediaRef.current = `${media.stationId}:${media.sourceUrl}`;
                 if (!joiningRoomRef.current && roomRef.current?.hostId !== getWatchPartySocketId()) {
-                    openMedia(media, false, event.currentTime, event.isPlaying);
+                    openMedia(media, false, capabilities.positionSync ? event.currentTime : 0, event.isPlaying);
                 }
             }
             setRoom((currentRoom) => currentRoom?.id === event.roomId
@@ -468,7 +619,7 @@ export function WatchPartyProvider({ children }: { children: ReactNode }) {
                     ...(media ? { media: media as unknown as Record<string, unknown> } : {}),
                     playback: {
                         ...currentRoom.playback,
-                        currentTime: event.currentTime,
+                        ...(capabilities.positionSync ? { currentTime: event.currentTime } : {}),
                         isPlaying: event.isPlaying,
                     },
                 }
@@ -518,6 +669,8 @@ export function WatchPartyProvider({ children }: { children: ReactNode }) {
 
         if (lastSentMediaRef.current === mediaKey) return;
 
+        setPendingAction((pending) => pending?.action === 'seek' ? null : pending);
+        setRemoteExecutionRef(null);
         lastSentMediaRef.current = mediaKey;
         void changeMedia({ roomId: room.id, media }).then((response) => {
             if (!response?.success) {
@@ -605,7 +758,11 @@ export function WatchPartyProvider({ children }: { children: ReactNode }) {
             setIsHost(isCurrentHost);
             setRadioMediaChangeAllowed(isCurrentHost);
             if (roomMedia && response.room.hostId !== getWatchPartySocketId()) {
-                openMedia(roomMedia, true, response.room.playback.currentTime, response.room.playback.isPlaying);
+                const joinElapsed = response.room.playback.isPlaying
+                    ? Math.max(0, Date.now() - (response.room.playback.updatedAt || Date.now())) / 1000
+                    : 0;
+                const joinTime = Math.max(0, response.room.playback.currentTime + joinElapsed);
+                openMedia(roomMedia, true, joinTime, response.room.playback.isPlaying);
                 setNeedsSyncPlayback(response.room.playback.isPlaying);
             } else if (response.room.hostId !== getWatchPartySocketId()) {
                 pauseForSilentJoin();
@@ -649,16 +806,90 @@ export function WatchPartyProvider({ children }: { children: ReactNode }) {
     }, [clearRoomState]);
 
     const sendAction = useCallback((action: WatchPartyAction['action'], payload: unknown) => {
+        const mediaCapabilities = resolveWatchPartyMediaCapabilities(
+            currentStation ?? getMediaInfo(room?.media) ?? mediaInfo,
+        );
+        if ((action === 'play' || action === 'pause') && !mediaCapabilities.playPause) {
+            return Promise.resolve({ success: false, error: 'PLAYBACK_CONTROL_UNSUPPORTED' });
+        }
+        if (action === 'seek' && (!mediaCapabilities.seek || !mediaCapabilities.positionSync)) {
+            return Promise.resolve({ success: false, error: 'POSITION_SYNC_UNSUPPORTED' });
+        }
+        const traceAction = action === 'play' || action === 'pause' || action === 'seek';
+        const position = action === 'seek'
+            ? getActionPosition(payload)
+            : getPlayerCurrentTime() ?? room?.playback.currentTime ?? null;
+        if (traceAction) {
+            console.info('[WP Action OUT]', {
+                role: isHost ? 'host' : 'guest',
+                action,
+                position,
+                stateVersion,
+                isHost,
+            });
+        }
+        const logActionAck = (response: WatchPartyResponse, transport: 'socket' | 'client') => {
+            const responseVersion = (response as WatchPartyResponse & { stateVersion?: number }).stateVersion;
+            if (traceAction) {
+                console.info('[WP Action ACK]', {
+                    role: isHost ? 'host' : 'guest',
+                    action,
+                    success: response.success,
+                    error: response.error ?? null,
+                    stateVersion: responseVersion ?? stateVersion,
+                    transport,
+                });
+            }
+            if (response.error === 'NOT_HOST') {
+                console.warn('[WP NOT_HOST SOURCE]', {
+                    role: isHost ? 'host' : 'guest',
+                    action,
+                    isHost,
+                    error: response.error,
+                    stateVersion: responseVersion ?? stateVersion,
+                    transport,
+                });
+            }
+            return response;
+        };
+
+        const emitAction = () => emitWatchPartyAction({ roomId: room!.id, action, payload, stateVersion })
+            .then((response) => logActionAck(response, 'socket'))
+            .catch((error: unknown) => {
+                if (traceAction) {
+                    console.info('[WP Action ACK]', {
+                        role: isHost ? 'host' : 'guest',
+                        action,
+                        success: false,
+                        error: error instanceof Error ? error.message : String(error),
+                        stateVersion,
+                        transport: 'socket-error',
+                    });
+                }
+                throw error;
+            });
+
         if (!room) {
-            return Promise.resolve({ success: false, error: 'NOT_IN_ROOM' });
+            return Promise.resolve(logActionAck({ success: false, error: 'NOT_IN_ROOM' }, 'client'));
+        }
+        if (!isHost) {
+            const isPlayPause = action === 'play' || action === 'pause';
+            const isYouTube = mediaInfo?.mediaType === 'youtube'
+                || (typeof currentStation?.id === 'string' && currentStation.id.startsWith('yt-'))
+                || currentStation?.url?.includes('youtube')
+                || currentStation?.iframeUrl?.includes('youtube');
+            const isYouTubeSeek = action === 'seek' && isYouTube;
+            if (!isPlayPause && !isYouTubeSeek) {
+                return Promise.resolve(logActionAck({ success: false, error: 'NOT_HOST' }, 'client'));
+            }
         }
 
         const isPlayPause = action === 'play' || action === 'pause';
         if (!isPlayPause) {
-            return emitWatchPartyAction({ roomId: room.id, action, payload, stateVersion });
+            return emitAction();
         }
         if (commandLockRef.current) {
-            return Promise.resolve({ success: false, error: 'COMMAND_LOCKED' });
+            return Promise.resolve(logActionAck({ success: false, error: 'COMMAND_LOCKED' }, 'client'));
         }
 
         commandLockRef.current = true;
@@ -681,7 +912,7 @@ export function WatchPartyProvider({ children }: { children: ReactNode }) {
             if (acknowledged) releaseLock();
         }, 350);
 
-        return emitWatchPartyAction({ roomId: room.id, action, payload, stateVersion }).then((response) => {
+        return emitAction().then((response) => {
             acknowledged = true;
             if (cooldownElapsed || Date.now() - startedAt >= 350) releaseLock();
             return response;
@@ -690,7 +921,7 @@ export function WatchPartyProvider({ children }: { children: ReactNode }) {
             if (cooldownElapsed || Date.now() - startedAt >= 350) releaseLock();
             throw error;
         });
-    }, [room, stateVersion]);
+    }, [room, isHost, stateVersion, mediaInfo, currentStation]);
 
     const consumePendingAction = useCallback(() => {
         const action = pendingAction;
@@ -701,9 +932,29 @@ export function WatchPartyProvider({ children }: { children: ReactNode }) {
     const clearRemoteExecutionRef = useCallback(() => setRemoteExecutionRef(null), []);
     const syncPlayback = useCallback(() => {
         if (!room || isHost || !needsSyncPlayback) return;
+        const capabilities = resolveWatchPartyMediaCapabilities(getMediaInfo(room.media));
+        const elapsed = room.playback.isPlaying
+            ? Math.max(0, Date.now() - (room.playback.updatedAt || Date.now())) / 1000
+            : 0;
+        const targetTime = capabilities.positionSync
+            ? Math.max(0, room.playback.currentTime + elapsed)
+            : null;
         const executionRef = `watchparty-local-sync-${Date.now()}`;
+        console.info('[WP PendingAction]', {
+            role: isHost ? 'host' : 'guest',
+            source: 'sync',
+            action: 'play',
+            position: targetTime ?? room.playback.currentTime,
+            stateVersion: room.stateVersion,
+        });
         setRemoteExecutionRef(executionRef);
-        setPendingAction({ roomId: room.id, action: 'play', payload: null, origin: executionRef, actionId: executionRef });
+        setPendingAction({
+            roomId: room.id,
+            action: 'play',
+            payload: targetTime,
+            origin: executionRef,
+            actionId: executionRef,
+        });
         setIsPlaying(true);
         setNeedsSyncPlayback(false);
     }, [isHost, needsSyncPlayback, room, setIsPlaying]);
