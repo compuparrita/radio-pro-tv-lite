@@ -437,26 +437,7 @@ export const Player: React.FC = () => {
                                             allowFullScreen
                                             title={currentStation.name}
                                         />
-                                        {needsSyncPlayback && !isHost ? (
-                                            <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/75 backdrop-blur-sm z-20 p-4">
-                                                <div className="flex flex-col items-center max-w-sm text-center">
-                                                    <p className="text-white text-base font-semibold mb-1">
-                                                        Transmisión en directo del anfitrión
-                                                    </p>
-                                                    <p className="text-white/60 text-xs mb-4">
-                                                        Pulsa para sincronizarte al instante con la sala
-                                                    </p>
-                                                    <button
-                                                        onClick={() => syncPlayback()}
-                                                        type="button"
-                                                        className="px-6 py-2.5 rounded-full bg-cyan-400 hover:bg-cyan-300 text-slate-950 font-bold text-sm shadow-[0_4px_20px_rgba(34,211,238,0.4)] transition hover:scale-105 active:scale-95 flex items-center gap-2 cursor-pointer"
-                                                    >
-                                                        <Play size={16} fill="currentColor" />
-                                                        Sincronizar ahora
-                                                    </button>
-                                                </div>
-                                            </div>
-                                        ) : !isPlaying ? (
+                                        {!isPlaying && (
                                             <div className="absolute inset-0 flex flex-col items-center justify-center bg-[var(--dark-bg)] bg-gradient-to-b from-black/20 to-black/60 z-10 pointer-events-none">
                                                 <img
                                                     src={currentStation.logo || 'https://picsum.photos/seed/radio-streaming-pro/150/150.jpg'}
@@ -466,7 +447,7 @@ export const Player: React.FC = () => {
                                                 />
                                                 <p className="mt-3 text-[var(--text-secondary)] text-sm font-medium">Pausado</p>
                                             </div>
-                                        ) : null}
+                                        )}
                                     </div>
                                 ) : (
                                     /* General TV / Embed iFrame (e.g. ksdjugfssddeports.com, tvporinternet2.com, etc.) */
@@ -550,9 +531,9 @@ export const Player: React.FC = () => {
                                     preload="metadata"
                                 />
                             </div>
-                        ) : isPlaying ? (
+                        ) : (
                             <audio ref={setVideoElementRef as any} style={{ display: 'none' }} playsInline preload="metadata" />
-                        ) : null}
+                        )}
 
                         {/* Audio Logo with pulsing effect */}
                         <div className="relative z-10">

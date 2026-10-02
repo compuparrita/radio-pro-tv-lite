@@ -54,8 +54,10 @@ export const MobileNav: React.FC<MobileNavProps> = ({ onChatClick, onThemeClick,
         return () => window.removeEventListener('scroll', handleScroll);
     }, []);
 
+    const isBarVisible = isVisible || Boolean(room);
+
     return (
-        <div className={`lg:hidden fixed bottom-0 left-0 right-0 z-30 bg-[var(--dark-surface)] border-t border-[var(--dark-border)] transition-transform duration-300 ease-in-out ${isVisible ? 'translate-y-0' : 'translate-y-full'}`}>
+        <div className={`lg:hidden fixed bottom-0 left-0 right-0 z-[1000] bg-[var(--dark-surface)] border-t border-[var(--dark-border)] transition-transform duration-300 ease-in-out pb-[env(safe-area-inset-bottom,0px)] ${isBarVisible ? 'translate-y-0' : 'translate-y-full'}`}>
             <div className="flex items-center justify-between py-2.5 px-3">
                 {/* Theme Toggle - Left Side */}
                 <button
@@ -89,8 +91,9 @@ export const MobileNav: React.FC<MobileNavProps> = ({ onChatClick, onThemeClick,
                     {/* Previous Station */}
                     <button
                         onClick={prevStation}
-                        className="flex flex-col items-center justify-center gap-1 active:opacity-50 transition-opacity"
-                        title="Anterior"
+                        disabled={Boolean(room && !isHost)}
+                        className={`flex flex-col items-center justify-center gap-1 active:opacity-50 transition-opacity ${room && !isHost ? 'opacity-35 cursor-not-allowed' : ''}`}
+                        title={room && !isHost ? 'Solo el anfitrión cambia de estación' : 'Anterior'}
                     >
                         <SkipBack size={19} className="text-gray-400" strokeWidth={1.5} />
                         <span className="text-[9px] text-gray-400">Anterior</span>
@@ -115,8 +118,9 @@ export const MobileNav: React.FC<MobileNavProps> = ({ onChatClick, onThemeClick,
                     {/* Next Station */}
                     <button
                         onClick={nextStation}
-                        className="flex flex-col items-center justify-center gap-1 active:opacity-50 transition-opacity"
-                        title="Siguiente"
+                        disabled={Boolean(room && !isHost)}
+                        className={`flex flex-col items-center justify-center gap-1 active:opacity-50 transition-opacity ${room && !isHost ? 'opacity-35 cursor-not-allowed' : ''}`}
+                        title={room && !isHost ? 'Solo el anfitrión cambia de estación' : 'Siguiente'}
                     >
                         <SkipForward size={19} className="text-gray-400" strokeWidth={1.5} />
                         <span className="text-[9px] text-gray-400">Siguiente</span>

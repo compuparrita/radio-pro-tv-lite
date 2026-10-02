@@ -198,7 +198,9 @@ export function WatchPartyProvider({ children }: { children: ReactNode }) {
     const hasStartedSocket = useRef(false);
     const readSavedSession = (): { roomCode: string; userId: string; role: 'host' | 'guest' } | null => {
         try {
-            const value = localStorage.getItem('watchparty_session');
+            // Clean up any legacy session accidentally left in localStorage from previous versions
+            localStorage.removeItem('watchparty_session');
+            const value = sessionStorage.getItem('watchparty_session');
             if (!value) return null;
             const session = JSON.parse(value) as { roomCode?: unknown; userId?: unknown; role?: unknown };
             if (typeof session.roomCode !== 'string' || typeof session.userId !== 'string'
@@ -450,7 +452,10 @@ export function WatchPartyProvider({ children }: { children: ReactNode }) {
         const userId = getWatchPartySocketId();
         if (!userId) return;
         const session = { roomCode: nextRoomCode, userId, role };
-        try { localStorage.setItem('watchparty_session', JSON.stringify(session)); } catch { /* Storage may be unavailable. */ }
+        try {
+            sessionStorage.setItem('watchparty_session', JSON.stringify(session));
+            localStorage.removeItem('watchparty_session');
+        } catch { /* Storage may be unavailable. */ }
         activeSessionRef.current = { ...session, userName: profile?.name ?? '' };
     }, [profile?.name]);
 
@@ -463,7 +468,10 @@ export function WatchPartyProvider({ children }: { children: ReactNode }) {
             const response = await sendJoinRoom({ roomCode: session.roomCode, userName: profile.name });
             if (!response.success || !response.room) {
                 if (response.error === 'ROOM_NOT_FOUND') {
-                    try { localStorage.removeItem('watchparty_session'); } catch { /* Storage may be unavailable. */ }
+                    try {
+                        sessionStorage.removeItem('watchparty_session');
+                        localStorage.removeItem('watchparty_session');
+                    } catch { /* Storage may be unavailable. */ }
                     activeSessionRef.current = null;
                     clearRoomState();
                     setError({ code: 'ROOM_ENDED', message: 'La sala terminó.' });
@@ -791,7 +799,10 @@ export function WatchPartyProvider({ children }: { children: ReactNode }) {
                 return false;
             }
             activeSessionRef.current = null;
-            try { localStorage.removeItem('watchparty_session'); } catch { /* Storage may be unavailable. */ }
+            try {
+                sessionStorage.removeItem('watchparty_session');
+                localStorage.removeItem('watchparty_session');
+            } catch { /* Storage may be unavailable. */ }
             clearRoomState();
             return true;
         } catch (requestError) {

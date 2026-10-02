@@ -301,6 +301,13 @@ function AppContent() {
                     onInviteCancel={handleRoomInviteCancel}
                     onInviteJoined={handleRoomInviteJoined}
                 />
+                <div className="mobile-nav-container">
+                    <MobileNav
+                        onChatClick={() => setIsChatOpen(true)}
+                        onThemeClick={cycleTheme}
+                        onWatchPartyClick={() => setIsWatchPartyOpen(true)}
+                    />
+                </div>
             </>
         );
     }
