@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { SkipBack, Play, Pause, SkipForward, MessageCircle, Palette, Film } from 'lucide-react';
+import { SkipBack, Play, Pause, SkipForward, MessageCircle, Palette, Film, ArrowLeft } from 'lucide-react';
 import { useRadio } from '../context/RadioContext';
 import { useChat } from '../context/ChatContext';
 import { useWatchParty } from '../context/WatchPartyContext';
@@ -8,9 +8,10 @@ interface MobileNavProps {
     onChatClick: () => void;
     onThemeClick: () => void;
     onWatchPartyClick?: () => void;
+    isGuestCinema: boolean;
 }
 
-export const MobileNav: React.FC<MobileNavProps> = ({ onChatClick, onThemeClick, onWatchPartyClick }) => {
+export const MobileNav: React.FC<MobileNavProps> = ({ onChatClick, onThemeClick, onWatchPartyClick, isGuestCinema }) => {
     const { isPlaying, togglePlay, nextStation, prevStation } = useRadio();
     const { unreadCount, onlineListeners, connectionStatus } = useChat();
     const { room, isHost, sendAction } = useWatchParty();
@@ -69,20 +70,24 @@ export const MobileNav: React.FC<MobileNavProps> = ({ onChatClick, onThemeClick,
                     <span className="text-[9px] text-gray-400">Tema</span>
                 </button>
 
-                {/* WatchParty Cine Button */}
+                {/* Single dynamic WatchParty navigation button */}
                 <button
                     onClick={onWatchPartyClick}
-                    className="relative flex flex-col items-center justify-center gap-1 min-w-[38px] active:opacity-50 transition-opacity"
+                    className="group relative flex flex-col items-center justify-center gap-1 min-w-[38px] text-[var(--text-secondary)] hover:text-[var(--primary-color)] active:opacity-50 transition-opacity focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--primary-color)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--dark-surface)]"
                     title="Cine Compartido"
                 >
                     <div className="relative">
-                        <Film size={19} className={room ? 'text-cyan-400' : 'text-gray-400'} strokeWidth={1.75} />
-                        {room && (
-                            <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-cyan-400 animate-pulse" />
+                        {isGuestCinema ? (
+                            <ArrowLeft size={19} className="text-[var(--primary-color)]" strokeWidth={1.75} />
+                        ) : (
+                            <Film size={19} className={room ? 'text-[var(--primary-color)]' : 'text-[var(--text-secondary)] group-hover:text-[var(--primary-color)]'} strokeWidth={1.75} />
+                        )}
+                        {room && !isGuestCinema && (
+                            <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-[var(--primary-color)] animate-pulse" />
                         )}
                     </div>
-                    <span className={`text-[9px] font-medium ${room ? 'text-cyan-300 font-bold' : 'text-gray-400'}`}>
-                        {room ? 'Sala' : 'Cine'}
+                    <span className={`text-[9px] font-medium ${room || isGuestCinema ? 'text-[var(--primary-color)] font-bold' : 'text-[var(--text-secondary)] group-hover:text-[var(--primary-color)]'}`}>
+                        {isGuestCinema ? 'Salir' : room ? 'Sala' : 'Cine'}
                     </span>
                 </button>
 

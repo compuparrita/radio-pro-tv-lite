@@ -1,6 +1,7 @@
 import { LogOut, MessageCircle, Users } from 'lucide-react';
 import { useWatchParty } from '../context/WatchPartyContext';
 import { Player } from './Player';
+import { getWatchPartySessionTitle } from '../utils/watchPartySessionTitle';
 
 interface GuestCinemaLayoutProps {
     isConnected: boolean;
@@ -13,13 +14,16 @@ export function GuestCinemaLayout({ isConnected, onChatClick, onExitCinema }: Gu
     const host = members.find((member) => member.role === 'host')
         ?? room?.members.find((member) => member.role === 'host');
     const participantCount = members.length || room?.members.length || 0;
+    const sessionTitle = room
+        ? getWatchPartySessionTitle(room.id, room.createdAt)
+        : 'Noche de cine';
 
     return (
         <main className="min-h-screen pb-24 lg:pb-0 bg-[var(--dark-bg)] text-[var(--text-primary)]">
             <div className="mx-auto flex min-h-screen w-full max-w-[1600px] flex-col gap-6 px-4 py-5 sm:gap-8 sm:px-8 sm:py-8 lg:px-12">
                 <header className="flex items-center justify-between gap-4 border-b border-white/10 pb-4">
                     <h1 className="text-base font-bold tracking-wide sm:text-lg">
-                        <span aria-hidden="true">🎬 </span>Noche de cine
+                        <span aria-hidden="true">🎬 </span>{sessionTitle}
                     </h1>
                     <div className="flex shrink-0 items-center gap-3 sm:gap-5">
                         <div className="flex items-center gap-2 text-xs font-semibold text-[var(--text-secondary)] sm:text-sm" role="status" aria-live="polite">
@@ -29,7 +33,7 @@ export function GuestCinemaLayout({ isConnected, onChatClick, onExitCinema }: Gu
                         </div>
                         <button
                             aria-label="Salir del Modo Cine"
-                            className="flex h-11 w-11 items-center justify-center rounded-full border border-white/10 text-[var(--text-secondary)] transition hover:bg-white/5 hover:text-cyan-200"
+                            className="hidden h-11 w-11 items-center justify-center rounded-full border border-[var(--dark-border)] text-[var(--text-secondary)] transition hover:bg-[var(--dark-surface)] hover:text-[var(--primary-color)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--primary-color)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--dark-bg)] lg:flex"
                             onClick={onExitCinema}
                             title="Salir del Modo Cine"
                             type="button"

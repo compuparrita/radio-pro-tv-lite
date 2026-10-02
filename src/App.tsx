@@ -17,6 +17,7 @@ import WatchPartyModal from './components/WatchPartyModal';
 import { UserProfileForm } from './components/UserProfileForm';
 import { HelpCircle } from 'lucide-react';
 import { GuestCinemaLayout } from './components/GuestCinemaLayout';
+import { getWatchPartySessionTitle } from './utils/watchPartySessionTitle';
 
 const ROOM_CODE_PATTERN = /^[A-HJ-NP-Z2-9]{6}$/;
 
@@ -73,7 +74,7 @@ function AppContent() {
     // Enable Smart TV remote control navigation
     useTVRemote();
 
-    const isGuestCinema = Boolean(room && !isHost && isGuestCinemaMode);
+    const isGuestCinema = Boolean(room && isGuestCinemaMode);
 
     useEffect(() => {
         setIsGuestCinemaMode(Boolean(room && !isHost));
@@ -111,6 +112,19 @@ function AppContent() {
         } else {
             setIsWatchPartyOpen(false);
         }
+    };
+
+    const handleWatchPartyNavigation = () => {
+        if (room) {
+            if (isGuestCinema) {
+                setIsGuestCinemaMode(false);
+                setIsWatchPartyOpen(false);
+            } else {
+                setIsGuestCinemaMode(true);
+            }
+            return;
+        }
+        setIsWatchPartyOpen(true);
     };
 
     // Apply theme to body
@@ -291,7 +305,7 @@ function AppContent() {
                 <GuestCinemaLayout
                     isConnected={isConnected}
                     onChatClick={() => setIsChatOpen(true)}
-                    onExitCinema={() => setIsGuestCinemaMode(false)}
+                    onExitCinema={handleWatchPartyNavigation}
                 />
                 <ChatModal externalOpen={isChatOpen} onOpenChange={setIsChatOpen} roomCode={roomCode} />
                 <WatchPartyModal
@@ -305,7 +319,8 @@ function AppContent() {
                     <MobileNav
                         onChatClick={() => setIsChatOpen(true)}
                         onThemeClick={cycleTheme}
-                        onWatchPartyClick={() => setIsWatchPartyOpen(true)}
+                        onWatchPartyClick={handleWatchPartyNavigation}
+                        isGuestCinema={isGuestCinema}
                     />
                 </div>
             </>
@@ -358,6 +373,12 @@ function AppContent() {
                             minWidth: isDesktop ? '450px' : '0'
                         }}
                     >
+                        {room && isHost && (
+                            <h1 className="mb-3 text-base font-bold tracking-wide sm:text-lg">
+                                <span aria-hidden="true">🎬 </span>
+                                {getWatchPartySessionTitle(room.id, room.createdAt)}
+                            </h1>
+                        )}
                         <Player />
                         {/* On mobile/tablet vertical, the list is part of the same parent as the player */}
                         <div className="lg:hidden mt-6 mobile-list-container">
@@ -437,7 +458,8 @@ function AppContent() {
                 <MobileNav
                     onChatClick={() => setIsChatOpen(true)}
                     onThemeClick={cycleTheme}
-                    onWatchPartyClick={() => setIsWatchPartyOpen(true)}
+                    onWatchPartyClick={handleWatchPartyNavigation}
+                    isGuestCinema={isGuestCinema}
                 />
             </div>
         </div>
