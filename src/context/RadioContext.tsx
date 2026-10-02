@@ -48,39 +48,74 @@ export const useRadio = () => {
 export const RADIO_CATEGORIES = ['Noticias', 'Música', 'Deportes', 'Religión', 'Cultura', 'Relax', 'Otros'];
 export const TV_CATEGORIES = ['Noticias', 'Música tv', 'Cine & Series', 'Documentales', 'Infantil', 'Deportes', 'Relax', 'Otros'];
 
-export const RadioProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-    const [stations, setStations] = useState<Station[]>([]);
-    const [isInitialLoad, setIsInitialLoad] = useState(true);
+const STATIONS_CACHE_KEY = 'radioStations';
+const STATIONS_CACHED_AT_KEY = 'radioStations_cachedAt';
+const STATIONS_CACHE_TTL = 24 * 60 * 60 * 1000; // 24 horas de vigencia de caché local
+const STATIONS_REALTIME_DEBOUNCE_MS = 1500; // Coalescing de 1.5s para eventos Realtime consecutivos
 
-    // Bootstrap stations: Estrategia Híbrida (Caché local instantáneo 0ms + Sincronización en segundo plano con Supabase)
+export const RadioProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+    const [stations, setStations] = useState<Station[]>(() => {
+        if (typeof window === 'undefined') return [];
+        try {
+            const saved = localStorage.getItem(STATIONS_CACHE_KEY);
+            if (saved) {
+                const parsed = JSON.parse(saved);
+                if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+            }
+        } catch {}
+        return [];
+    });
+    const [isInitialLoad, setIsInitialLoad] = useState(() => {
+        if (typeof window === 'undefined') return true;
+        try {
+            const saved = localStorage.getItem(STATIONS_CACHE_KEY);
+            return !saved;
+        } catch {
+            return true;
+        }
+    });
+
+    // Bootstrap stations: Estrategia Cache-First (Caché local inmediato + Sync condicional + Coalescing Realtime)
     useEffect(() => {
         let isMounted = true;
+        let realtimeDebounceTimer: ReturnType<typeof setTimeout> | null = null;
 
         const initStations = async () => {
-            const saved = localStorage.getItem('radioStations');
+            const saved = localStorage.getItem(STATIONS_CACHE_KEY);
+            const cachedAtStr = localStorage.getItem(STATIONS_CACHED_AT_KEY);
+            const cachedAt = cachedAtStr ? Number(cachedAtStr) : 0;
+            const isCacheFresh = cachedAt > 0 && (Date.now() - cachedAt < STATIONS_CACHE_TTL);
 
-            // 1. Cargar de inmediato desde la caché local si existe (arranque a 0 segundos)
+            // 1. Si existe caché local válido y dentro del TTL, mostrarlo y omitir consulta remota
             if (saved) {
                 try {
                     const parsed = JSON.parse(saved);
                     if (Array.isArray(parsed) && parsed.length > 0) {
                         setStations(parsed);
                         setIsInitialLoad(false);
+
+                        if (isCacheFresh) {
+                            console.log('[RadioContext] Catálogo cargado desde caché local válido (TTL vigente). Omitiendo GET Supabase.');
+                            return;
+                        } else {
+                            console.log('[RadioContext] Caché local expirado (> 24h). Sincronizando en segundo plano...');
+                        }
                     }
                 } catch (e) {
                     console.error('Error al leer caché local de radioStations:', e);
                 }
             }
 
-            // 2. Consultar catálogo maestro en la nube de Supabase
+            // 2. Si no hay caché o expiró el TTL, consultar catálogo maestro en la nube de Supabase
             try {
                 const cloudStations = await fetchStationsFromCloud();
                 if (isMounted && cloudStations && cloudStations.length > 0) {
                     setStations(cloudStations);
-                    localStorage.setItem('radioStations', JSON.stringify(cloudStations));
+                    localStorage.setItem(STATIONS_CACHE_KEY, JSON.stringify(cloudStations));
+                    localStorage.setItem(STATIONS_CACHED_AT_KEY, Date.now().toString());
                 }
             } catch (error) {
-                console.warn('[RadioContext] Sin conexión a Supabase, usando respaldo local o stations.json:', error);
+                console.warn('[RadioContext] Sin conexión a Supabase, conservando catálogo local o stations.json:', error);
                 if (!saved) {
                     await fetchDefaultStations();
                 }
@@ -102,7 +137,8 @@ export const RadioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
                 const data = await response.json();
                 if (isMounted) {
                     setStations(data);
-                    localStorage.setItem('radioStations', JSON.stringify(data));
+                    localStorage.setItem(STATIONS_CACHE_KEY, JSON.stringify(data));
+                    localStorage.setItem(STATIONS_CACHED_AT_KEY, Date.now().toString());
                 }
             } catch (error) {
                 console.error('Error fetching fallback stations:', error);
@@ -112,21 +148,31 @@ export const RadioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
         initStations();
 
-        // 3. Suscripción en tiempo real: Si se agrega/edita una emisora en Supabase, se actualiza automáticamente
-        const unsubscribe = subscribeToStationsChanges(async () => {
-            try {
-                const updatedStations = await fetchStationsFromCloud();
-                if (isMounted && updatedStations && updatedStations.length > 0) {
-                    setStations(updatedStations);
-                    localStorage.setItem('radioStations', JSON.stringify(updatedStations));
-                }
-            } catch (err) {
-                console.error('Error al sincronizar cambio en tiempo real:', err);
+        // 3. Suscripción en tiempo real con coalescing (debounce de 1.5s para evitar tormentas de GETs)
+        const unsubscribe = subscribeToStationsChanges(() => {
+            if (realtimeDebounceTimer) {
+                clearTimeout(realtimeDebounceTimer);
             }
+            realtimeDebounceTimer = setTimeout(async () => {
+                try {
+                    console.log('[RadioContext Realtime] Ejecutando sincronización de emisoras coalescida...');
+                    const updatedStations = await fetchStationsFromCloud();
+                    if (isMounted && updatedStations && updatedStations.length > 0) {
+                        setStations(updatedStations);
+                        localStorage.setItem(STATIONS_CACHE_KEY, JSON.stringify(updatedStations));
+                        localStorage.setItem(STATIONS_CACHED_AT_KEY, Date.now().toString());
+                    }
+                } catch (err) {
+                    console.error('[RadioContext Realtime] Error al sincronizar cambio en tiempo real:', err);
+                }
+            }, STATIONS_REALTIME_DEBOUNCE_MS);
         });
 
         return () => {
             isMounted = false;
+            if (realtimeDebounceTimer) {
+                clearTimeout(realtimeDebounceTimer);
+            }
             unsubscribe();
         };
     }, []);
@@ -314,7 +360,8 @@ export const RadioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     // Save to localStorage
     useEffect(() => {
         if (!isInitialLoad && stations.length > 0) {
-            localStorage.setItem('radioStations', JSON.stringify(stations));
+            localStorage.setItem(STATIONS_CACHE_KEY, JSON.stringify(stations));
+            localStorage.setItem(STATIONS_CACHED_AT_KEY, Date.now().toString());
         }
     }, [stations, isInitialLoad]);
 

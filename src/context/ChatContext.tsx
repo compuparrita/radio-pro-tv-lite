@@ -144,9 +144,46 @@ function showDesktopNotification(senderName: string, messageText: string, onOpen
     }
 }
 
+const CHAT_CACHE_KEY = 'chatCachedMessages';
+const CHAT_CACHED_AT_KEY = 'chatCachedAt';
+const CHAT_CACHE_TTL = 5 * 60 * 1000; // 5 minutos de validez para el snapshot
+const MAX_CACHED_MESSAGES = 40; // Mantener un snapshot seguro y acotado
+
+function saveChatMessagesToCache(msgs: ChatMessage[]) {
+    if (typeof window === 'undefined') return;
+    try {
+        const recent = msgs.slice(-MAX_CACHED_MESSAGES);
+        // Proteger contra QuotaExceededError en localStorage si hay archivos grandes en base64
+        const sanitized = recent.map((m) => {
+            if (m.mediaThumbnail && m.mediaThumbnail.startsWith('data:') && m.mediaThumbnail.length > 50000) {
+                return { ...m, mediaThumbnail: undefined };
+            }
+            return m;
+        });
+        localStorage.setItem(CHAT_CACHE_KEY, JSON.stringify(sanitized));
+        localStorage.setItem(CHAT_CACHED_AT_KEY, Date.now().toString());
+    } catch (e) {
+        console.warn('[ChatContext] Error al guardar caché local de mensajes:', e);
+    }
+}
+
+function loadChatMessagesFromCache(): ChatMessage[] {
+    if (typeof window === 'undefined') return [];
+    try {
+        const saved = localStorage.getItem(CHAT_CACHE_KEY);
+        if (!saved) return [];
+        const parsed = JSON.parse(saved);
+        return Array.isArray(parsed) ? parsed : [];
+    } catch {
+        return [];
+    }
+}
+
 export const ChatProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
     const { profile } = useUserProfile();
-    const [messages, setMessages] = useState<ChatMessage[]>([]);
+    const [messages, setMessages] = useState<ChatMessage[]>(() => {
+        return loadChatMessagesFromCache();
+    });
     const [onlineListeners, setOnlineListeners] = useState(1);
     const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>(() =>
         typeof navigator !== 'undefined' && !navigator.onLine ? 'disconnected' : 'connecting'
@@ -430,35 +467,46 @@ export const ChatProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         }
     }, [messages, isModalOpen]);
 
-    // Conectar a Supabase (Carga de Historial + Realtime + Presencia)
+    // Conectar a Supabase (Carga de Historial Cache-First + Realtime + Presencia)
     useEffect(() => {
         let isMounted = true;
         setConnectionStatus('connecting');
 
-        // 1. Cargar historial desde Supabase
-        fetchChatHistoryFromCloud(50)
-            .then((history) => {
-                if (isMounted) {
-                    setMessages((prev) => {
-                        // Conservar mensajes locales pendientes de envío que aún no están en la nube
-                        const localPending = prev.filter((m) => m.isPending);
-                        const merged = [...history];
-                        for (const lp of localPending) {
-                            if (!merged.some((m) => m.id === lp.id)) {
-                                merged.push(lp);
+        const cachedAtStr = localStorage.getItem(CHAT_CACHED_AT_KEY);
+        const cachedAt = cachedAtStr ? Number(cachedAtStr) : 0;
+        const cachedMessages = loadChatMessagesFromCache();
+        const isCacheFresh = cachedAt > 0 && (Date.now() - cachedAt < CHAT_CACHE_TTL) && cachedMessages.length > 0;
+
+        // 1. Cargar historial: Usar caché local si está vigente, o consultar Supabase si expiró
+        if (isCacheFresh) {
+            console.log('[ChatContext] Historial de chat cargado desde caché local válido (TTL vigente). Omitiendo GET Supabase.');
+            setConnectionStatus('connected');
+            flushPendingMessages();
+        } else {
+            fetchChatHistoryFromCloud(50)
+                .then((history) => {
+                    if (isMounted) {
+                        setMessages((prev) => {
+                            // Conservar mensajes locales pendientes de envío que aún no están en la nube
+                            const localPending = prev.filter((m) => m.isPending);
+                            const merged = [...history];
+                            for (const lp of localPending) {
+                                if (!merged.some((m) => m.id === lp.id)) {
+                                    merged.push(lp);
+                                }
                             }
-                        }
-                        return merged;
-                    });
-                    setConnectionStatus('connected');
-                    // Enviar pendientes de inmediato ahora que la conexión está viva
-                    flushPendingMessages();
-                }
-            })
-            .catch((err) => {
-                console.error('Error cargando historial de chat de Supabase:', err);
-                if (isMounted) setConnectionStatus('error');
-            });
+                            saveChatMessagesToCache(merged);
+                            return merged;
+                        });
+                        setConnectionStatus('connected');
+                        flushPendingMessages();
+                    }
+                })
+                .catch((err) => {
+                    console.error('Error cargando historial de chat de Supabase:', err);
+                    if (isMounted) setConnectionStatus('error');
+                });
+        }
 
         // 2. Suscribirse a nuevos mensajes en tiempo real
         const myUserId = getUserId(userIdentity);
@@ -469,7 +517,9 @@ export const ChatProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
                 setMessages((prev) => {
                     if (prev.some((m) => m.id === newMsg.id)) return prev;
-                    return [...prev, newMsg];
+                    const updated = [...prev, newMsg];
+                    saveChatMessagesToCache(updated);
+                    return updated;
                 });
 
                 // Si el mensaje no fue enviado por mí mismo (compara por ID y por Nombre)
@@ -498,7 +548,11 @@ export const ChatProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                         localStorage.setItem('chatDeletedIds', JSON.stringify(deleted));
                     }
                 } catch {}
-                setMessages((prev) => prev.filter((m) => m.id !== deletedMessageId));
+                setMessages((prev) => {
+                    const updated = prev.filter((m) => m.id !== deletedMessageId);
+                    saveChatMessagesToCache(updated);
+                    return updated;
+                });
             },
             (status) => {
                 if (!isMounted) return;
@@ -678,6 +732,8 @@ export const ChatProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         const now = Date.now();
         localStorage.setItem('chatClearedAt', now.toString());
         localStorage.removeItem('chatDeletedIds');
+        localStorage.removeItem(CHAT_CACHE_KEY);
+        localStorage.removeItem(CHAT_CACHED_AT_KEY);
         localStorage.setItem('lastReadMessageCount', '0');
         setUnreadCount(0);
         setMessages([]);
@@ -690,7 +746,11 @@ export const ChatProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             deletedIds.push(messageId);
             localStorage.setItem('chatDeletedIds', JSON.stringify(deletedIds));
         }
-        setMessages((prev) => prev.filter((m) => m.id !== messageId));
+        setMessages((prev) => {
+            const updated = prev.filter((m) => m.id !== messageId);
+            saveChatMessagesToCache(updated);
+            return updated;
+        });
 
         // 2. Notificación en tiempo real instantánea a todos los clientes vía Broadcast
         const currentUserId = getUserId(userIdentity);
@@ -706,7 +766,11 @@ export const ChatProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         const deletedIds = JSON.parse(localStorage.getItem('chatDeletedIds') || '[]');
         const updatedDeletedIds = Array.from(new Set([...deletedIds, ...messageIds]));
         localStorage.setItem('chatDeletedIds', JSON.stringify(updatedDeletedIds));
-        setMessages((prev) => prev.filter((m) => !messageIds.includes(m.id)));
+        setMessages((prev) => {
+            const updated = prev.filter((m) => !messageIds.includes(m.id));
+            saveChatMessagesToCache(updated);
+            return updated;
+        });
 
         // 2. Notificación en tiempo real instantánea a todos los clientes vía Broadcast
         const currentUserId = getUserId(userIdentity);
