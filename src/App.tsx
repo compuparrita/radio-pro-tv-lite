@@ -10,6 +10,7 @@ import { Player } from './components/Player';
 import { StationList } from './components/StationList';
 import { StationManager } from './components/StationManager';
 import { ChatModal } from './components/ChatModal';
+import { RoomChatTicker } from './components/RoomChatTicker';
 import { MobileNav } from './components/MobileNav';
 import { useTVRemote } from './hooks/useTVRemote';
 import GeneralHelpModal from './components/GeneralHelpModal';
@@ -75,6 +76,9 @@ function AppContent() {
     useTVRemote();
 
     const isGuestCinema = Boolean(room && isGuestCinemaMode);
+    const roomChatTicker = room && roomCode && !isChatOpen
+        ? <RoomChatTicker roomCode={roomCode} isGuestCinema={isGuestCinema} />
+        : null;
 
     useEffect(() => {
         setIsGuestCinemaMode(Boolean(room && !isHost));
@@ -317,6 +321,7 @@ function AppContent() {
     if (isGuestCinema) {
         return (
             <>
+                {roomChatTicker}
                 <GuestCinemaLayout
                     isConnected={isConnected}
                     onChatClick={() => setIsChatOpen(true)}
@@ -344,6 +349,8 @@ function AppContent() {
     }
 
     return (
+        <>
+        {roomChatTicker}
         <div className="min-h-screen pb-24 md:pb-2" style={{ overflow: 'visible' }}>
             <div className="animated-bg"></div>
 
@@ -479,6 +486,7 @@ function AppContent() {
                 />
             </div>
         </div>
+        </>
     );
 }
 
