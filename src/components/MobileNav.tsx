@@ -58,7 +58,7 @@ export const MobileNav: React.FC<MobileNavProps> = ({ onChatClick, onThemeClick,
     const isBarVisible = isVisible || Boolean(room);
 
     return (
-        <div className={`lg:hidden fixed bottom-0 left-0 right-0 z-[1000] bg-[var(--dark-surface)] border-t border-[var(--dark-border)] transition-transform duration-300 ease-in-out pb-[env(safe-area-inset-bottom,0px)] ${isBarVisible ? 'translate-y-0' : 'translate-y-full'}`}>
+        <div className={`${isGuestCinema ? 'guest-cinema-mobile-nav' : 'lg:hidden'} fixed bottom-0 left-0 right-0 z-[1000] bg-[var(--dark-surface)] border-t border-[var(--dark-border)] transition-transform duration-300 ease-in-out pb-[env(safe-area-inset-bottom,0px)] ${isBarVisible ? 'translate-y-0' : 'translate-y-full'}`}>
             <div className="flex items-center justify-between py-2.5 px-3">
                 {/* Theme Toggle - Left Side */}
                 <button

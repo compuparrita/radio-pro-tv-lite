@@ -19,9 +19,9 @@ export function GuestCinemaLayout({ isConnected, onChatClick, onExitCinema }: Gu
         : 'Noche de cine';
 
     return (
-        <main className="min-h-screen pb-24 lg:pb-0 bg-[var(--dark-bg)] text-[var(--text-primary)]">
+        <main className="guest-cinema-layout min-h-screen bg-[var(--dark-bg)] pb-24 text-[var(--text-primary)] lg:pb-0">
             <div className="mx-auto flex min-h-screen w-full max-w-[1600px] flex-col gap-6 px-4 py-5 sm:gap-8 sm:px-8 sm:py-8 lg:px-12">
-                <header className="flex items-center justify-between gap-4 border-b border-white/10 pb-4">
+                <header className="flex shrink-0 items-center justify-between gap-4 border-b border-white/10 pb-4">
                     <h1 className="text-base font-bold tracking-wide sm:text-lg">
                         <span aria-hidden="true">🎬 </span>{sessionTitle}
                     </h1>
@@ -33,7 +33,7 @@ export function GuestCinemaLayout({ isConnected, onChatClick, onExitCinema }: Gu
                         </div>
                         <button
                             aria-label="Salir del Modo Cine"
-                            className="hidden h-11 w-11 items-center justify-center rounded-full border border-[var(--dark-border)] text-[var(--text-secondary)] transition hover:bg-[var(--dark-surface)] hover:text-[var(--primary-color)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--primary-color)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--dark-bg)] lg:flex"
+                            className="guest-cinema-desktop-exit hidden h-11 w-11 items-center justify-center rounded-full border border-[var(--dark-border)] text-[var(--text-secondary)] transition hover:bg-[var(--dark-surface)] hover:text-[var(--primary-color)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--primary-color)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--dark-bg)]"
                             onClick={onExitCinema}
                             title="Salir del Modo Cine"
                             type="button"
@@ -43,11 +43,11 @@ export function GuestCinemaLayout({ isConnected, onChatClick, onExitCinema }: Gu
                     </div>
                 </header>
 
-                <section className="w-full flex-1" aria-label="Cine compartido">
+                <section className="guest-cinema-player flex w-full min-h-0 flex-1 flex-col" aria-label="Cine compartido">
                     <Player />
                 </section>
 
-                <section className="border-t border-white/10 pt-4 sm:pt-5" aria-label="Contenido compartido">
+                <section className="shrink-0 border-t border-white/10 pt-4 sm:pt-5" aria-label="Contenido compartido">
                     <h2 className="truncate text-base font-semibold sm:text-lg">
                         {mediaInfo?.title || 'Contenido compartido'}
                     </h2>
@@ -60,7 +60,7 @@ export function GuestCinemaLayout({ isConnected, onChatClick, onExitCinema }: Gu
             {/* Desktop-only floating chat trigger. On mobile, MobileNav provides the chat button */}
             <button
                 aria-label="Abrir chat"
-                className="hidden lg:flex fixed bottom-5 right-5 z-[250] h-14 w-14 items-center justify-center rounded-full border border-cyan-200/20 bg-cyan-400 text-slate-950 shadow-[0_8px_30px_rgba(34,211,238,0.25)] transition hover:scale-105 hover:bg-cyan-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-200 focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--dark-bg)] sm:bottom-8 sm:right-8"
+                className="guest-cinema-desktop-chat hidden fixed bottom-5 right-5 z-[250] h-14 w-14 items-center justify-center rounded-full border border-cyan-200/20 bg-cyan-400 text-slate-950 shadow-[0_8px_30px_rgba(34,211,238,0.25)] transition hover:scale-105 hover:bg-cyan-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-200 focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--dark-bg)] sm:bottom-8 sm:right-8"
                 onClick={onChatClick}
                 title="Abrir chat"
                 type="button"

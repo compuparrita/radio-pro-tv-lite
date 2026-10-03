@@ -364,7 +364,7 @@ function AppContent() {
 
             {/* Main content area - REACTIVE PADDING (Removes black gaps) */}
             <div
-                className="w-full relative px-[10px]"
+                className="w-full relative px-0 min-[1200px]:px-[10px]"
                 style={{
                     overflow: 'visible',
                     zIndex: 10,

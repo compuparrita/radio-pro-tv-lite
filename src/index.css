@@ -407,7 +407,55 @@ button:focus-visible {
 }
 
 /* DESKTOP LAYOUT REINFORCEMENT */
+@media (width < 1200px) {
+  .guest-cinema-layout > div {
+    padding-inline: 0;
+  }
+
+  .guest-cinema-layout > div > header,
+  .guest-cinema-layout > div > section[aria-label="Contenido compartido"] {
+    padding-inline: 1rem;
+  }
+
+  html:has(.guest-cinema-layout) .mobile-nav-container {
+    display: block !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+  }
+
+  .guest-cinema-layout .player-sticky-wrapper > .block {
+    display: none !important;
+  }
+}
+
+@media (min-width: 640px) and (width < 1200px) {
+  .guest-cinema-layout > div > header,
+  .guest-cinema-layout > div > section[aria-label="Contenido compartido"] {
+    padding-inline: 2rem;
+  }
+}
+
+@media (min-width: 1024px) and (width < 1200px) {
+  .guest-cinema-layout > div > header,
+  .guest-cinema-layout > div > section[aria-label="Contenido compartido"] {
+    padding-inline: 3rem;
+  }
+}
+
+@media (max-width: 1023px) {
+  html:has(.guest-cinema-layout) .guest-cinema-mobile-nav {
+    z-index: 1000000 !important;
+  }
+}
+
 @media (min-width: 1024px) {
+  .guest-cinema-layout .player-sticky-wrapper {
+    position: relative !important;
+    top: auto !important;
+    display: block;
+    height: auto;
+  }
+
   .player-column {
     min-width: 0;
     flex: 1 1 0%;
@@ -422,6 +470,57 @@ button:focus-visible {
 
   .sidebar-container {
     flex-shrink: 0;
+  }
+}
+
+@media (width >= 1200px) {
+  html:has(.guest-cinema-layout) {
+    scroll-snap-type: y proximity;
+  }
+
+  .guest-cinema-layout > div > header {
+    scroll-snap-align: start;
+    scroll-snap-stop: normal;
+  }
+
+  .guest-cinema-layout {
+    height: auto;
+    min-height: 100vh;
+    min-height: 100dvh;
+    overflow-x: clip;
+    overflow-y: visible;
+  }
+
+  .guest-cinema-layout > div {
+    height: auto;
+    min-height: 100vh;
+    min-height: 100dvh;
+    padding-block-start: 0;
+  }
+
+  .guest-cinema-layout .guest-cinema-player {
+    flex: none;
+    min-height: 100vh;
+    min-height: 100dvh;
+    scroll-snap-align: start;
+    scroll-snap-stop: normal;
+  }
+
+  .guest-cinema-layout .player-main-media {
+    flex: none;
+    height: 100vh;
+    height: 100dvh;
+    max-height: none;
+    aspect-ratio: auto;
+  }
+
+  .guest-cinema-mobile-nav {
+    display: none !important;
+  }
+
+  .guest-cinema-desktop-exit,
+  .guest-cinema-desktop-chat {
+    display: flex !important;
   }
 }
 /* Mobile sticky logic */
