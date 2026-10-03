@@ -11,6 +11,7 @@ interface WatchPartyModalProps {
     inviteCode?: string | null;
     onInviteCancel?: () => void;
     onInviteJoined?: () => void;
+    onReturnToApp?: () => void;
 }
 
 type WatchPartyTab = 'create' | 'join';
@@ -18,7 +19,7 @@ type WatchPartyTab = 'create' | 'join';
 const inputClassName = 'h-11 w-full rounded-xl border border-white/10 bg-white/[0.04] px-4 text-sm text-white placeholder:text-white/30 outline-none transition focus:border-cyan-300/60 focus:ring-2 focus:ring-cyan-300/10';
 const secondaryButtonClassName = 'inline-flex min-h-10 items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/[0.04] px-4 py-2 text-sm font-medium text-white/80 transition hover:bg-white/[0.08] hover:text-white focus:outline-none focus:ring-2 focus:ring-cyan-300/50';
 
-function WatchPartyModal({ isOpen, onClose, inviteCode, onInviteCancel, onInviteJoined }: WatchPartyModalProps) {
+function WatchPartyModal({ isOpen, onClose, inviteCode, onInviteCancel, onInviteJoined, onReturnToApp }: WatchPartyModalProps) {
     const { currentStation } = useRadio();
     const [activeTab, setActiveTab] = useState<WatchPartyTab>('create');
     const [roomName, setRoomName] = useState('');
@@ -315,30 +316,41 @@ function WatchPartyModal({ isOpen, onClose, inviteCode, onInviteCancel, onInvite
                             </button>
                         </div>
                     ) : room ? (
-                        isHost ? (
-                            <button
-                                className="min-h-11 w-full rounded-xl bg-white/[0.07] text-sm font-medium text-white/85 transition hover:bg-white/[0.11] focus:outline-none focus:ring-2 focus:ring-white/20 disabled:cursor-wait disabled:opacity-50"
-                                disabled={isLoading}
-                                onClick={() => {
-                                    void leaveRoom().then((left) => {
-                                        if (left) onClose();
-                                    });
-                                }}
-                                type="button"
-                            >
-                                {isLoading ? 'Abandonando...' : 'Abandonar sala'}
-                            </button>
-                        ) : (
-                            <button
-                                className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-red-300/15 bg-red-300/[0.06] text-sm font-medium text-red-100/85 transition hover:bg-red-300/[0.1] focus:outline-none focus:ring-2 focus:ring-red-200/30 disabled:opacity-50"
-                                disabled={isLoading}
-                                onClick={() => void leaveRoom()}
-                                type="button"
-                            >
-                                <LogOut aria-hidden="true" size={15} />
-                                {isLoading ? 'Saliendo...' : 'Salir de la sala'}
-                            </button>
-                        )
+                        <div className={onReturnToApp ? 'flex flex-wrap gap-2' : ''}>
+                            {onReturnToApp && (
+                                <button
+                                    className="min-h-11 min-w-28 flex-[1_1_7rem] rounded-xl border border-white/10 bg-white/[0.04] px-3 text-sm font-medium text-white/80 transition hover:bg-white/[0.08] focus:outline-none focus:ring-2 focus:ring-white/20"
+                                    onClick={onReturnToApp}
+                                    type="button"
+                                >
+                                    Ir a App
+                                </button>
+                            )}
+                            {isHost ? (
+                                <button
+                                    className={`${onReturnToApp ? 'min-w-36 flex-[1_1_9rem] border border-red-300/15 bg-red-300/[0.06] text-red-100/85 hover:bg-red-300/[0.1]' : 'w-full bg-white/[0.07] text-white/85 hover:bg-white/[0.11]'} min-h-11 rounded-xl px-3 text-sm font-medium transition focus:outline-none focus:ring-2 focus:ring-white/20 disabled:cursor-wait disabled:opacity-50`}
+                                    disabled={isLoading}
+                                    onClick={() => {
+                                        void leaveRoom().then((left) => {
+                                            if (left) onClose();
+                                        });
+                                    }}
+                                    type="button"
+                                >
+                                    {isLoading ? 'Abandonando...' : 'Abandonar sala'}
+                                </button>
+                            ) : (
+                                <button
+                                    className={`inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-red-300/15 bg-red-300/[0.06] px-3 text-sm font-medium text-red-100/85 transition hover:bg-red-300/[0.1] focus:outline-none focus:ring-2 focus:ring-red-200/30 disabled:opacity-50 ${onReturnToApp ? 'min-w-36 flex-[1_1_9rem]' : 'w-full'}`}
+                                    disabled={isLoading}
+                                    onClick={() => void leaveRoom()}
+                                    type="button"
+                                >
+                                    <LogOut aria-hidden="true" size={15} />
+                                    {isLoading ? 'Saliendo...' : 'Abandonar sala'}
+                                </button>
+                            )}
+                        </div>
                     ) : (
                         <button className="w-full py-1 text-sm text-white/40 transition hover:text-white/75" onClick={() => setIsHelpOpen(true)} type="button">
                             {'¿Cómo funciona?'}

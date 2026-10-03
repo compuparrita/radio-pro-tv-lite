@@ -127,6 +127,21 @@ function AppContent() {
         setIsWatchPartyOpen(true);
     };
 
+    const handleMobileWatchPartyNavigation = () => {
+        if (!room) {
+            setIsWatchPartyOpen(true);
+        } else if (isGuestCinema) {
+            setIsWatchPartyOpen(true);
+        } else {
+            setIsGuestCinemaMode(true);
+        }
+    };
+
+    const handleReturnToApp = () => {
+        setIsGuestCinemaMode(false);
+        setIsWatchPartyOpen(false);
+    };
+
     // Apply theme to body
     useEffect(() => {
         document.body.className = theme === 'dark' ? '' : theme === 'light' ? 'light-mode' : 'youth-mode';
@@ -314,12 +329,13 @@ function AppContent() {
                     inviteCode={pendingRoomInvite}
                     onInviteCancel={handleRoomInviteCancel}
                     onInviteJoined={handleRoomInviteJoined}
+                    onReturnToApp={handleReturnToApp}
                 />
                 <div className="mobile-nav-container">
                     <MobileNav
                         onChatClick={() => setIsChatOpen(true)}
                         onThemeClick={cycleTheme}
-                        onWatchPartyClick={handleWatchPartyNavigation}
+                        onWatchPartyClick={handleMobileWatchPartyNavigation}
                         isGuestCinema={isGuestCinema}
                     />
                 </div>
@@ -458,7 +474,7 @@ function AppContent() {
                 <MobileNav
                     onChatClick={() => setIsChatOpen(true)}
                     onThemeClick={cycleTheme}
-                    onWatchPartyClick={handleWatchPartyNavigation}
+                    onWatchPartyClick={handleMobileWatchPartyNavigation}
                     isGuestCinema={isGuestCinema}
                 />
             </div>

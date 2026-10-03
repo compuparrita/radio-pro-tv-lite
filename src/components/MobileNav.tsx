@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { SkipBack, Play, Pause, SkipForward, MessageCircle, Palette, Film, ArrowLeft } from 'lucide-react';
+import { SkipBack, Play, Pause, SkipForward, MessageCircle, Palette, Film } from 'lucide-react';
 import { useRadio } from '../context/RadioContext';
 import { useChat } from '../context/ChatContext';
 import { useWatchParty } from '../context/WatchPartyContext';
@@ -77,17 +77,13 @@ export const MobileNav: React.FC<MobileNavProps> = ({ onChatClick, onThemeClick,
                     title="Cine Compartido"
                 >
                     <div className="relative">
-                        {isGuestCinema ? (
-                            <ArrowLeft size={19} className="text-[var(--primary-color)]" strokeWidth={1.75} />
-                        ) : (
-                            <Film size={19} className={room ? 'text-[var(--primary-color)]' : 'text-[var(--text-secondary)] group-hover:text-[var(--primary-color)]'} strokeWidth={1.75} />
-                        )}
+                        <Film size={19} className={room || isGuestCinema ? 'text-[var(--primary-color)]' : 'text-[var(--text-secondary)] group-hover:text-[var(--primary-color)]'} strokeWidth={1.75} />
                         {room && !isGuestCinema && (
                             <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-[var(--primary-color)] animate-pulse" />
                         )}
                     </div>
                     <span className={`text-[9px] font-medium ${room || isGuestCinema ? 'text-[var(--primary-color)] font-bold' : 'text-[var(--text-secondary)] group-hover:text-[var(--primary-color)]'}`}>
-                        {isGuestCinema ? 'Salir' : room ? 'Sala' : 'Cine'}
+                        {room ? 'Sala' : 'Cine'}
                     </span>
                 </button>
 

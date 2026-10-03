@@ -27,7 +27,7 @@ export function GuestCinemaLayout({ isConnected, onChatClick, onExitCinema }: Gu
                     </h1>
                     <div className="flex shrink-0 items-center gap-3 sm:gap-5">
                         <div className="flex items-center gap-2 text-xs font-semibold text-[var(--text-secondary)] sm:text-sm" role="status" aria-live="polite">
-                            <span className={`h-2.5 w-2.5 rounded-full ${isConnected ? 'bg-emerald-400 shadow-[0_0_10px_rgba(52,211,153,0.55)]' : 'bg-amber-400 animate-pulse'}`} />
+                            <span aria-label={isConnected ? 'Conectado' : 'Desconectado o reconectando'} className={`h-2.5 w-2.5 rounded-full ${isConnected ? 'bg-emerald-400 shadow-[0_0_10px_rgba(52,211,153,0.55)]' : 'bg-amber-400 animate-pulse'}`} />
                             <Users aria-hidden="true" size={15} />
                             <span>{participantCount} {participantCount === 1 ? 'participante' : 'participantes'}</span>
                         </div>
