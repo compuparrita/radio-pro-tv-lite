@@ -228,7 +228,7 @@ help/watchparty.md
         └── PanelShell
 ```
 
-`PanelHost` ya existe en `src/components/panels/PanelHost.tsx`. Decide qué panel registrado se renderiza. Actualmente registra `watchparty` y `general-help`; recibe desde App el estado y las acciones de cada vista, y suministra el `PanelShell` común sin trasladar la lógica específica al host. La arquitectura queda:
+`PanelHost` ya existe en `src/components/panels/PanelHost.tsx`. Decide qué panel registrado se renderiza. Actualmente registra `watchparty`, `general-help` y `chat-help`; recibe desde App el estado y las acciones de cada vista, y suministra el `PanelShell` común sin trasladar la lógica específica al host. La arquitectura queda:
 
 ```text
 PanelHost
@@ -246,13 +246,13 @@ help-chat
 help-watchparty
 ```
 
-Actualmente, `PanelHost` selecciona entre WatchParty y General Help según el estado recibido desde App. `PanelShell` sigue presentando la superficie común; las migraciones de otros paneles continúan pendientes.
+Actualmente, `PanelHost` selecciona entre WatchParty, General Help y Chat Help según el estado recibido desde App. `PanelShell` sigue presentando la superficie común; las migraciones de otros paneles continúan pendientes.
 
 Solo se debe montar/renderizar la vista activa cuando sea razonable; no es necesario mantener todas las vistas montadas simultáneamente.
 
 ### Pendiente
 
-- Migrar Ayuda Chat, Perfil y Registro inicial.
+- Migrar Perfil y Registro inicial.
 
 ### Ventaja principal
 
@@ -293,7 +293,7 @@ Markdown es el formato preferido para contenido humano de ayuda; utilizar estruc
 - La aplicación tiene tres temas (`dark`, `light` y `youth`). El contenido de ayuda debe ser agnóstico al tema; colores, superficies, bordes y texto provienen del sistema de temas existente.
 - Los textos largos se centralizarán progresivamente en `/help`. Markdown es el formato preferido para contenido humano de ayuda, salvo que un caso requiera estructura JSON.
 - La separación debe reducir redundancia y evitar duplicar contenido y presentación.
-- WatchParty Help es la primera migración piloto y ya utiliza `PanelShell`. `PanelHost` está implementado y registra WatchParty y General Help.
+- WatchParty Help es la primera migración piloto y ya utiliza `PanelShell`. `PanelHost` está implementado y registra WatchParty, General Help y Chat Help.
 
 Ejemplo conceptual:
 
@@ -447,11 +447,12 @@ Preferencia del usuario:
 - `PanelShell` como superficie común contextual.
 - WatchParty Help como primer consumidor, usando el sistema de temas `dark`, `light` y `youth`.
 - General Help usando `PanelHost` y `PanelShell`.
-- `PanelHost` registra `watchparty` y `general-help`.
+- Chat Help usando `PanelHost` y `PanelShell`, accesible desde Chat general y Chat de sala.
+- `PanelHost` registra `watchparty`, `general-help` y `chat-help`.
 
 **PENDIENTE:**
 
-- Migración de Ayuda Chat, Perfil y Registro inicial.
+- Migración de Perfil y Registro inicial.
 
 ---
 
@@ -523,7 +524,8 @@ Preferencia del usuario:
 - Se decidió separar textos largos del código de presentación.
 - Se implementó `PanelShell` y se migró WatchParty Help como su primer consumidor.
 - Se migró General Help a `PanelHost` y `PanelShell`; ambos paneles registrados comparten el shell.
-- Próximo trabajo arquitectónico: migrar Ayuda Chat, Perfil o Registro y validar el contrato compartido.
+- Se migró Chat Help a `PanelHost` y `PanelShell`; está disponible desde Chat general y Chat de sala.
+- Próximo trabajo arquitectónico: migrar Perfil o Registro y validar el contrato compartido.
 
 ---
 

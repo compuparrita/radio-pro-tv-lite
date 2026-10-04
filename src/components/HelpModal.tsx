@@ -1,23 +1,18 @@
-import React, { useEffect } from 'react';
-import { X, MessageSquare, Share2, Youtube, Sparkles } from 'lucide-react';
+import React from 'react';
+import type { ComponentType } from 'react';
+import { MessageSquare, Share2, Youtube, Sparkles } from 'lucide-react';
+import type { PanelShellProps } from './panels/PanelShell';
 
-interface HelpModalProps {
+export interface HelpModalProps {
     isOpen: boolean;
     onClose: () => void;
 }
 
-const HelpModal: React.FC<HelpModalProps> = ({ isOpen, onClose }) => {
-    useEffect(() => {
-        if (isOpen) {
-            const prevOverflow = document.body.style.overflow;
-            document.body.style.overflow = 'hidden';
-            return () => {
-                document.body.style.overflow = prevOverflow;
-            };
-        }
-    }, [isOpen]);
+interface HelpModalHostProps extends HelpModalProps {
+    PanelShellComponent: ComponentType<PanelShellProps>;
+}
 
-    if (!isOpen) return null;
+const HelpModal: React.FC<HelpModalHostProps> = ({ isOpen, onClose, PanelShellComponent }) => {
 
     const sections = [
         {
@@ -44,33 +39,34 @@ const HelpModal: React.FC<HelpModalProps> = ({ isOpen, onClose }) => {
     ];
 
     return (
-        <div className="fixed inset-0 z-[100002] flex items-center justify-center p-3 sm:p-4 bg-black/75 backdrop-blur-md animate-fade-in">
-            {/* Backdrop click to close */}
-            <div className="absolute inset-0" onClick={onClose} />
-
-            <div className="relative w-full max-w-xl bg-[var(--dark-surface)] text-[var(--text-primary)] border border-white/10 rounded-xl sm:rounded-2xl shadow-2xl overflow-hidden animate-slide-in-right flex flex-col max-h-[90vh]">
-                {/* Header */}
-                <div className="p-4 sm:p-5 border-b border-white/10 flex items-center justify-between bg-gradient-to-r from-[var(--primary-color)]/20 via-transparent to-[var(--secondary-color)]/20">
-                    <div className="flex items-center gap-3">
-                        <div className="p-2 bg-[var(--primary-color)]/20 text-[var(--primary-color)] rounded-lg border border-[var(--primary-color)]/30">
-                            <Sparkles size={22} />
-                        </div>
-                        <div>
-                            <h2 className="text-lg sm:text-xl font-bold tracking-tight">Guía de Uso del Chat</h2>
-                            <p className="text-xs text-[var(--text-secondary)]">Aprende a sacarle el máximo provecho al chat en vivo</p>
-                        </div>
-                    </div>
+        <PanelShellComponent
+            ariaLabel="Guía de Uso del Chat"
+            closeButtonLabel="Cerrar ayuda del chat"
+            contentClassName="custom-scrollbar"
+            description="Aprende a sacarle el máximo provecho al chat en vivo"
+            footer={(
+                <div className="flex items-center justify-end border-t border-white/10 bg-black/20 p-3 sm:p-4">
                     <button
                         onClick={onClose}
-                        className="p-2 text-[var(--text-secondary)] hover:text-white hover:bg-white/10 rounded-lg transition-colors"
-                        title="Cerrar ayuda"
+                        className="w-full rounded-lg bg-gradient-to-r from-[var(--primary-color)] to-[var(--secondary-color)] px-6 py-2.5 text-sm font-bold text-white shadow-lg transition-all hover:opacity-90 active:scale-95 sm:w-auto"
                     >
-                        <X size={20} />
+                        Entendido
                     </button>
                 </div>
-
-                {/* Content */}
-                <div className="p-4 sm:p-6 overflow-y-auto space-y-4 custom-scrollbar flex-1">
+            )}
+            isOpen={isOpen}
+            onClose={onClose}
+            title={(
+                <span className="inline-flex items-center gap-3">
+                    <span className="rounded-lg border border-[var(--primary-color)]/30 bg-[var(--primary-color)]/20 p-2 text-[var(--primary-color)]">
+                        <Sparkles aria-hidden="true" size={22} />
+                    </span>
+                    Guía de Uso del Chat
+                </span>
+            )}
+            titleId="chat-help-title"
+        >
+                <div className="space-y-4">
                     {sections.map((section, idx) => (
                         <div
                             key={idx}
@@ -99,18 +95,7 @@ const HelpModal: React.FC<HelpModalProps> = ({ isOpen, onClose }) => {
                         </div>
                     ))}
                 </div>
-
-                {/* Footer */}
-                <div className="p-3 sm:p-4 border-t border-white/10 bg-black/20 flex items-center justify-end">
-                    <button
-                        onClick={onClose}
-                        className="w-full sm:w-auto px-6 py-2.5 bg-gradient-to-r from-[var(--primary-color)] to-[var(--secondary-color)] text-white font-bold text-sm rounded-lg hover:opacity-90 active:scale-95 transition-all shadow-lg"
-                    >
-                        Entendido
-                    </button>
-                </div>
-            </div>
-        </div>
+        </PanelShellComponent>
     );
 };
 

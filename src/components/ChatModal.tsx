@@ -4,11 +4,11 @@ import { MessageCircle, X, Send, Users, Wifi, WifiOff, Trash2, HelpCircle, Bell,
 import { useChat } from '../context/ChatContext';
 import { useWatchPartyChat } from '../context/WatchPartyChatContext';
 import { useRadio } from '../context/RadioContext';
-import HelpModal from './HelpModal';
 
 interface ChatModalProps {
     externalOpen?: boolean;
     onOpenChange?: (open: boolean) => void;
+    onOpenChatHelp: () => void;
     roomCode?: string | null;
 }
 
@@ -745,7 +745,7 @@ const MessageText = ({ text, msg, stations, playStation, setIsOpen, isOwnMessage
     );
 };
 
-export const ChatModal: React.FC<ChatModalProps> = ({ externalOpen, onOpenChange, roomCode }) => {
+export const ChatModal: React.FC<ChatModalProps> = ({ externalOpen, onOpenChange, onOpenChatHelp, roomCode }) => {
     const {
         messages: globalMessages,
         onlineListeners: globalOnlineListeners,
@@ -784,7 +784,6 @@ export const ChatModal: React.FC<ChatModalProps> = ({ externalOpen, onOpenChange
     const [isOpen, setIsOpen] = useState(false);
     const [currentMessage, setCurrentMessage] = useState('');
     const [error, setError] = useState('');
-    const [isHelpOpen, setIsHelpOpen] = useState(false);
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const inputRef = useRef<HTMLTextAreaElement>(null);
     const [canSend, setCanSend] = useState(true);
@@ -1675,7 +1674,8 @@ const compressImageFile = (file: File): Promise<{ data: string; previewUrl: stri
                                             <button
                                                 onClick={() => {
                                                     setIsMenuOpen(false);
-                                                    setIsHelpOpen(true);
+                                                    menuRef.current?.querySelector<HTMLButtonElement>('button')?.focus();
+                                                    onOpenChatHelp();
                                                 }}
                                                 className="w-full px-3 py-2 text-left text-xs font-medium text-[var(--text-primary)] hover:bg-white/10 flex items-center gap-2.5 transition-colors"
                                             >
@@ -2222,11 +2222,6 @@ const compressImageFile = (file: File): Promise<{ data: string; previewUrl: stri
                     </div>
                 </div>
             )}
-
-            <HelpModal
-                isOpen={isHelpOpen}
-                onClose={() => setIsHelpOpen(false)}
-            />
 
             {/* ── Portal del menú contextual ──────────────────────────────────────
                 Se renderiza en document.body para escapar del stacking context

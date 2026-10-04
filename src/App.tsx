@@ -33,6 +33,7 @@ function AppContent() {
     const [isChatOpen, setIsChatOpen] = useState(false);
     const [isWatchPartyOpen, setIsWatchPartyOpen] = useState(false);
     const [isGuestCinemaMode, setIsGuestCinemaMode] = useState(true);
+    const [isChatHelpOpen, setIsChatHelpOpen] = useState(false);
     const [pendingRoomInvite, setPendingRoomInvite] = useState<string | null>(null);
     const [theme, setTheme] = useState<'dark' | 'light' | 'youth'>(() => {
         const saved = localStorage.getItem('theme');
@@ -313,7 +314,12 @@ function AppContent() {
                     onChatClick={() => setIsChatOpen(true)}
                     onExitCinema={handleMobileWatchPartyNavigation}
                 />
-                <ChatModal externalOpen={isChatOpen} onOpenChange={setIsChatOpen} roomCode={roomCode} />
+                <ChatModal
+                    externalOpen={isChatOpen}
+                    onOpenChange={setIsChatOpen}
+                    onOpenChatHelp={() => setIsChatHelpOpen(true)}
+                    roomCode={roomCode}
+                />
                 <PanelHost
                     activePanel={isWatchPartyOpen ? {
                         kind: 'watchparty',
@@ -324,6 +330,12 @@ function AppContent() {
                             onInviteCancel: handleRoomInviteCancel,
                             onInviteJoined: handleRoomInviteJoined,
                             onReturnToApp: handleReturnToApp,
+                        },
+                    } : isChatHelpOpen ? {
+                        kind: 'chat-help',
+                        props: {
+                            isOpen: true,
+                            onClose: () => setIsChatHelpOpen(false),
                         },
                     } : null}
                 />
@@ -459,7 +471,12 @@ function AppContent() {
             </div>
 
             <StationManager isOpen={isManagerOpen} onClose={() => setIsManagerOpen(false)} />
-            <ChatModal externalOpen={isChatOpen} onOpenChange={setIsChatOpen} roomCode={roomCode} />
+            <ChatModal
+                externalOpen={isChatOpen}
+                onOpenChange={setIsChatOpen}
+                onOpenChatHelp={() => setIsChatHelpOpen(true)}
+                roomCode={roomCode}
+            />
             <PanelHost
                 activePanel={isWatchPartyOpen ? {
                     kind: 'watchparty',
@@ -469,6 +486,12 @@ function AppContent() {
                         inviteCode: pendingRoomInvite,
                         onInviteCancel: handleRoomInviteCancel,
                         onInviteJoined: handleRoomInviteJoined,
+                    },
+                } : isChatHelpOpen ? {
+                    kind: 'chat-help',
+                    props: {
+                        isOpen: true,
+                        onClose: () => setIsChatHelpOpen(false),
                     },
                 } : isAppHelpOpen ? {
                     kind: 'general-help',
