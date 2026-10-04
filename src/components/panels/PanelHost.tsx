@@ -6,11 +6,14 @@ import GeneralHelpModal from '../GeneralHelpModal';
 import type { GeneralHelpModalProps } from '../GeneralHelpModal';
 import HelpModal from '../HelpModal';
 import type { HelpModalProps } from '../HelpModal';
+import ProfilePanel from '../ProfilePanel';
+import type { ProfilePanelProps } from '../ProfilePanel';
 
 export type ActivePanel =
     | { kind: 'watchparty'; props: WatchPartyModalProps }
     | { kind: 'general-help'; props: GeneralHelpModalProps }
-    | { kind: 'chat-help'; props: HelpModalProps };
+    | { kind: 'chat-help'; props: HelpModalProps }
+    | { kind: 'profile'; props: ProfilePanelProps };
 
 interface PanelHostProps {
     activePanel: ActivePanel | null;
@@ -35,7 +38,9 @@ export function PanelHost({ activePanel }: PanelHostProps) {
             ? { kind: 'watchparty', props: { ...lastActivePanel.props, isOpen: false } }
             : lastActivePanel.kind === 'general-help'
                 ? { kind: 'general-help', props: { ...lastActivePanel.props, isOpen: false } }
-                : { kind: 'chat-help', props: { ...lastActivePanel.props, isOpen: false } };
+                : lastActivePanel.kind === 'chat-help'
+                    ? { kind: 'chat-help', props: { ...lastActivePanel.props, isOpen: false } }
+                    : { kind: 'profile', props: { ...lastActivePanel.props, isOpen: false } };
 
         setClosingPanel(panelClosing);
         const timeout = window.setTimeout(() => setClosingPanel(null), PANEL_EXIT_DURATION_MS);
@@ -52,5 +57,7 @@ export function PanelHost({ activePanel }: PanelHostProps) {
             return <GeneralHelpModal {...panelToRender.props} PanelShellComponent={PanelShell} />;
         case 'chat-help':
             return <HelpModal {...panelToRender.props} PanelShellComponent={PanelShell} />;
+        case 'profile':
+            return <ProfilePanel {...panelToRender.props} PanelShellComponent={PanelShell} />;
     }
 }

@@ -31,6 +31,7 @@ function AppContent() {
     const { room, roomCode, isHost, isConnected } = useWatchParty();
     const [isManagerOpen, setIsManagerOpen] = useState(false);
     const [isChatOpen, setIsChatOpen] = useState(false);
+    const [isProfileOpen, setIsProfileOpen] = useState(false);
     const [isWatchPartyOpen, setIsWatchPartyOpen] = useState(false);
     const [isGuestCinemaMode, setIsGuestCinemaMode] = useState(true);
     const [isChatHelpOpen, setIsChatHelpOpen] = useState(false);
@@ -337,6 +338,12 @@ function AppContent() {
                             isOpen: true,
                             onClose: () => setIsChatHelpOpen(false),
                         },
+                    } : isProfileOpen ? {
+                        kind: 'profile',
+                        props: {
+                            isOpen: true,
+                            onClose: () => setIsProfileOpen(false),
+                        },
                     } : null}
                 />
                 <div className="mobile-nav-container">
@@ -369,6 +376,7 @@ function AppContent() {
                     onThemeClick={cycleTheme}
                     onChatClick={() => setIsChatOpen(true)}
                     onWatchPartyClick={handleMobileWatchPartyNavigation}
+                    onProfileClick={() => setIsProfileOpen(true)}
                 />
             </div>
 
@@ -498,6 +506,12 @@ function AppContent() {
                     props: {
                         isOpen: true,
                         onClose: () => setIsAppHelpOpen(false),
+                    },
+                } : isProfileOpen ? {
+                    kind: 'profile',
+                    props: {
+                        isOpen: true,
+                        onClose: () => setIsProfileOpen(false),
                     },
                 } : null}
             />

@@ -228,7 +228,7 @@ help/watchparty.md
         └── PanelShell
 ```
 
-`PanelHost` ya existe en `src/components/panels/PanelHost.tsx`. Decide qué panel registrado se renderiza. Actualmente registra `watchparty`, `general-help` y `chat-help`; recibe desde App el estado y las acciones de cada vista, y suministra el `PanelShell` común sin trasladar la lógica específica al host. La arquitectura queda:
+`PanelHost` ya existe en `src/components/panels/PanelHost.tsx`. Decide qué panel registrado se renderiza. Actualmente registra `watchparty`, `general-help`, `chat-help` y `profile`; recibe desde App el estado y las acciones de cada vista, y suministra el `PanelShell` común sin trasladar la lógica específica al host. La arquitectura queda:
 
 ```text
 PanelHost
@@ -250,9 +250,13 @@ Actualmente, `PanelHost` selecciona entre WatchParty, General Help y Chat Help s
 
 Solo se debe montar/renderizar la vista activa cuando sea razonable; no es necesario mantener todas las vistas montadas simultáneamente.
 
-### Pendiente
+### Perfil y registro inicial
 
-- Migrar Perfil y Registro inicial.
+- Profile está migrado a `PanelHost`/`PanelShell`; la vista conserva la lógica de perfil y `UserProfileContext` conserva estado y persistencia.
+- El registro inicial permanece como pantalla completa mediante `UserProfileGate` + `UserProfileForm` en modo `setup`; no es un panel.
+- Profile y Registration comparten `UserProfileForm` y `UserProfileContext`, pero son flujos distintos.
+- La presentación de Profile corresponde a `PanelShell`; la lógica de perfil permanece en la vista/contexto.
+- No todo modal debe convertirse automáticamente en panel.
 
 ### Ventaja principal
 
@@ -448,11 +452,12 @@ Preferencia del usuario:
 - WatchParty Help como primer consumidor, usando el sistema de temas `dark`, `light` y `youth`.
 - General Help usando `PanelHost` y `PanelShell`.
 - Chat Help usando `PanelHost` y `PanelShell`, accesible desde Chat general y Chat de sala.
-- `PanelHost` registra `watchparty`, `general-help` y `chat-help`.
+- `PanelHost` registra `watchparty`, `general-help`, `chat-help` y `profile`.
+- Profile usa `PanelHost`/`PanelShell`; Registration continúa como pantalla de entrada.
 
 **PENDIENTE:**
 
-- Migración de Perfil y Registro inicial.
+- No hay otras migraciones de Profile pendientes. Registration permanece deliberadamente como pantalla de entrada, fuera de `PanelHost`.
 
 ---
 
@@ -525,7 +530,8 @@ Preferencia del usuario:
 - Se implementó `PanelShell` y se migró WatchParty Help como su primer consumidor.
 - Se migró General Help a `PanelHost` y `PanelShell`; ambos paneles registrados comparten el shell.
 - Se migró Chat Help a `PanelHost` y `PanelShell`; está disponible desde Chat general y Chat de sala.
-- Próximo trabajo arquitectónico: migrar Perfil o Registro y validar el contrato compartido.
+- Se migró Profile a `PanelHost` y `PanelShell`; el registro inicial permanece como pantalla completa mediante `UserProfileGate`.
+- Profile y Registration comparten formulario/contexto, pero mantienen flujos separados; no todo modal se convierte automáticamente en panel.
 
 ---
 

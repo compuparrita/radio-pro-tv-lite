@@ -9,6 +9,7 @@ export interface PanelShellProps {
     ariaLabel: string;
     onClose: () => void;
     closeButtonLabel: string;
+    closeIcon?: ReactNode;
     children: ReactNode;
     titleId?: string;
     description?: ReactNode;
@@ -27,6 +28,7 @@ export function PanelShell({
     ariaLabel,
     onClose,
     closeButtonLabel,
+    closeIcon,
     children,
     titleId = 'panel-shell-title',
     description,
@@ -170,7 +172,9 @@ export function PanelShell({
                         title={navigationLabel}
                         type="button"
                     >
-                        <ChevronLeft aria-hidden="true" size={20} strokeWidth={1.75} />
+                        {hasBackAction || !closeIcon
+                            ? <ChevronLeft aria-hidden="true" size={20} strokeWidth={1.75} />
+                            : closeIcon}
                     </button>
                 </header>
 
