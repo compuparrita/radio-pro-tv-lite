@@ -1,24 +1,18 @@
-import React, { useEffect } from 'react';
-import { X, Radio, Settings, Filter, Cloud, Sparkles } from 'lucide-react';
+import React from 'react';
+import type { ComponentType } from 'react';
+import { Radio, Settings, Filter, Cloud, Sparkles } from 'lucide-react';
+import type { PanelShellProps } from './panels/PanelShell';
 
-interface GeneralHelpModalProps {
+export interface GeneralHelpModalProps {
     isOpen: boolean;
     onClose: () => void;
 }
 
-const GeneralHelpModal: React.FC<GeneralHelpModalProps> = ({ isOpen, onClose }) => {
-    useEffect(() => {
-        if (isOpen) {
-            const prevOverflow = document.body.style.overflow;
-            document.body.style.overflow = 'hidden';
-            return () => {
-                document.body.style.overflow = prevOverflow;
-            };
-        }
-    }, [isOpen]);
+interface GeneralHelpModalHostProps extends GeneralHelpModalProps {
+    PanelShellComponent: ComponentType<PanelShellProps>;
+}
 
-    if (!isOpen) return null;
-
+const GeneralHelpModal: React.FC<GeneralHelpModalHostProps> = ({ isOpen, onClose, PanelShellComponent }) => {
     const sections = [
         {
             title: "Gestor de Emisoras y Sincronización en la Nube",
@@ -51,33 +45,34 @@ const GeneralHelpModal: React.FC<GeneralHelpModalProps> = ({ isOpen, onClose }) 
     ];
 
     return (
-        <div className="fixed inset-0 z-[100000] flex items-center justify-center p-3 sm:p-4 bg-black/75 backdrop-blur-md animate-fade-in">
-            {/* Backdrop click to close */}
-            <div className="absolute inset-0" onClick={onClose} />
-
-            <div className="relative w-full max-w-2xl bg-[var(--dark-surface)] text-[var(--text-primary)] border border-white/10 rounded-xl sm:rounded-2xl shadow-2xl overflow-hidden animate-slide-in-right flex flex-col max-h-[90vh]">
-                {/* Header */}
-                <div className="p-4 sm:p-5 border-b border-white/10 flex items-center justify-between bg-gradient-to-r from-indigo-500/20 via-transparent to-[var(--primary-color)]/20">
-                    <div className="flex items-center gap-3">
-                        <div className="p-2 bg-indigo-500/20 text-indigo-400 rounded-lg border border-indigo-500/30">
-                            <Sparkles size={22} />
-                        </div>
-                        <div>
-                            <h2 className="text-lg sm:text-xl font-bold tracking-tight">Ayuda y Guía de la App</h2>
-                            <p className="text-xs text-[var(--text-secondary)]">Conoce las funciones principales de Radio Streaming Pro</p>
-                        </div>
-                    </div>
+        <PanelShellComponent
+            ariaLabel="Ayuda y Guía de la App"
+            closeButtonLabel="Cerrar ayuda"
+            contentClassName="custom-scrollbar"
+            description="Conoce las funciones principales de Radio Streaming Pro"
+            footer={(
+                <div className="flex items-center justify-end border-t border-white/10 bg-black/20 p-3 sm:p-4">
                     <button
                         onClick={onClose}
-                        className="p-2 text-[var(--text-secondary)] hover:text-white hover:bg-white/10 rounded-lg transition-colors"
-                        title="Cerrar ayuda"
+                        className="w-full rounded-lg bg-gradient-to-r from-indigo-500 to-[var(--primary-color)] px-6 py-2.5 text-sm font-bold text-white shadow-lg transition-all hover:opacity-90 active:scale-95 sm:w-auto"
                     >
-                        <X size={20} />
+                        Entendido
                     </button>
                 </div>
-
-                {/* Content */}
-                <div className="p-4 sm:p-6 overflow-y-auto space-y-4 custom-scrollbar flex-1">
+            )}
+            isOpen={isOpen}
+            lockBodyScroll
+            onClose={onClose}
+            title={(
+                <span className="inline-flex items-center gap-3">
+                    <span className="rounded-lg border border-indigo-500/30 bg-indigo-500/20 p-2 text-indigo-400">
+                        <Sparkles aria-hidden="true" size={22} />
+                    </span>
+                    Ayuda y Guía de la App
+                </span>
+            )}
+        >
+                <div className="space-y-4 custom-scrollbar">
                     {sections.map((section, idx) => (
                         <div
                             key={idx}
@@ -106,18 +101,7 @@ const GeneralHelpModal: React.FC<GeneralHelpModalProps> = ({ isOpen, onClose }) 
                         </div>
                     ))}
                 </div>
-
-                {/* Footer */}
-                <div className="p-3 sm:p-4 border-t border-white/10 bg-black/20 flex items-center justify-end">
-                    <button
-                        onClick={onClose}
-                        className="w-full sm:w-auto px-6 py-2.5 bg-gradient-to-r from-indigo-500 to-[var(--primary-color)] text-white font-bold text-sm rounded-lg hover:opacity-90 active:scale-95 transition-all shadow-lg"
-                    >
-                        Entendido
-                    </button>
-                </div>
-            </div>
-        </div>
+        </PanelShellComponent>
     );
 };
 

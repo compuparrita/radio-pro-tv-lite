@@ -1,11 +1,14 @@
 import { useEffect, useRef, useState } from 'react';
-import { createPortal } from 'react-dom';
-import { Check, Copy, HelpCircle, LogOut, PlusCircle, Users, X } from 'lucide-react';
+import type { ComponentType } from 'react';
+import { Check, Copy, HelpCircle, LogOut, PlusCircle, Radio, Users } from 'lucide-react';
 import { useWatchParty } from '../context/WatchPartyContext';
 import { useRadio } from '../context/RadioContext';
 import { generateQrCodeMatrix } from '../utils/qrCode';
+import { parseHelpMarkdown } from '../content/helpMarkdown';
+import watchPartyHelpMarkdown from '../../help/watchparty.md?raw';
+import type { PanelShellProps } from './panels/PanelShell';
 
-interface WatchPartyModalProps {
+export interface WatchPartyModalProps {
     isOpen: boolean;
     onClose: () => void;
     inviteCode?: string | null;
@@ -14,12 +17,19 @@ interface WatchPartyModalProps {
     onReturnToApp?: () => void;
 }
 
+interface WatchPartyModalHostProps extends WatchPartyModalProps {
+    PanelShellComponent: ComponentType<PanelShellProps>;
+}
+
 type WatchPartyTab = 'create' | 'join';
+
+const watchPartyHelp = parseHelpMarkdown(watchPartyHelpMarkdown);
+const watchPartyHelpIcons = [PlusCircle, Users, Radio];
 
 const inputClassName = 'h-11 w-full rounded-xl border border-white/10 bg-white/[0.04] px-4 text-sm text-white placeholder:text-white/30 outline-none transition focus:border-cyan-300/60 focus:ring-2 focus:ring-cyan-300/10';
 const secondaryButtonClassName = 'inline-flex min-h-10 items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/[0.04] px-4 py-2 text-sm font-medium text-white/80 transition hover:bg-white/[0.08] hover:text-white focus:outline-none focus:ring-2 focus:ring-cyan-300/50';
 
-function WatchPartyModal({ isOpen, onClose, inviteCode, onInviteCancel, onInviteJoined, onReturnToApp }: WatchPartyModalProps) {
+function WatchPartyModal({ isOpen, onClose, inviteCode, onInviteCancel, onInviteJoined, onReturnToApp, PanelShellComponent }: WatchPartyModalHostProps) {
     const { currentStation } = useRadio();
     const [activeTab, setActiveTab] = useState<WatchPartyTab>('create');
     const [roomName, setRoomName] = useState('');
@@ -58,8 +68,6 @@ function WatchPartyModal({ isOpen, onClose, inviteCode, onInviteCancel, onInvite
         wasOpen.current = isOpen;
     }, [isOpen, currentStation?.name]);
 
-    if (!isOpen) return null;
-
     const hostName = members.find((member) => member.socketId === hostId)?.userName ?? 'Anfitrión';
 
     const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
@@ -90,51 +98,128 @@ function WatchPartyModal({ isOpen, onClose, inviteCode, onInviteCancel, onInvite
         if (joined) onInviteJoined?.();
     };
 
-    const modalContent = (
-        <div
-            className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm"
-            onClick={onClose}
-        >
-            <section
-                aria-labelledby="watchparty-title"
-                aria-modal="true"
-                className="relative flex max-h-[84vh] w-full max-w-[560px] flex-col overflow-hidden rounded-[28px] border border-white/[0.09] bg-[#111318]/95 text-white shadow-[0_24px_100px_rgba(0,0,0,0.55)] backdrop-blur-xl"
-                role="dialog"
-                onClick={(event) => event.stopPropagation()}
-            >
-                <header className="flex items-start justify-between border-b border-white/[0.07] px-6 py-5">
-                    <div>
-                        <h2 id="watchparty-title" className="text-xl font-semibold tracking-tight">
-                            {inviteCode ? 'Unirse a una sala' : room && isHost ? 'Compartir sala' : 'WatchParty'}
-                        </h2>
-                        {!inviteCode && (
-                            <p className="mt-1 text-sm text-white/45">
-                                {room && isHost
-                                ? 'Invita a cualquier persona con un código o QR.'
-                                : room
-                                    ? 'Conectado a la sala'
-                                    : 'Disfruta y sincroniza contenido en grupo'}
-                            </p>
-                        )}
-                    </div>
+    const panelFooter = !isHelpOpen ? (
+        <footer className="border-t border-white/[0.07] px-5 py-4 sm:px-6">
+            {inviteCode ? (
+                <div className="flex gap-3">
                     <button
-                        aria-label="Cerrar"
-                        className="-mr-2 -mt-1 flex h-9 w-9 items-center justify-center rounded-full text-white/45 transition hover:bg-white/[0.07] hover:text-white focus:outline-none focus:ring-2 focus:ring-cyan-300/50"
-                        onClick={onClose}
+                        className="min-h-11 flex-1 rounded-xl border border-white/10 bg-white/[0.04] text-sm font-medium text-white/75 transition hover:bg-white/[0.08] focus:outline-none focus:ring-2 focus:ring-white/20"
+                        onClick={onInviteCancel}
                         type="button"
                     >
-                        <X aria-hidden="true" size={18} />
+                        Cancelar
                     </button>
-                </header>
-
-                <div className="space-y-5 overflow-y-auto px-6 py-5">
-                    {error && (
-                        <div className="rounded-xl border border-red-400/20 bg-red-400/[0.08] px-4 py-3 text-sm text-red-200" role="alert">
-                            {error.code !== 'ROOM_ENDED' && <span className="mr-2 font-semibold">{error.code}</span>}{error.message}
-                        </div>
+                    <button
+                        className="min-h-11 flex-1 rounded-xl bg-white text-sm font-semibold text-zinc-950 transition hover:bg-cyan-50 focus:outline-none focus:ring-2 focus:ring-cyan-200/70 disabled:cursor-wait disabled:opacity-55"
+                        disabled={isLoading}
+                        onClick={() => void handleInviteJoin()}
+                        type="button"
+                    >
+                        Unirse
+                    </button>
+                </div>
+            ) : room ? (
+                <div className={onReturnToApp ? 'flex flex-wrap gap-2' : ''}>
+                    {onReturnToApp && (
+                        <button
+                            className="min-h-11 min-w-28 flex-[1_1_7rem] rounded-xl border border-white/10 bg-white/[0.04] px-3 text-sm font-medium text-white/80 transition hover:bg-white/[0.08] focus:outline-none focus:ring-2 focus:ring-white/20"
+                            onClick={onReturnToApp}
+                            type="button"
+                        >
+                            Ir a App
+                        </button>
                     )}
+                    {isHost ? (
+                        <button
+                            className={`${onReturnToApp ? 'min-w-36 flex-[1_1_9rem] border border-red-300/15 bg-red-300/[0.06] text-red-100/85 hover:bg-red-300/[0.1]' : 'w-full bg-white/[0.07] text-white/85 hover:bg-white/[0.11]'} min-h-11 rounded-xl px-3 text-sm font-medium transition focus:outline-none focus:ring-2 focus:ring-white/20 disabled:cursor-wait disabled:opacity-50`}
+                            disabled={isLoading}
+                            onClick={() => {
+                                void leaveRoom().then((left) => {
+                                    if (left) onClose();
+                                });
+                            }}
+                            type="button"
+                        >
+                            {isLoading ? 'Abandonando...' : 'Abandonar sala'}
+                        </button>
+                    ) : (
+                        <button
+                            className={`inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-red-300/15 bg-red-300/[0.06] px-3 text-sm font-medium text-red-100/85 transition hover:bg-red-300/[0.1] focus:outline-none focus:ring-2 focus:ring-red-200/30 disabled:opacity-50 ${onReturnToApp ? 'min-w-36 flex-[1_1_9rem]' : 'w-full'}`}
+                            disabled={isLoading}
+                            onClick={() => void leaveRoom()}
+                            type="button"
+                        >
+                            <LogOut aria-hidden="true" size={15} />
+                            {isLoading ? 'Saliendo...' : 'Abandonar sala'}
+                        </button>
+                    )}
+                </div>
+            ) : (
+                <button className="w-full py-1 text-sm text-white/40 transition hover:text-white/75" onClick={() => setIsHelpOpen(true)} type="button">
+                    {'¿Cómo funciona?'}
+                </button>
+            )}
+        </footer>
+    ) : null;
 
-                    {inviteCode ? (
+    const modalContent = (
+        <PanelShellComponent
+            ariaLabel="Panel Cine y WatchParty"
+            backButtonLabel="Volver a gestión de sala"
+            closeButtonLabel="Cerrar panel WatchParty"
+            description={!isHelpOpen && !inviteCode ? (
+                room && isHost
+                    ? 'Invita a cualquier persona con un código o QR.'
+                    : room
+                        ? 'Conectado a la sala'
+                        : 'Disfruta y sincroniza contenido en grupo'
+            ) : undefined}
+            footer={panelFooter}
+            isOpen={isOpen}
+            onBack={isHelpOpen ? () => setIsHelpOpen(false) : undefined}
+            onClose={onClose}
+            title={isHelpOpen ? 'Ayuda' : inviteCode ? 'Unirse a una sala' : room && isHost ? 'Compartir sala' : 'WatchParty'}
+            titleId="watchparty-title"
+        >
+                    {isHelpOpen ? (
+                        <div className="space-y-4 pb-1 text-sm text-[var(--text-secondary)]">
+                            <div className="border-b border-[var(--glass-border)] pb-4">
+                                <p className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--primary-color)]"><Radio aria-hidden="true" size={12} />{watchPartyHelp.title}</p>
+                                <h3 id="watchparty-help-title" className="mt-1 text-base font-semibold tracking-tight text-[var(--text-primary)]">{watchPartyHelp.subtitle}</h3>
+                                <p className="mt-1.5 text-[13px] leading-5 text-[var(--text-secondary)]">{watchPartyHelp.introduction}</p>
+                            </div>
+                            <div className="space-y-3">
+                                {watchPartyHelp.sections.map((section, sectionIndex) => {
+                                    const SectionIcon = watchPartyHelpIcons[sectionIndex] ?? Radio;
+
+                                    return (
+                                        <section className="rounded-2xl border border-[var(--glass-border)] bg-[var(--glass-bg)] p-4" key={section.title}>
+                                            <div className="flex items-center gap-2.5">
+                                                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border border-[var(--dark-border)] bg-[var(--glass-bg)] text-[var(--primary-color)]"><SectionIcon aria-hidden="true" size={15} /></span>
+                                                <h4 className="text-sm font-semibold text-[var(--text-primary)]">{section.title}</h4>
+                                            </div>
+                                            <ol className="mt-3 space-y-2.5">
+                                                {section.steps.map((step) => (
+                                                    <li className="flex gap-3 text-[13px] leading-5 text-[var(--text-primary)]" key={step.number}>
+                                                        <span className="pt-0.5 text-[10px] font-semibold tracking-wide text-[var(--primary-color)]">{String(step.number).padStart(2, '0')}</span>
+                                                        <span>{step.text}</span>
+                                                    </li>
+                                                ))}
+                                            </ol>
+                                        </section>
+                                    );
+                                })}
+                            </div>
+                        </div>
+                    ) : (
+                        <>
+                            {error && (
+                                <div className="rounded-xl border border-red-400/20 bg-red-400/[0.08] px-4 py-3 text-sm text-red-200" role="alert">
+                                    {error.code !== 'ROOM_ENDED' && <span className="mr-2 font-semibold">{error.code}</span>}{error.message}
+                                </div>
+                            )}
+
+                            {inviteCode ? (
                         <section className="rounded-2xl border border-white/[0.07] bg-white/[0.025] p-5 text-center">
                             <p className="text-sm text-white/65">Has abierto una invitación de WatchParty.</p>
                             <p className="mt-4 text-[11px] font-medium uppercase tracking-[0.16em] text-white/40">Código de sala</p>
@@ -293,108 +378,13 @@ function WatchPartyModal({ isOpen, onClose, inviteCode, onInviteCancel, onInvite
                                 </button>
                             </form>
                         </>
-                    )}
-                </div>
-
-                <footer className="border-t border-white/[0.07] px-6 py-4">
-                    {inviteCode ? (
-                        <div className="flex gap-3">
-                            <button
-                                className="min-h-11 flex-1 rounded-xl border border-white/10 bg-white/[0.04] text-sm font-medium text-white/75 transition hover:bg-white/[0.08] focus:outline-none focus:ring-2 focus:ring-white/20"
-                                onClick={onInviteCancel}
-                                type="button"
-                            >
-                                Cancelar
-                            </button>
-                            <button
-                                className="min-h-11 flex-1 rounded-xl bg-white text-sm font-semibold text-zinc-950 transition hover:bg-cyan-50 focus:outline-none focus:ring-2 focus:ring-cyan-200/70 disabled:cursor-wait disabled:opacity-55"
-                                disabled={isLoading}
-                                onClick={() => void handleInviteJoin()}
-                                type="button"
-                            >
-                                Unirse
-                            </button>
-                        </div>
-                    ) : room ? (
-                        <div className={onReturnToApp ? 'flex flex-wrap gap-2' : ''}>
-                            {onReturnToApp && (
-                                <button
-                                    className="min-h-11 min-w-28 flex-[1_1_7rem] rounded-xl border border-white/10 bg-white/[0.04] px-3 text-sm font-medium text-white/80 transition hover:bg-white/[0.08] focus:outline-none focus:ring-2 focus:ring-white/20"
-                                    onClick={onReturnToApp}
-                                    type="button"
-                                >
-                                    Ir a App
-                                </button>
                             )}
-                            {isHost ? (
-                                <button
-                                    className={`${onReturnToApp ? 'min-w-36 flex-[1_1_9rem] border border-red-300/15 bg-red-300/[0.06] text-red-100/85 hover:bg-red-300/[0.1]' : 'w-full bg-white/[0.07] text-white/85 hover:bg-white/[0.11]'} min-h-11 rounded-xl px-3 text-sm font-medium transition focus:outline-none focus:ring-2 focus:ring-white/20 disabled:cursor-wait disabled:opacity-50`}
-                                    disabled={isLoading}
-                                    onClick={() => {
-                                        void leaveRoom().then((left) => {
-                                            if (left) onClose();
-                                        });
-                                    }}
-                                    type="button"
-                                >
-                                    {isLoading ? 'Abandonando...' : 'Abandonar sala'}
-                                </button>
-                            ) : (
-                                <button
-                                    className={`inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-red-300/15 bg-red-300/[0.06] px-3 text-sm font-medium text-red-100/85 transition hover:bg-red-300/[0.1] focus:outline-none focus:ring-2 focus:ring-red-200/30 disabled:opacity-50 ${onReturnToApp ? 'min-w-36 flex-[1_1_9rem]' : 'w-full'}`}
-                                    disabled={isLoading}
-                                    onClick={() => void leaveRoom()}
-                                    type="button"
-                                >
-                                    <LogOut aria-hidden="true" size={15} />
-                                    {isLoading ? 'Saliendo...' : 'Abandonar sala'}
-                                </button>
-                            )}
-                        </div>
-                    ) : (
-                        <button className="w-full py-1 text-sm text-white/40 transition hover:text-white/75" onClick={() => setIsHelpOpen(true)} type="button">
-                            {'¿Cómo funciona?'}
-                        </button>
+                        </>
                     )}
-                </footer>
-
-                {isHelpOpen && createPortal(
-                    <div className="fixed inset-0 z-[10001] flex items-center justify-center bg-black/75 p-4 backdrop-blur-sm" onClick={() => setIsHelpOpen(false)}>
-                        <section
-                            aria-labelledby="watchparty-help-title"
-                            aria-modal="true"
-                            className="w-full max-w-sm rounded-2xl border border-white/10 bg-[#17191f] p-5 text-white shadow-2xl"
-                            role="dialog"
-                            onClick={(event) => event.stopPropagation()}
-                        >
-                            <div className="flex items-start justify-between">
-                                <div>
-                                    <h3 id="watchparty-help-title" className="font-semibold">{'¿Cómo funciona?'}</h3>
-                                    <p className="mt-1 text-xs text-white/40">Una sala compartida, sincronizada en tiempo real.</p>
-                                </div>
-                                <button aria-label="Cerrar ayuda" className="rounded-full p-1 text-white/45 hover:bg-white/10 hover:text-white" onClick={() => setIsHelpOpen(false)} type="button">
-                                    <X aria-hidden="true" size={17} />
-                                </button>
-                            </div>
-                            <ol className="mt-5 space-y-3 text-sm text-white/65">
-                                <li className="flex gap-3"><span className="text-cyan-200/70">01</span><span>El anfitrión crea una sala.</span></li>
-                                <li className="flex gap-3"><span className="text-cyan-200/70">02</span><span>Comparte el código con sus amigos.</span></li>
-                                <li className="flex gap-3"><span className="text-cyan-200/70">03</span><span>Los invitados ingresan el código para unirse.</span></li>
-                                <li className="flex gap-3"><span className="text-cyan-200/70">04</span><span>La reproducción, las pausas y el contenido se sincronizan automáticamente.</span></li>
-                                <li className="flex gap-3"><span className="text-cyan-200/70">05</span><span>Si el anfitrión sale, el rol se transfiere automáticamente.</span></li>
-                            </ol>
-                            <button className="mt-5 min-h-10 w-full rounded-xl bg-white/[0.07] text-sm font-medium text-white/80 hover:bg-white/[0.11]" onClick={() => setIsHelpOpen(false)} type="button">
-                                Entendido
-                            </button>
-                        </section>
-                    </div>,
-                    document.body,
-                )}
-            </section>
-        </div>
+                </PanelShellComponent>
     );
 
-    return createPortal(modalContent, document.body);
+    return modalContent;
 }
 
 export default WatchPartyModal;

@@ -13,8 +13,7 @@ import { ChatModal } from './components/ChatModal';
 import { RoomChatTicker } from './components/RoomChatTicker';
 import { MobileNav } from './components/MobileNav';
 import { useTVRemote } from './hooks/useTVRemote';
-import GeneralHelpModal from './components/GeneralHelpModal';
-import WatchPartyModal from './components/WatchPartyModal';
+import { PanelHost } from './components/panels/PanelHost';
 import { UserProfileForm } from './components/UserProfileForm';
 import { HelpCircle } from 'lucide-react';
 import { GuestCinemaLayout } from './components/GuestCinemaLayout';
@@ -116,19 +115,6 @@ function AppContent() {
         } else {
             setIsWatchPartyOpen(false);
         }
-    };
-
-    const handleWatchPartyNavigation = () => {
-        if (room) {
-            if (isGuestCinema) {
-                setIsGuestCinemaMode(false);
-                setIsWatchPartyOpen(false);
-            } else {
-                setIsGuestCinemaMode(true);
-            }
-            return;
-        }
-        setIsWatchPartyOpen(true);
     };
 
     const handleMobileWatchPartyNavigation = () => {
@@ -325,16 +311,21 @@ function AppContent() {
                 <GuestCinemaLayout
                     isConnected={isConnected}
                     onChatClick={() => setIsChatOpen(true)}
-                    onExitCinema={handleWatchPartyNavigation}
+                    onExitCinema={handleMobileWatchPartyNavigation}
                 />
                 <ChatModal externalOpen={isChatOpen} onOpenChange={setIsChatOpen} roomCode={roomCode} />
-                <WatchPartyModal
-                    isOpen={isWatchPartyOpen}
-                    onClose={handleWatchPartyModalClose}
-                    inviteCode={pendingRoomInvite}
-                    onInviteCancel={handleRoomInviteCancel}
-                    onInviteJoined={handleRoomInviteJoined}
-                    onReturnToApp={handleReturnToApp}
+                <PanelHost
+                    activePanel={isWatchPartyOpen ? {
+                        kind: 'watchparty',
+                        props: {
+                            isOpen: true,
+                            onClose: handleWatchPartyModalClose,
+                            inviteCode: pendingRoomInvite,
+                            onInviteCancel: handleRoomInviteCancel,
+                            onInviteJoined: handleRoomInviteJoined,
+                            onReturnToApp: handleReturnToApp,
+                        },
+                    } : null}
                 />
                 <div className="mobile-nav-container">
                     <MobileNav
@@ -365,7 +356,7 @@ function AppContent() {
                     theme={theme}
                     onThemeClick={cycleTheme}
                     onChatClick={() => setIsChatOpen(true)}
-                    onWatchPartyClick={() => setIsWatchPartyOpen(true)}
+                    onWatchPartyClick={handleMobileWatchPartyNavigation}
                 />
             </div>
 
@@ -469,13 +460,23 @@ function AppContent() {
 
             <StationManager isOpen={isManagerOpen} onClose={() => setIsManagerOpen(false)} />
             <ChatModal externalOpen={isChatOpen} onOpenChange={setIsChatOpen} roomCode={roomCode} />
-            <GeneralHelpModal isOpen={isAppHelpOpen} onClose={() => setIsAppHelpOpen(false)} />
-            <WatchPartyModal
-                isOpen={isWatchPartyOpen}
-                onClose={handleWatchPartyModalClose}
-                inviteCode={pendingRoomInvite}
-                onInviteCancel={handleRoomInviteCancel}
-                onInviteJoined={handleRoomInviteJoined}
+            <PanelHost
+                activePanel={isWatchPartyOpen ? {
+                    kind: 'watchparty',
+                    props: {
+                        isOpen: true,
+                        onClose: handleWatchPartyModalClose,
+                        inviteCode: pendingRoomInvite,
+                        onInviteCancel: handleRoomInviteCancel,
+                        onInviteJoined: handleRoomInviteJoined,
+                    },
+                } : isAppHelpOpen ? {
+                    kind: 'general-help',
+                    props: {
+                        isOpen: true,
+                        onClose: () => setIsAppHelpOpen(false),
+                    },
+                } : null}
             />
             <div className="mobile-nav-container">
                 <MobileNav
