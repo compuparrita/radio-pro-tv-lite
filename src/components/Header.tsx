@@ -258,7 +258,7 @@ export const Header: React.FC<HeaderProps> = ({ theme, onThemeClick, onChatClick
                     {/* Unified Theme Switcher */}
                     <button
                         onClick={onThemeClick}
-                        className="flex items-center gap-2 px-4 py-1.5 bg-white/5 border border-white/5  hover:bg-white/10 transition-all group"
+                        className="btn btn-secondary btn-sm group"
                         title="Cambiar tema"
                     >
                         <div className="relative w-5 h-5 flex items-center justify-center">
@@ -266,7 +266,7 @@ export const Header: React.FC<HeaderProps> = ({ theme, onThemeClick, onChatClick
                             {theme === 'light' && <Waves size={18} className="text-[var(--primary-color)]" />}
                             {theme === 'youth' && <Zap size={18} className="text-[var(--accent-color)]" />}
                         </div>
-                        <span className="text-xs font-bold uppercase tracking-wider min-w-[60px] text-left">
+                        <span className="uppercase tracking-wider min-w-[60px] text-left">
                             {getThemeLabel()}
                         </span>
                     </button>
@@ -274,11 +274,11 @@ export const Header: React.FC<HeaderProps> = ({ theme, onThemeClick, onChatClick
                     {/* Chat Button */}
                     <button
                         onClick={onChatClick}
-                        className="relative flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-[var(--primary-color)] to-[var(--secondary-color)] text-white hover:opacity-90 transition-all border border-transparent"
+                        className="btn btn-primary btn-sm relative"
                         title="Chatear online"
                     >
                         <MessageCircle size={18} />
-                        <span className="text-xs font-bold tracking-wider">Chat</span>
+                        <span className="tracking-wider">Chat</span>
                         {/* Online count pill */}
                         <span className="flex items-center gap-1 bg-black/25 rounded-full px-1.5 py-0.5 text-[10px] font-bold leading-none">
                             <span className={`w-1.5 h-1.5 rounded-full inline-block ${
@@ -305,19 +305,19 @@ export const Header: React.FC<HeaderProps> = ({ theme, onThemeClick, onChatClick
                                 setIsWatchPartyOpen(true);
                             }
                         }}
-                        className="flex items-center gap-1.5 px-3 py-1.5 bg-white/5 border border-white/10 text-white hover:bg-white/10 transition-all"
+                        className="btn btn-secondary btn-sm"
                         type="button"
                     >
-                        <span className="text-xs font-bold tracking-wider">🎬 Cine</span>
+                        <span className="tracking-wider">🎬 Cine</span>
                     </button>
 					<button
                     onClick={() => onProfileClick?.()}
-                    className="flex items-center gap-1.5 px-3 py-1.5 bg-white/5 border border-white/10 text-white hover:bg-white/10 transition-all"
+                    className="btn btn-secondary btn-sm"
                     title="Administrar perfil local"
                     type="button"
                 >
                     <User size={16} />
-                    <span className="text-xs font-bold tracking-wider">Perfil</span>
+                    <span className="tracking-wider">Perfil</span>
                 </button>
                 </div>
             </div>

@@ -54,7 +54,7 @@ const GeneralHelpModal: React.FC<GeneralHelpModalHostProps> = ({ isOpen, onClose
                 <div className="flex items-center justify-end border-t border-white/10 bg-black/20 p-3 sm:p-4">
                     <button
                         onClick={onClose}
-                        className="w-full rounded-lg bg-gradient-to-r from-indigo-500 to-[var(--primary-color)] px-6 py-2.5 text-sm font-bold text-white shadow-lg transition-all hover:opacity-90 active:scale-95 sm:w-auto"
+                        className="btn btn-primary btn-block sm:w-auto"
                     >
                         Entendido
                     </button>

@@ -27,7 +27,7 @@ const watchPartyHelp = parseHelpMarkdown(watchPartyHelpMarkdown);
 const watchPartyHelpIcons = [PlusCircle, Users, Radio];
 
 const inputClassName = 'h-11 w-full rounded-xl border border-white/10 bg-white/[0.04] px-4 text-sm text-white placeholder:text-white/30 outline-none transition focus:border-cyan-300/60 focus:ring-2 focus:ring-cyan-300/10';
-const secondaryButtonClassName = 'inline-flex min-h-10 items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/[0.04] px-4 py-2 text-sm font-medium text-white/80 transition hover:bg-white/[0.08] hover:text-white focus:outline-none focus:ring-2 focus:ring-cyan-300/50';
+const secondaryButtonClassName = 'btn btn-secondary btn-sm';
 
 function WatchPartyModal({ isOpen, onClose, inviteCode, onInviteCancel, onInviteJoined, onReturnToApp, PanelShellComponent }: WatchPartyModalHostProps) {
     const { currentStation } = useRadio();
@@ -103,14 +103,14 @@ function WatchPartyModal({ isOpen, onClose, inviteCode, onInviteCancel, onInvite
             {inviteCode ? (
                 <div className="flex gap-3">
                     <button
-                        className="min-h-11 flex-1 rounded-xl border border-white/10 bg-white/[0.04] text-sm font-medium text-white/75 transition hover:bg-white/[0.08] focus:outline-none focus:ring-2 focus:ring-white/20"
+                        className="btn btn-secondary flex-1"
                         onClick={onInviteCancel}
                         type="button"
                     >
                         Cancelar
                     </button>
                     <button
-                        className="min-h-11 flex-1 rounded-xl bg-white text-sm font-semibold text-zinc-950 transition hover:bg-cyan-50 focus:outline-none focus:ring-2 focus:ring-cyan-200/70 disabled:cursor-wait disabled:opacity-55"
+                        className="btn btn-primary flex-1"
                         disabled={isLoading}
                         onClick={() => void handleInviteJoin()}
                         type="button"
@@ -122,7 +122,7 @@ function WatchPartyModal({ isOpen, onClose, inviteCode, onInviteCancel, onInvite
                 <div className={onReturnToApp ? 'flex flex-wrap gap-2' : ''}>
                     {onReturnToApp && (
                         <button
-                            className="min-h-11 min-w-28 flex-[1_1_7rem] rounded-xl border border-white/10 bg-white/[0.04] px-3 text-sm font-medium text-white/80 transition hover:bg-white/[0.08] focus:outline-none focus:ring-2 focus:ring-white/20"
+                            className="btn btn-secondary min-w-28 flex-[1_1_7rem]"
                             onClick={onReturnToApp}
                             type="button"
                         >
@@ -131,7 +131,7 @@ function WatchPartyModal({ isOpen, onClose, inviteCode, onInviteCancel, onInvite
                     )}
                     {isHost ? (
                         <button
-                            className={`${onReturnToApp ? 'min-w-36 flex-[1_1_9rem] border border-red-300/15 bg-red-300/[0.06] text-red-100/85 hover:bg-red-300/[0.1]' : 'w-full bg-white/[0.07] text-white/85 hover:bg-white/[0.11]'} min-h-11 rounded-xl px-3 text-sm font-medium transition focus:outline-none focus:ring-2 focus:ring-white/20 disabled:cursor-wait disabled:opacity-50`}
+                            className={`btn btn-danger ${onReturnToApp ? 'min-w-36 flex-[1_1_9rem]' : 'w-full'}`}
                             disabled={isLoading}
                             onClick={() => {
                                 void leaveRoom().then((left) => {
@@ -144,7 +144,7 @@ function WatchPartyModal({ isOpen, onClose, inviteCode, onInviteCancel, onInvite
                         </button>
                     ) : (
                         <button
-                            className={`inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-red-300/15 bg-red-300/[0.06] px-3 text-sm font-medium text-red-100/85 transition hover:bg-red-300/[0.1] focus:outline-none focus:ring-2 focus:ring-red-200/30 disabled:opacity-50 ${onReturnToApp ? 'min-w-36 flex-[1_1_9rem]' : 'w-full'}`}
+                            className={`btn btn-danger ${onReturnToApp ? 'min-w-36 flex-[1_1_9rem]' : 'w-full'}`}
                             disabled={isLoading}
                             onClick={() => void leaveRoom()}
                             type="button"
@@ -155,7 +155,7 @@ function WatchPartyModal({ isOpen, onClose, inviteCode, onInviteCancel, onInvite
                     )}
                 </div>
             ) : (
-                <button className="w-full py-1 text-sm text-white/40 transition hover:text-white/75" onClick={() => setIsHelpOpen(true)} type="button">
+                <button className="btn btn-ghost btn-block" onClick={() => setIsHelpOpen(true)} type="button">
                     {'¿Cómo funciona?'}
                 </button>
             )}
@@ -292,7 +292,7 @@ function WatchPartyModal({ isOpen, onClose, inviteCode, onInviteCancel, onInvite
                                             <div className="rounded-xl border border-cyan-200/15 bg-cyan-200/[0.06] p-4">
                                                 <p className="text-sm text-white/75">{hostName} está reproduciendo</p>
                                                 <button
-                                                    className="mt-3 min-h-11 w-full rounded-xl bg-white text-sm font-semibold text-zinc-950 transition hover:bg-cyan-50 focus:outline-none focus:ring-2 focus:ring-cyan-200/70"
+                                                    className="btn btn-primary btn-block mt-3"
                                                     onClick={syncPlayback}
                                                     type="button"
                                                 >
@@ -370,7 +370,7 @@ function WatchPartyModal({ isOpen, onClose, inviteCode, onInviteCancel, onInvite
                                     </label>
                                 )}
                                 <button
-                                    className="min-h-11 w-full rounded-xl bg-white text-sm font-semibold text-zinc-950 transition hover:bg-cyan-50 focus:outline-none focus:ring-2 focus:ring-cyan-200/70 disabled:cursor-wait disabled:opacity-55"
+                                    className="btn btn-primary btn-block"
                                     disabled={isLoading}
                                     type="submit"
                                 >

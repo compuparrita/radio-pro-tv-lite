@@ -414,10 +414,10 @@ export const StationManager: React.FC<StationManagerProps> = ({ isOpen, onClose 
                         </span>
                         <button
                             onClick={() => setShowHelp(true)}
-                            className="flex items-center gap-1.5 px-2 py-1 text-[10px] font-bold transition-all bg-white/5 text-[var(--text-secondary)] hover:bg-white/10 hover:text-white rounded"
+                            className="btn btn-ghost btn-sm"
                             title="Ver guía de gestión"
                         >
-                            <HelpCircle size={15} className="text-indigo-400" />
+                            <HelpCircle size={15} />
                             <span>Guía</span>
                         </button>
                     </div>
@@ -490,7 +490,7 @@ export const StationManager: React.FC<StationManagerProps> = ({ isOpen, onClose 
                             <div className="p-3 border-t border-white/10 bg-black/20 flex justify-end">
                                 <button
                                     onClick={() => setShowHelp(false)}
-                                    className="px-5 py-2 bg-[var(--primary-color)] text-white font-bold text-xs rounded-lg hover:opacity-90 active:scale-95 transition-all shadow-md"
+                                    className="btn btn-primary btn-sm"
                                 >
                                     Entendido
                                 </button>
@@ -628,7 +628,7 @@ export const StationManager: React.FC<StationManagerProps> = ({ isOpen, onClose 
                                             <button
                                                 type="button"
                                                 onClick={handleCancel}
-                                                className="px-3 py-1 bg-white/5 hover:bg-white/10 text-white font-bold transition-all text-[11px]"
+                                                className="btn btn-secondary btn-sm"
                                             >
                                                 Cancelar
                                             </button>
@@ -636,10 +636,7 @@ export const StationManager: React.FC<StationManagerProps> = ({ isOpen, onClose 
                                         <button
                                             type="submit"
                                             disabled={!formData.name || (!formData.url && !formData.iframeUrl && !formData.embedCanal)}
-                                            className={`px-4 py-1 font-bold transition-all flex items-center gap-1.5 text-[10px] uppercase tracking-wide shadow-lg ${(!formData.name || (!formData.url && !formData.iframeUrl && !formData.embedCanal))
-                                                ? 'bg-white/5 text-white/20 cursor-not-allowed'
-                                                : 'bg-[var(--primary-color)] text-white hover:brightness-110 active:scale-95'
-                                                }`}
+                                            className="btn btn-primary btn-sm uppercase tracking-wide shadow-lg"
                                         >
                                             <CheckCircle size={11} />
                                             {editingId ? 'Guardar' : 'Agregar'}
@@ -692,7 +689,7 @@ export const StationManager: React.FC<StationManagerProps> = ({ isOpen, onClose 
                     <div className="flex gap-4 items-center flex-wrap">
                         <button
                             onClick={handleExport}
-                            className="flex items-center gap-1.5 text-xs font-medium text-[var(--text-secondary)] hover:text-white transition-colors"
+                            className="btn btn-ghost btn-sm"
                         >
                             <Download size={14} /> Exportar
                         </button>
@@ -704,13 +701,13 @@ export const StationManager: React.FC<StationManagerProps> = ({ isOpen, onClose 
                         <div className="relative">
                             {confirmReset ? (
                                 <div className="flex items-center gap-2 animate-in zoom-in-95 bg-white/5 p-1 border border-white/10">
-                                    <button onClick={handleClearStorage} className="text-[10px] bg-red-500 text-white px-3 py-1 font-bold hover:bg-red-600 transition-all">Sí, restablecer</button>
-                                    <button onClick={() => setConfirmReset(false)} className="text-[10px] bg-white/10 text-white px-3 py-1 font-bold hover:bg-white/20 transition-all">Cancelar</button>
+                                    <button onClick={handleClearStorage} className="btn btn-danger btn-sm">Sí, restablecer</button>
+                                    <button onClick={() => setConfirmReset(false)} className="btn btn-secondary btn-sm">Cancelar</button>
                                 </div>
                             ) : (
                                 <button
                                     onClick={() => setConfirmReset(true)}
-                                    className="flex items-center gap-1.5 text-xs font-medium text-red-500/60 hover:text-red-600 transition-colors"
+                                    className="btn btn-danger btn-sm"
                                 >
                                     <AlertTriangle size={18} /> Reset
                                 </button>
@@ -720,7 +717,7 @@ export const StationManager: React.FC<StationManagerProps> = ({ isOpen, onClose 
 
                     <button
                         onClick={onClose}
-                        className="px-3 py-1.4 p-0.5 bg-white/10 hover:bg-white/20 text-white font-bold transition-all text-sm"
+                        className="btn btn-secondary btn-sm"
                     >
                         Cerrar
                     </button>

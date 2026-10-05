@@ -462,13 +462,13 @@ function AppContent() {
                     <div className="flex flex-col md:flex-row items-center justify-center gap-6 md:gap-8 border-t border-[var(--dark-border)] pt-8 md:pt-6">
                         <button
                             onClick={() => setIsManagerOpen(true)}
-                            className="flex items-center gap-2 hover:text-[var(--primary-color)] transition-colors"
+                            className="btn btn-ghost"
                         >
                             <Settings size={16} /> Gestor de Emisoras
                         </button>
                         <button
                             onClick={() => setIsAppHelpOpen(true)}
-                            className="flex items-center gap-2 hover:text-[var(--primary-color)] transition-colors"
+                            className="btn btn-ghost"
                         >
                             <HelpCircle size={16} /> Ayuda de la App
                         </button>

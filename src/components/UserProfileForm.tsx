@@ -115,7 +115,7 @@ export function UserProfileForm({ mode = 'setup', variant = 'page', onSaved, onC
                 <div className={`${isCompact ? 'mt-5' : 'mt-7'} flex gap-2`}>
                     {isCompact && onCancel && (
                         <button
-                            className="h-11 flex-1 rounded-lg border border-white/10 text-sm font-semibold text-white/70 transition hover:bg-white/5"
+                            className="btn btn-secondary flex-1"
                             onClick={onCancel}
                             type="button"
                         >
@@ -123,7 +123,7 @@ export function UserProfileForm({ mode = 'setup', variant = 'page', onSaved, onC
                         </button>
                     )}
                     <button
-                        className="h-11 flex-1 rounded-lg bg-cyan-300 text-sm font-semibold text-[#111318] transition hover:bg-cyan-200 focus:outline-none focus:ring-2 focus:ring-cyan-200/70"
+                        className="btn btn-primary flex-1"
                         type="submit"
                     >
                         {isEditing ? 'Guardar cambios' : 'Continuar'}

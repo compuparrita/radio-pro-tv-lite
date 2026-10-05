@@ -3,7 +3,7 @@
 > Documento de continuidad para mantener contexto entre sesiones y evitar reconstruir decisiones de arquitectura desde cero.
 >
 > Proyecto: `C:\radiofm`
-> Última actualización: 2026-10-04
+> Última actualización: 2026-10-05
 >
 > **Regla:** este documento registra decisiones, invariantes, estado de fases, pruebas y próximos pasos. No sustituye `ARCHITECTURE.md`, que sigue siendo la fuente de verdad de la arquitectura técnica general del proyecto.
 
@@ -270,6 +270,24 @@ La motivación principal no es únicamente rendimiento. Es evitar duplicación y
 - accesibilidad;
 - comportamiento responsive;
 - estética.
+
+### Sistema global de botones — estado actual
+
+**Estado de fase: IMPLEMENTADA Y CERRADA** (mensaje: refactor(ui): establish global button system).
+
+El sistema global está implementado en `src/index.css` con `.btn`, `.btn-primary`, `.btn-secondary`, `.btn-danger`, `.btn-ghost`, `.btn-sm`, `.btn-lg`, `.btn-icon` y `.btn-block`. La base centraliza tipografía, alineación, espaciado, altura mínima, borde, transición, focus, disabled y cursor. Las variantes semánticas consumen tokens existentes; los colores responden a `dark`, `light` y `youth`. Se mantiene `border-radius: 0`.
+
+El sistema se usa para acciones convencionales y reutilizables; no absorbe automáticamente todos los elementos `<button>`. Las migraciones aprobadas abarcan ProfilePanel, UserProfileForm, General Help, Chat Help, WatchParty, Footer, Header/Cine-Sala, MobileNav y las acciones convencionales de StationManager.
+
+### Regla para controles especializados
+
+Se conservan fuera de `.btn` cuando su geometría, interacción o semántica lo requiere: controles compactos de filas, icon-only especializados, selectores segmentados, drag handles, controles de Player, controles especializados de Chat y otros overlays/popovers. Cuando sea viable, deben consumir tokens globales del tema aunque no usen `.btn`.
+
+### StationManager — cierre de fase
+
+Se migraron nueve acciones convencionales. Editar, Eliminar, Borrar y X de confirmación de las filas sortable mantienen sus geometrías compactas y estados contextuales. Audio/TV permanece como selector segmentado; las X del gestor y la guía siguen especializadas; el drag handle queda fuera del sistema global. No se justifica una variante global nueva.
+
+Queda pendiente evaluar la tokenización de los rojos hardcoded de Borrar/Eliminar y sus hovers, y de los azules hardcoded de Editar y su superficie hover, preservando la geometría especializada. Evaluar su conexión con los tokens semánticos existentes; mantener Audio/TV, las X y demás controles especializados fuera del sistema global mientras no exista una razón concreta para migrarlos.
 
 ---
 

@@ -57,14 +57,14 @@ export default function ProfilePanel({ isOpen, onClose, PanelShellComponent }: P
                     </dl>
                     <div className="mt-4 flex flex-col gap-2">
                         <button
-                            className="flex items-center justify-center gap-2 rounded-lg bg-cyan-300 px-3 py-2 text-sm font-bold text-slate-950 transition hover:bg-cyan-200"
+                            className="btn btn-primary"
                             onClick={() => setProfileFormMode('edit')}
                             type="button"
                         >
                             <Pencil size={15} /> Editar perfil
                         </button>
                         <button
-                            className="flex items-center justify-center gap-2 rounded-lg border border-red-400/20 px-3 py-2 text-sm font-semibold text-red-300 transition hover:bg-red-400/10"
+                            className="btn btn-danger"
                             onClick={handleClearProfile}
                             type="button"
                         >
@@ -76,7 +76,7 @@ export default function ProfilePanel({ isOpen, onClose, PanelShellComponent }: P
                 <div>
                     <p className="text-sm text-[var(--text-secondary)]">No hay un perfil guardado en este dispositivo.</p>
                     <button
-                        className="mt-4 w-full rounded-lg bg-cyan-300 px-3 py-2 text-sm font-bold text-slate-950 transition hover:bg-cyan-200"
+                        className="btn btn-primary btn-block mt-4"
                         onClick={() => setProfileFormMode('setup')}
                         type="button"
                     >

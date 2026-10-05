@@ -93,7 +93,7 @@ export const MobileNav: React.FC<MobileNavProps> = ({ onChatClick, onThemeClick,
                     <button
                         onClick={prevStation}
                         disabled={Boolean(room && !isHost)}
-                        className={`flex flex-col items-center justify-center gap-1 active:opacity-50 transition-opacity ${room && !isHost ? 'opacity-35 cursor-not-allowed' : ''}`}
+                        className={`btn btn-ghost btn-sm flex-col gap-1 p-0 active:opacity-50 ${room && !isHost ? 'opacity-35' : ''}`}
                         title={room && !isHost ? 'Solo el anfitrión cambia de estación' : 'Anterior'}
                     >
                         <SkipBack size={19} className="text-gray-400" strokeWidth={1.5} />
@@ -103,7 +103,7 @@ export const MobileNav: React.FC<MobileNavProps> = ({ onChatClick, onThemeClick,
                     {/* Play/Pause */}
                     <button
                         onClick={handleTogglePlayback}
-                        className="flex flex-col items-center justify-center gap-1 active:opacity-50 transition-opacity"
+                        className="btn btn-ghost btn-sm flex-col gap-1 p-0 active:opacity-50"
                         title={isPlaying ? 'Pausar' : 'Reproducir'}
                     >
                         {isPlaying ? (
@@ -120,7 +120,7 @@ export const MobileNav: React.FC<MobileNavProps> = ({ onChatClick, onThemeClick,
                     <button
                         onClick={nextStation}
                         disabled={Boolean(room && !isHost)}
-                        className={`flex flex-col items-center justify-center gap-1 active:opacity-50 transition-opacity ${room && !isHost ? 'opacity-35 cursor-not-allowed' : ''}`}
+                        className={`btn btn-ghost btn-sm flex-col gap-1 p-0 active:opacity-50 ${room && !isHost ? 'opacity-35' : ''}`}
                         title={room && !isHost ? 'Solo el anfitrión cambia de estación' : 'Siguiente'}
                     >
                         <SkipForward size={19} className="text-gray-400" strokeWidth={1.5} />
