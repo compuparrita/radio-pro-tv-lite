@@ -1,8 +1,11 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { Play, Pause, SkipBack, SkipForward, Volume2, VolumeX } from 'lucide-react';
+import { Play, Pause, SkipBack, SkipForward, Volume2, VolumeX, Star } from 'lucide-react';
 import { useRadio } from '../context/RadioContext';
 import { useWatchParty } from '../context/WatchPartyContext';
 import { useVideoPlayer } from '../hooks/useVideoPlayer';
+
+const isVideoJsPlayerType = (playerType: ReturnType<typeof useVideoPlayer>['playerType']) =>
+    playerType === 'videojs';
 import { QualitySelector } from './QualitySelector';
 import { QualitySelectorPortal } from './QualitySelectorPortal';
 import { getPlayerCurrentTime } from '../utils/playerTimeBridge';
@@ -24,12 +27,15 @@ export const Player: React.FC = () => {
         isPlaying,
         setIsPlaying,
         volume,
+        favorites,
         togglePlay,
+        toggleFavorite,
         setVolume,
         nextStation,
         prevStation,
         setCurrentStation
     } = useRadio();
+    const isCurrentStationFavorite = Boolean(currentStation && favorites.includes(currentStation.id));
 
     const [isVolumeOpen, setIsVolumeOpen] = useState(false);
     const [isUserActive, setIsUserActive] = useState(true);
@@ -65,15 +71,6 @@ export const Player: React.FC = () => {
         suppressedLocalActionRef.current = action;
         suppressionTimeoutRef.current = window.setTimeout(clearSuppressedAction, 5000);
     }, [clearSuppressedAction]);
-
-    const handleTogglePlayback = useCallback(() => {
-        const watchParty = watchPartyRef.current;
-        if (watchParty.watchPartyRoom && !isHost && watchParty.needsSyncPlayback) {
-            watchParty.syncPlayback();
-            return;
-        }
-        togglePlay();
-    }, [isHost, togglePlay]);
 
     useEffect(() => () => {
         if (suppressionTimeoutRef.current !== null) window.clearTimeout(suppressionTimeoutRef.current);
@@ -169,7 +166,8 @@ export const Player: React.FC = () => {
         isAutoMode,
         setQualityLevel,
         isYouTube,
-        executeRemoteAction
+        executeRemoteAction,
+        markExternalPlaybackIntent
     } = useVideoPlayer(
         currentStation,
         isPlaying,
@@ -178,6 +176,18 @@ export const Player: React.FC = () => {
         setCurrentStation,
         handleLocalSeek
     );
+
+    const handleTogglePlayback = useCallback(() => {
+        const watchParty = watchPartyRef.current;
+        if (watchParty.watchPartyRoom && !isHost && watchParty.needsSyncPlayback) {
+            watchParty.syncPlayback();
+            return;
+        }
+        if (!watchParty.watchPartyRoom) {
+            markExternalPlaybackIntent(!isPlaying);
+        }
+        togglePlay();
+    }, [isHost, isPlaying, markExternalPlaybackIntent, togglePlay]);
 
     const extractYouTubeId = (url?: string): string | null => {
         if (!url) return null;
@@ -420,7 +430,56 @@ export const Player: React.FC = () => {
                     </div>
                 </div>
 
-                {hasVideo ? (
+                {playerType === 'videojs' ? (
+                    <div key={`tech-container-${currentStation.id}-${playerType}`} className="absolute inset-0 flex items-center justify-center player-tech-container">
+                        <div data-vjs-player className={`absolute inset-0 ${hasVideo ? 'h-full w-full' : 'hidden pointer-events-none opacity-0 h-0 w-0'}`}>
+                            <video
+                                ref={setVideoElementRef as any}
+                                className="video-js vjs-big-play-centered w-full h-full object-contain"
+                                playsInline
+                                preload="metadata"
+                            />
+                            {hasVideo && !isPlaying && (
+                                <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/40 backdrop-blur-[2px] z-[60]">
+                                    <img
+                                        src={currentStation.logo || 'https://picsum.photos/seed/radio-streaming-pro/150/150.jpg'}
+                                        alt={currentStation.name}
+                                        className="w-24 h-24 md:w-32 md:h-32 object-contain rounded-full border-4 border-[var(--primary-color)] opacity-80 p-2 bg-white/5 shadow-2xl"
+                                        onError={(e) => { (e.target as HTMLImageElement).src = "https://picsum.photos/seed/radio-streaming-pro/150/150.jpg" }}
+                                    />
+                                    <p className="mt-3 text-white/90 font-medium text-sm md:text-base tracking-wide drop-shadow-md">Pulsar Play para ver en vivo</p>
+                                </div>
+                            )}
+                        </div>
+
+                        {hasVideo && videoRef.current?.parentNode && (
+                            <QualitySelectorPortal container={videoRef.current.parentNode as HTMLElement}>
+                                <div className="absolute top-2 right-2 z-[100]">
+                                    <QualitySelector
+                                        qualityLevels={qualityLevels}
+                                        currentLevel={currentLevel}
+                                        isAutoMode={isAutoMode}
+                                        onLevelChange={setQualityLevel}
+                                    />
+                                </div>
+                            </QualitySelectorPortal>
+                        )}
+
+                        {!hasVideo && (
+                            <div className="absolute inset-0 flex flex-col items-center justify-center bg-[var(--dark-bg)] bg-gradient-to-b from-black/20 to-black/60">
+                                <div className="relative z-10">
+                                    <img
+                                        src={currentStation.logo || 'https://picsum.photos/seed/radio-streaming-pro/150/150.jpg'}
+                                        alt={currentStation.name}
+                                        className={`w-32 h-32 md:w-44 md:h-44 object-contain rounded-full border-[6px] md:border-[10px] border-[var(--primary-color)] shadow-[0_0_40px_rgba(139,92,246,0.4)] transition-all duration-700 p-2 md:p-3 bg-white/5 ${isPlaying ? 'animate-rotate-logo scale-105' : 'scale-100 opacity-60'}`}
+                                        onError={(e) => { (e.target as HTMLImageElement).src = "https://picsum.photos/seed/radio-streaming-pro/150/150.jpg" }}
+                                    />
+                                    <div className={`absolute inset-0 bg-[var(--primary-color)]/5 blur-3xl rounded-full transition-opacity duration-1000 ${isPlaying ? 'opacity-100' : 'opacity-0'}`}></div>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                ) : hasVideo ? (
                     <div key={`tech-container-${currentStation.id}-${playerType}`} className="absolute inset-0 bg-black flex items-center justify-center player-tech-container">
                         <div className="relative h-full w-full player-aspect-wrapper">
                             {playerType === 'iframe' ? (
@@ -478,10 +537,10 @@ export const Player: React.FC = () => {
                                 )
                             ) : (
                                 <>
-                                    <div data-vjs-player={playerType === 'videojs' ? true : undefined} className="h-full w-full relative">
+                                    <div data-vjs-player={isVideoJsPlayerType(playerType) ? true : undefined} className="h-full w-full relative">
                                         <video
                                             ref={setVideoElementRef as any}
-                                            className={`${playerType === 'videojs' ? 'video-js vjs-big-play-centered' : ''} w-full h-full object-contain`}
+                                            className={`${isVideoJsPlayerType(playerType) ? 'video-js vjs-big-play-centered' : ''} w-full h-full object-contain`}
                                             playsInline
                                             preload="metadata"
                                             controls={playerType === 'html5'}
@@ -501,7 +560,7 @@ export const Player: React.FC = () => {
                                     </div>
 
                                     {/* Quality Selector Portal (Only for VideoJS) */}
-                                    {playerType === 'videojs' && videoRef.current?.parentNode && (
+                                    {isVideoJsPlayerType(playerType) && videoRef.current?.parentNode && (
                                         <QualitySelectorPortal
                                             container={videoRef.current.parentNode as HTMLElement}
                                         >
@@ -522,7 +581,7 @@ export const Player: React.FC = () => {
                 ) : (
                     <div key={`tech-container-${currentStation.id}-${playerType}`} className="absolute inset-0 flex flex-col items-center justify-center bg-[var(--dark-bg)] bg-gradient-to-b from-black/20 to-black/60">
                         {/* Hidden Audio Element handles HLS/Native */}
-                        {playerType === 'videojs' ? (
+                        {isVideoJsPlayerType(playerType) ? (
                             <div data-vjs-player className="hidden pointer-events-none opacity-0 h-0 w-0">
                                 <video
                                     ref={setVideoElementRef as any}
@@ -596,13 +655,28 @@ export const Player: React.FC = () => {
                                 Error de carga
                             </div>
                         )}
-                        {playerType === 'iframe' ? (
-                            <div className="text-[var(--text-secondary)] text-[9px] md:text-[10px] italic opacity-60 bg-white/5 px-2 md:px-3 py-1 md:py-1.5 rounded-lg border border-white/5 text-center leading-tight">
-                                Usa el volumen nativo del reproductor
-                            </div>
-                        ) : (
-                            <div className="flex items-center gap-2">
-                                {/* Responsive Vertical Popup Volume Control (Mobile & Desktop) */}
+                        <div className="flex items-center gap-2">
+                            <button
+                                type="button"
+                                onClick={() => toggleFavorite(currentStation.id)}
+                                className="w-10 h-10 md:w-10 md:h-10 flex items-center justify-center bg-white/5 text-white/70 hover:bg-white/10 transition-colors rounded-none"
+                                title={isCurrentStationFavorite ? 'Quitar de favoritos' : 'Agregar a favoritos'}
+                                aria-label={isCurrentStationFavorite ? 'Quitar de favoritos' : 'Agregar a favoritos'}
+                                aria-pressed={isCurrentStationFavorite}
+                            >
+                                <Star
+                                    size={18}
+                                    className={isCurrentStationFavorite
+                                        ? 'text-[var(--warning-color)] fill-[var(--warning-color)]'
+                                        : 'text-[var(--text-secondary)]'}
+                                />
+                            </button>
+                            {playerType === 'iframe' ? (
+                                <div className="text-[var(--text-secondary)] text-[9px] md:text-[10px] italic opacity-60 bg-white/5 px-2 md:px-3 py-1 md:py-1.5 rounded-lg border border-white/5 text-center leading-tight">
+                                    Usa el volumen nativo del reproductor
+                                </div>
+                            ) : (
+                                /* Responsive Vertical Popup Volume Control (Mobile & Desktop) */
                                 <div
                                     ref={volumeRef}
                                     className="flex flex-col items-center relative z-[220]"
@@ -643,8 +717,8 @@ export const Player: React.FC = () => {
                                         {volume === 0 ? <VolumeX size={16} className="text-red-400" /> : <Volume2 size={16} />}
                                     </button>
                                 </div>
-                            </div>
-                        )}
+                            )}
+                        </div>
                     </div>
                 </div>
             </div>

@@ -8,12 +8,15 @@ import HelpModal from '../HelpModal';
 import type { HelpModalProps } from '../HelpModal';
 import ProfilePanel from '../ProfilePanel';
 import type { ProfilePanelProps } from '../ProfilePanel';
+import { GlobalMenu } from '../GlobalMenu';
+import type { GlobalMenuProps } from '../GlobalMenu';
 
 export type ActivePanel =
     | { kind: 'watchparty'; props: WatchPartyModalProps }
     | { kind: 'general-help'; props: GeneralHelpModalProps }
     | { kind: 'chat-help'; props: HelpModalProps }
-    | { kind: 'profile'; props: ProfilePanelProps };
+    | { kind: 'profile'; props: ProfilePanelProps }
+    | { kind: 'global-menu'; props: GlobalMenuProps };
 
 interface PanelHostProps {
     activePanel: ActivePanel | null;
@@ -40,7 +43,9 @@ export function PanelHost({ activePanel }: PanelHostProps) {
                 ? { kind: 'general-help', props: { ...lastActivePanel.props, isOpen: false } }
                 : lastActivePanel.kind === 'chat-help'
                     ? { kind: 'chat-help', props: { ...lastActivePanel.props, isOpen: false } }
-                    : { kind: 'profile', props: { ...lastActivePanel.props, isOpen: false } };
+                    : lastActivePanel.kind === 'profile'
+                        ? { kind: 'profile', props: { ...lastActivePanel.props, isOpen: false } }
+                        : { kind: 'global-menu', props: { ...lastActivePanel.props, isOpen: false } };
 
         setClosingPanel(panelClosing);
         const timeout = window.setTimeout(() => setClosingPanel(null), PANEL_EXIT_DURATION_MS);
@@ -59,5 +64,7 @@ export function PanelHost({ activePanel }: PanelHostProps) {
             return <HelpModal {...panelToRender.props} PanelShellComponent={PanelShell} />;
         case 'profile':
             return <ProfilePanel {...panelToRender.props} PanelShellComponent={PanelShell} />;
+        case 'global-menu':
+            return <GlobalMenu {...panelToRender.props} PanelShellComponent={PanelShell} />;
     }
 }

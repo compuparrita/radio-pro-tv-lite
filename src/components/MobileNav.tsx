@@ -1,17 +1,18 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { SkipBack, Play, Pause, SkipForward, MessageCircle, Palette, Film } from 'lucide-react';
+import { SkipBack, Play, Pause, SkipForward, MessageCircle, Palette, Film, User } from 'lucide-react';
 import { useRadio } from '../context/RadioContext';
 import { useChat } from '../context/ChatContext';
 import { useWatchParty } from '../context/WatchPartyContext';
 
 interface MobileNavProps {
     onChatClick: () => void;
+    onProfileClick?: () => void;
     onThemeClick: () => void;
     onWatchPartyClick?: () => void;
     isGuestCinema: boolean;
 }
 
-export const MobileNav: React.FC<MobileNavProps> = ({ onChatClick, onThemeClick, onWatchPartyClick, isGuestCinema }) => {
+export const MobileNav: React.FC<MobileNavProps> = ({ onChatClick, onProfileClick, onThemeClick, onWatchPartyClick, isGuestCinema }) => {
     const { isPlaying, togglePlay, nextStation, prevStation } = useRadio();
     const { unreadCount, onlineListeners, connectionStatus } = useChat();
     const { room, isHost, sendAction } = useWatchParty();
@@ -27,6 +28,11 @@ export const MobileNav: React.FC<MobileNavProps> = ({ onChatClick, onThemeClick,
             });
             return;
         }
+        if (!room) {
+            window.dispatchEvent(new CustomEvent('radiofm:external-playback-intent', {
+                detail: !isPlaying,
+            }));
+        }
         togglePlay();
     };
 
@@ -34,8 +40,11 @@ export const MobileNav: React.FC<MobileNavProps> = ({ onChatClick, onThemeClick,
     const lastScrollY = useRef(0);
 
     useEffect(() => {
+        const appScrollElement = document.getElementById('root');
+        if (!appScrollElement) return;
+
         const handleScroll = () => {
-            const currentScrollY = window.scrollY;
+            const currentScrollY = appScrollElement.scrollTop;
 
             // Always visible near top of page
             if (currentScrollY < 60) {
@@ -51,8 +60,8 @@ export const MobileNav: React.FC<MobileNavProps> = ({ onChatClick, onThemeClick,
             lastScrollY.current = currentScrollY;
         };
 
-        window.addEventListener('scroll', handleScroll, { passive: true });
-        return () => window.removeEventListener('scroll', handleScroll);
+        appScrollElement.addEventListener('scroll', handleScroll, { passive: true });
+        return () => appScrollElement.removeEventListener('scroll', handleScroll);
     }, []);
 
     const isBarVisible = isVisible || Boolean(room);
@@ -88,7 +97,7 @@ export const MobileNav: React.FC<MobileNavProps> = ({ onChatClick, onThemeClick,
                 </button>
 
                 {/* Playback Controls - Centered */}
-                <div className="flex items-center justify-center gap-4 sm:gap-6 flex-1 px-1">
+                <div className={`flex items-center justify-center ${onProfileClick ? 'gap-2' : 'gap-4'} sm:gap-6 flex-1 px-1`}>
                     {/* Previous Station */}
                     <button
                         onClick={prevStation}
@@ -153,6 +162,18 @@ export const MobileNav: React.FC<MobileNavProps> = ({ onChatClick, onThemeClick,
                         <span>{connectionStatus === 'connected' ? onlineListeners : 0}</span>
                     </span>
                 </button>
+                {onProfileClick && (
+                    <button
+                        aria-label="Abrir perfil"
+                        onClick={onProfileClick}
+                        className="flex flex-col items-center justify-center gap-1 min-w-[38px] active:opacity-50 transition-opacity"
+                        title="Perfil"
+                        type="button"
+                    >
+                        <User size={19} className="text-gray-300" strokeWidth={1.75} />
+                        <span className="text-[9px] font-medium text-gray-300 leading-none">Perfil</span>
+                    </button>
+                )}
             </div>
         </div>
     );

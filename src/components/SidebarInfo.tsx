@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Clock, Users } from 'lucide-react';
 import { format } from 'date-fns';
 import { useChat } from '../context/ChatContext';
+import { getTimeOfDay } from '../utils/timeOfDay';
 
 export const SidebarInfo: React.FC = () => {
     const [time, setTime] = useState(new Date());
@@ -14,9 +15,9 @@ export const SidebarInfo: React.FC = () => {
     }, []);
 
     useEffect(() => {
-        const hour = time.getHours();
-        if (hour < 12) setGreeting('Buenos días ☕‍');
-        else if (hour < 18) setGreeting('Buenas tardes 😎');
+        const timeOfDay = getTimeOfDay(time);
+        if (timeOfDay === 'morning') setGreeting('Buenos días ☕‍');
+        else if (timeOfDay === 'afternoon') setGreeting('Buenas tardes 😎');
         else setGreeting('Buenas noches 🌜');
     }, [time]);
 

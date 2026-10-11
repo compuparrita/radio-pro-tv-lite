@@ -1,19 +1,23 @@
 import React, { useState } from 'react';
-import { Radio, Moon, Waves, Zap, MessageCircle, Antenna, Star, Monitor, ChevronDown, User } from 'lucide-react';
+import { Radio, MessageCircle, Antenna, Star, Monitor, ChevronDown, User, Menu } from 'lucide-react';
 import { useChat } from '../context/ChatContext';
+import { useWatchParty } from '../context/WatchPartyContext';
 import { useRadio } from '../context/RadioContext';
 import WatchPartyModal from './WatchPartyModal';
+import { PanelShell } from './panels/PanelShell';
 
 interface HeaderProps {
-    theme: 'dark' | 'light' | 'youth';
-    onThemeClick: () => void;
     onChatClick: () => void;
     onWatchPartyClick?: () => void;
     onProfileClick?: () => void;
+    onGlobalMenuClick: () => void;
+    isGlobalMenuOpen: boolean;
+    isGlobalMenuDisabled: boolean;
 }
 
-export const Header: React.FC<HeaderProps> = ({ theme, onThemeClick, onChatClick, onWatchPartyClick, onProfileClick }) => {
+export const Header: React.FC<HeaderProps> = ({ onChatClick, onWatchPartyClick, onProfileClick, onGlobalMenuClick, isGlobalMenuOpen, isGlobalMenuDisabled }) => {
     const { unreadCount, onlineListeners, connectionStatus } = useChat();
+    const { room } = useWatchParty();
     const { activeTab, setActiveTab, radioCategories, tvCategories, selectedCategory, setSelectedCategory } = useRadio();
     const [isWatchPartyOpen, setIsWatchPartyOpen] = useState(false);
     const [activeMenu, setActiveMenu] = React.useState<'radios' | 'tv' | null>(null);
@@ -84,17 +88,22 @@ export const Header: React.FC<HeaderProps> = ({ theme, onThemeClick, onChatClick
         return () => window.removeEventListener('click', handleClickOutside);
     }, []);
 
-    const getThemeLabel = () => {
-        if (theme === 'dark') return 'Dark';
-        if (theme === 'light') return 'Océano';
-        return 'Juvenil';
-    };
-
     return (
         <header className="w-full z-[100] lg:bg-[var(--dark-bg)]/95 lg:backdrop-blur-md border-b border-white/5 py-4 lg:py-3 transition-colors duration-300">
             <div className="max-w-[1700px] mx-auto flex flex-col items-center lg:flex-row lg:justify-between lg:items-center px-[10px] gap-4">
                 {/* Logo & Title */}
                 <div className="flex items-center gap-3">
+                    <button
+                        aria-expanded={isGlobalMenuOpen}
+                        aria-label={isGlobalMenuOpen ? 'Cerrar menú global' : 'Abrir menú global'}
+                        className="btn btn-secondary btn-sm relative -left-[13px] lg:left-0"
+                        disabled={isGlobalMenuDisabled}
+                        onClick={onGlobalMenuClick}
+                        title={isGlobalMenuDisabled ? 'Cierra el panel actual para abrir el menú' : 'Menú global'}
+                        type="button"
+                    >
+                        <Menu aria-hidden="true" size={20} />
+                    </button>
                     <h1 className="text-2xl md:text-3xl lg:text-2xl font-black tracking-tighter text-transparent bg-clip-text bg-gradient-to-r from-[var(--primary-color)] via-[var(--secondary-color)] to-[var(--accent-color)]">
                         <span className="flex items-center gap-2">
                             <Radio size={28} className="shrink-0 text-[var(--primary-color)]" />
@@ -216,17 +225,6 @@ export const Header: React.FC<HeaderProps> = ({ theme, onThemeClick, onChatClick
                             <span className="relative z-10">{activeTab === 'tv' && selectedCategory !== 'Todas' ? selectedCategory : 'TV & YT'}</span>
                             <ChevronDown size={14} className={`relative z-10 transition-transform duration-300 ${activeMenu === 'tv' ? 'rotate-180 text-white/70' : 'text-white/30'}`} />
 
-                            {/* Shortcut to Lite version */}
-                            <a
-                                href="/tv-lite.html"
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                onClick={(e) => e.stopPropagation()}
-                                className="ml-1 px-1 bg-white/20 text-[8px] rounded hover:bg-white/40 transition-colors"
-                                title="Abrir versión optimizada, LITE"
-                            >
-                                LITE
-                            </a>
                         </button>
 
                         {/* Dropdown Menu */}
@@ -255,22 +253,6 @@ export const Header: React.FC<HeaderProps> = ({ theme, onThemeClick, onChatClick
 
                 {/* Actions Section - Desktop Only */}
                 <div className="hidden lg:flex items-center gap-4">
-                    {/* Unified Theme Switcher */}
-                    <button
-                        onClick={onThemeClick}
-                        className="btn btn-secondary btn-sm group"
-                        title="Cambiar tema"
-                    >
-                        <div className="relative w-5 h-5 flex items-center justify-center">
-                            {theme === 'dark' && <Moon size={18} className="text-[var(--primary-color)]" />}
-                            {theme === 'light' && <Waves size={18} className="text-[var(--primary-color)]" />}
-                            {theme === 'youth' && <Zap size={18} className="text-[var(--accent-color)]" />}
-                        </div>
-                        <span className="uppercase tracking-wider min-w-[60px] text-left">
-                            {getThemeLabel()}
-                        </span>
-                    </button>
-
                     {/* Chat Button */}
                     <button
                         onClick={onChatClick}
@@ -308,7 +290,7 @@ export const Header: React.FC<HeaderProps> = ({ theme, onThemeClick, onChatClick
                         className="btn btn-secondary btn-sm"
                         type="button"
                     >
-                        <span className="tracking-wider">🎬 Cine</span>
+                        <span className="tracking-wider">{room ? '🎞 Sala' : '🎬 Cine'}</span>
                     </button>
 					<button
                     onClick={() => onProfileClick?.()}
@@ -325,6 +307,7 @@ export const Header: React.FC<HeaderProps> = ({ theme, onThemeClick, onChatClick
                 <WatchPartyModal
                     isOpen={isWatchPartyOpen}
                     onClose={() => setIsWatchPartyOpen(false)}
+                    PanelShellComponent={PanelShell}
                 />
             )}
         </header>

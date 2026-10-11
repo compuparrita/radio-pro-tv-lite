@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { createPortal } from 'react-dom';
-import { ChevronLeft } from 'lucide-react';
+import { ArrowLeft, X } from 'lucide-react';
 
 export interface PanelShellProps {
     isOpen: boolean;
+    side?: 'left' | 'right';
     title: ReactNode;
     ariaLabel: string;
     onClose: () => void;
@@ -15,8 +16,8 @@ export interface PanelShellProps {
     description?: ReactNode;
     onBack?: () => void;
     backButtonLabel?: string;
+    showBackButton?: boolean;
     footer?: ReactNode;
-    lockBodyScroll?: boolean;
     contentClassName?: string;
 }
 
@@ -24,6 +25,7 @@ export const PANEL_EXIT_DURATION_MS = 280;
 
 export function PanelShell({
     isOpen,
+    side = 'right',
     title,
     ariaLabel,
     onClose,
@@ -34,8 +36,8 @@ export function PanelShell({
     description,
     onBack,
     backButtonLabel,
+    showBackButton = true,
     footer,
-    lockBodyScroll = false,
     contentClassName = '',
 }: PanelShellProps) {
     const [isMounted, setIsMounted] = useState(isOpen);
@@ -72,16 +74,6 @@ export function PanelShell({
     useEffect(() => {
         panelRef.current?.toggleAttribute('inert', !isOpen);
     }, [isOpen, isMounted]);
-
-    useEffect(() => {
-        if (!isOpen || !lockBodyScroll) return;
-
-        const previousOverflow = document.body.style.overflow;
-        document.body.style.overflow = 'hidden';
-        return () => {
-            document.body.style.overflow = previousOverflow;
-        };
-    }, [isOpen, lockBodyScroll]);
 
     useEffect(() => {
         if (!isOpen) {
@@ -136,9 +128,13 @@ export function PanelShell({
 
     if (!isMounted) return null;
 
-    const hasBackAction = Boolean(onBack);
+    const hasBackAction = Boolean(onBack) && showBackButton;
     const handleNavigation = onBack ?? onClose;
-    const navigationLabel = hasBackAction ? backButtonLabel ?? closeButtonLabel : closeButtonLabel;
+    const navigationLabel = onBack ? backButtonLabel ?? closeButtonLabel : closeButtonLabel;
+    const sideClasses = side === 'left'
+        ? 'left-0 border-r border-[var(--dark-border)] shadow-[18px_0_60px_rgba(0,0,0,0.2)] '
+        : 'right-0 border-l border-[var(--dark-border)] shadow-[-18px_0_60px_rgba(0,0,0,0.2)] ';
+    const exitTransform = side === 'left' ? '-translate-x-full' : 'translate-x-full';
 
     return createPortal(
         <div
@@ -152,7 +148,7 @@ export function PanelShell({
                 aria-labelledby={titleId}
                 aria-modal="true"
                 aria-label={ariaLabel}
-                className={'fixed inset-y-0 right-[env(safe-area-inset-right)] flex h-screen w-[min(88vw,28rem)] max-w-full flex-col overflow-hidden border-l border-[var(--dark-border)] bg-[var(--dark-surface)] pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)] text-[var(--text-primary)] shadow-[-18px_0_60px_rgba(0,0,0,0.2)] backdrop-blur-xl transition-transform ease-out min-[1200px]:w-[min(86vw,23.75rem)] ' + (isVisible ? 'duration-[330ms] translate-x-0' : 'duration-[280ms] pointer-events-none translate-x-full')}
+                className={'fixed inset-y-0 ' + sideClasses + 'flex h-screen w-[min(88vw,28rem)] max-w-full flex-col overflow-hidden bg-[var(--dark-surface)] pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)] text-[var(--text-primary)] backdrop-blur-xl transition-transform ease-out min-[1200px]:w-[min(86vw,23.75rem)] ' + (isVisible ? 'duration-[330ms] translate-x-0' : 'duration-[280ms] pointer-events-none ' + exitTransform)}
                 role="dialog"
                 onClick={(event) => event.stopPropagation()}
                 ref={panelRef}
@@ -172,9 +168,9 @@ export function PanelShell({
                         title={navigationLabel}
                         type="button"
                     >
-                        {hasBackAction || !closeIcon
-                            ? <ChevronLeft aria-hidden="true" size={20} strokeWidth={1.75} />
-                            : closeIcon}
+                        {hasBackAction
+                            ? <ArrowLeft aria-hidden="true" size={20} strokeWidth={1.75} />
+                            : closeIcon ?? <X aria-hidden="true" size={20} strokeWidth={1.75} />}
                     </button>
                 </header>
 

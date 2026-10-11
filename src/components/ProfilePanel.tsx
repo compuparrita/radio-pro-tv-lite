@@ -17,11 +17,16 @@ interface ProfilePanelHostProps extends ProfilePanelProps {
 export default function ProfilePanel({ isOpen, onClose, PanelShellComponent }: ProfilePanelHostProps) {
     const { profile, clearProfile } = useUserProfile();
     const [profileFormMode, setProfileFormMode] = useState<'setup' | 'edit' | null>(null);
+    const [isConfirmingProfileDeletion, setIsConfirmingProfileDeletion] = useState(false);
+
+    const handlePanelClose = () => {
+        setIsConfirmingProfileDeletion(false);
+        onClose();
+    };
 
     const handleClearProfile = () => {
-        if (!window.confirm('¿Borrar el perfil guardado en este dispositivo? No se borrarán tus favoritos ni tu historial.')) return;
         clearProfile();
-        onClose();
+        handlePanelClose();
     };
 
     return (
@@ -30,8 +35,7 @@ export default function ProfilePanel({ isOpen, onClose, PanelShellComponent }: P
             closeButtonLabel="Cerrar perfil"
             closeIcon={<X aria-hidden="true" size={18} />}
             isOpen={isOpen}
-            lockBodyScroll
-            onClose={onClose}
+            onClose={handlePanelClose}
             title="Perfil local"
         >
             {profileFormMode ? (
@@ -55,22 +59,45 @@ export default function ProfilePanel({ isOpen, onClose, PanelShellComponent }: P
                             </div>
                         )}
                     </dl>
-                    <div className="mt-4 flex flex-col gap-2">
-                        <button
-                            className="btn btn-primary"
-                            onClick={() => setProfileFormMode('edit')}
-                            type="button"
-                        >
-                            <Pencil size={15} /> Editar perfil
-                        </button>
-                        <button
-                            className="btn btn-danger"
-                            onClick={handleClearProfile}
-                            type="button"
-                        >
-                            <Trash2 size={15} /> Borrar datos del dispositivo
-                        </button>
-                    </div>
+                    {isConfirmingProfileDeletion ? (
+                        <section aria-describedby="profile-delete-description" aria-labelledby="profile-delete-title" className="mt-4 rounded-lg border border-[var(--danger-color)]/25 bg-[var(--glass-bg)] p-4">
+                            <h3 className="text-sm font-semibold text-[var(--text-primary)]" id="profile-delete-title">¿Eliminar tu perfil?</h3>
+                            <p className="mt-1 text-sm text-[var(--text-secondary)]" id="profile-delete-description">Esta acción no se puede deshacer.</p>
+                            <div className="mt-4 flex gap-2">
+                                <button
+                                    className="btn btn-secondary min-w-0 flex-1"
+                                    onClick={() => setIsConfirmingProfileDeletion(false)}
+                                    type="button"
+                                >
+                                    Cancelar
+                                </button>
+                                <button
+                                    className="btn btn-danger min-w-0 flex-1"
+                                    onClick={handleClearProfile}
+                                    type="button"
+                                >
+                                    Eliminar perfil
+                                </button>
+                            </div>
+                        </section>
+                    ) : (
+                        <div className="mt-4 flex flex-col gap-2">
+                            <button
+                                className="btn btn-primary"
+                                onClick={() => setProfileFormMode('edit')}
+                                type="button"
+                            >
+                                <Pencil size={15} /> Editar perfil
+                            </button>
+                            <button
+                                className="btn btn-danger"
+                                onClick={() => setIsConfirmingProfileDeletion(true)}
+                                type="button"
+                            >
+                                <Trash2 size={15} /> Borrar datos del dispositivo
+                            </button>
+                        </div>
+                    )}
                 </>
             ) : (
                 <div>

@@ -6,7 +6,7 @@ process.on('unhandledRejection', (reason) => {
 });
 
 const express = require('express');
-const { createServer } = require('http');
+const { createServer, get: httpGet } = require('http');
 const { Server } = require('socket.io');
 const cors = require('cors');
 // const bcrypt = require('bcrypt');
@@ -246,6 +246,90 @@ const repretelC6Proxy = createProxyMiddleware ? createProxyMiddleware({
 
 if (repretelProxy) app.use('/repretel-stream', repretelProxy);
 if (repretelC6Proxy) app.use('/repretel-c6', repretelC6Proxy);
+
+// Fixed-origin streaming proxy for Onda Brava Radio (station ID 32).
+app.get('/onda-brava-stream', (req, res) => {
+    if (req.method !== 'GET') return res.sendStatus(405);
+
+    const upstream = httpGet('http://65.109.81.84:7248/stream', {
+        headers: {
+            accept: req.headers.accept || '*/*',
+            ...(req.headers.range ? { range: req.headers.range } : {}),
+            ...(req.headers['user-agent'] ? { 'user-agent': req.headers['user-agent'] } : {}),
+        },
+    }, (upstreamRes) => {
+        res.statusCode = upstreamRes.statusCode || 502;
+        [
+            'content-type',
+            'content-length',
+            'content-range',
+            'accept-ranges',
+            'icy-br',
+            'icy-description',
+            'icy-genre',
+            'icy-metaint',
+            'icy-name',
+            'icy-pub',
+            'icy-url',
+        ].forEach((header) => {
+            if (upstreamRes.headers[header] !== undefined) {
+                res.setHeader(header, upstreamRes.headers[header]);
+            }
+        });
+        res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+        res.setHeader('Pragma', 'no-cache');
+        res.setHeader('Expires', '0');
+        res.setHeader('X-Accel-Buffering', 'no');
+
+        upstreamRes.on('error', (error) => {
+            console.error('[Onda Brava proxy] upstream stream error:', error.message);
+            if (!res.headersSent) {
+                res.status(502).end('Error de comunicación con Onda Brava');
+            } else {
+                res.destroy(error);
+            }
+        });
+        upstreamRes.pipe(res);
+    });
+
+    let connectionEstablished = false;
+    let connectionTimedOut = false;
+    const connectionTimeout = setTimeout(() => {
+        if (connectionEstablished || upstream.destroyed || res.headersSent || res.writableEnded) return;
+        connectionTimedOut = true;
+        if (!res.destroyed) {
+            res.status(502).set('Cache-Control', 'no-store').end('Tiempo de conexión agotado con Onda Brava');
+        }
+        upstream.destroy();
+    }, 5000);
+    upstream.once('socket', (socket) => {
+        const markConnectionEstablished = () => {
+            connectionEstablished = true;
+            clearTimeout(connectionTimeout);
+        };
+        if (socket.connecting) socket.once('connect', markConnectionEstablished);
+        else markConnectionEstablished();
+    });
+
+    const abortUpstream = () => {
+        clearTimeout(connectionTimeout);
+        if (!upstream.destroyed) upstream.destroy();
+    };
+    req.once('aborted', abortUpstream);
+    res.once('close', () => {
+        if (!res.writableEnded) abortUpstream();
+    });
+    upstream.once('error', (error) => {
+        clearTimeout(connectionTimeout);
+        if (connectionTimedOut) return;
+        console.error('[Onda Brava proxy] upstream request error:', error.message);
+        if (!res.headersSent && !res.writableEnded && !res.destroyed) {
+            res.status(502).set('Cache-Control', 'no-store').end('No se pudo conectar con Onda Brava');
+        } else if (!res.writableEnded && !res.destroyed) {
+            res.destroy(error);
+        }
+    });
+});
 
 // Dynamic Proxy for any stream (useful for user-added stations)
 app.use('/proxy-stream', (req, res, next) => {

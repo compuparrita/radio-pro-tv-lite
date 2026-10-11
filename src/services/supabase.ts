@@ -11,6 +11,39 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 // SERVICIOS DE EMISORAS (STATIONS)
 // ==========================================
 
+export interface StationRealtimeChange {
+    eventType: string;
+    new: Record<string, unknown>;
+    old: Record<string, unknown>;
+}
+
+export type StationRealtimeStatus = 'SUBSCRIBED' | 'TIMED_OUT' | 'CLOSED' | 'CHANNEL_ERROR' | string;
+
+const hasOwn = (record: Record<string, unknown>, key: string) =>
+    Object.prototype.hasOwnProperty.call(record, key);
+
+export function mapStationFromCloudRow(row: Record<string, unknown>, previous?: Station): Station {
+    const value = (key: string, fallback: unknown) => hasOwn(row, key) ? row[key] : fallback;
+    const id = value('id', previous?.id);
+    const type = value('type', previous?.type);
+
+    return {
+        id: typeof id === 'string' ? id : '',
+        name: String(value('name', previous?.name ?? '') ?? ''),
+        url: String(value('url', previous?.url ?? '') ?? ''),
+        logo: String(value('logo', previous?.logo ?? '') ?? ''),
+        country: String(value('country', previous?.country ?? '') ?? ''),
+        type: type === 'video' ? 'video' : type === 'audio' ? 'audio' : previous?.type ?? 'audio',
+        iframeUrl: String(value('iframe_url', previous?.iframeUrl ?? '') ?? ''),
+        useProxy: !!value('use_proxy', previous?.useProxy ?? false),
+        category: String(value('category', previous?.category ?? 'Otros') ?? 'Otros'),
+        embedCanal: String(value('embed_canal', previous?.embedCanal ?? '') ?? ''),
+        ...(previous?.watchPartyCapabilities
+            ? { watchPartyCapabilities: previous.watchPartyCapabilities }
+            : {}),
+    };
+}
+
 export async function fetchStationsFromCloud(): Promise<Station[]> {
     try {
         const { data, error } = await supabase
@@ -27,18 +60,7 @@ export async function fetchStationsFromCloud(): Promise<Station[]> {
             return [];
         }
 
-        return data.map((row: any) => ({
-            id: row.id,
-            name: row.name || '',
-            url: row.url || '',
-            logo: row.logo || '',
-            country: row.country || '',
-            type: (row.type as 'audio' | 'video') || 'audio',
-            iframeUrl: row.iframe_url || '',
-            useProxy: !!row.use_proxy,
-            category: row.category || 'Otros',
-            embedCanal: row.embed_canal || ''
-        }));
+        return data.map((row: Record<string, unknown>) => mapStationFromCloudRow(row));
     } catch (err) {
         console.error('[Supabase] Fallo al cargar emisoras de la nube:', err);
         throw err;
@@ -114,18 +136,24 @@ export async function updateStationsOrderInCloud(stations: Station[]): Promise<b
     }
 }
 
-export function subscribeToStationsChanges(onChanged: () => void) {
+export function subscribeToStationsChanges(
+    onChanged: (change: StationRealtimeChange) => void,
+    onStatusChange?: (status: StationRealtimeStatus, error?: Error) => void
+) {
     const channel = supabase
         .channel('public:stations:changes')
         .on(
             'postgres_changes',
             { event: '*', schema: 'public', table: 'stations' },
-            () => {
-                console.log('[Supabase Realtime] Cambio detectado en emisoras');
-                onChanged();
+            (payload) => {
+                onChanged({
+                    eventType: payload.eventType,
+                    new: payload.new as Record<string, unknown>,
+                    old: payload.old as Record<string, unknown>,
+                });
             }
         )
-        .subscribe();
+        .subscribe((status, error) => onStatusChange?.(status, error));
 
     return () => {
         supabase.removeChannel(channel);

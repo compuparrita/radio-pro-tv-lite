@@ -1,4 +1,4 @@
-import { LogOut, MessageCircle, Users } from 'lucide-react';
+import { MessageCircle, Settings2, Users } from 'lucide-react';
 import { useWatchParty } from '../context/WatchPartyContext';
 import { Player } from './Player';
 import { getWatchPartySessionTitle } from '../utils/watchPartySessionTitle';
@@ -32,13 +32,13 @@ export function GuestCinemaLayout({ isConnected, onChatClick, onExitCinema }: Gu
                             <span>{participantCount} {participantCount === 1 ? 'participante' : 'participantes'}</span>
                         </div>
                         <button
-                            aria-label="Salir del Modo Cine"
+                            aria-label="Opciones de sala"
                             className="guest-cinema-desktop-exit hidden h-11 w-11 items-center justify-center rounded-full border border-[var(--dark-border)] text-[var(--text-secondary)] transition hover:bg-[var(--dark-surface)] hover:text-[var(--primary-color)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--primary-color)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--dark-bg)]"
                             onClick={onExitCinema}
-                            title="Salir del Modo Cine"
+                            title="Opciones de sala"
                             type="button"
                         >
-                            <LogOut size={18} />
+                            <Settings2 size={18} />
                         </button>
                     </div>
                 </header>
@@ -47,14 +47,14 @@ export function GuestCinemaLayout({ isConnected, onChatClick, onExitCinema }: Gu
                     <Player />
                 </section>
 
-                <section className="shrink-0 border-t border-white/10 pt-4 sm:pt-5" aria-label="Contenido compartido">
+                <footer className="shrink-0 border-t border-white/10 pt-4 sm:pt-5" aria-label="Contenido compartido">
                     <h2 className="truncate text-base font-semibold sm:text-lg">
                         {mediaInfo?.title || 'Contenido compartido'}
                     </h2>
                     <p className="mt-1 text-sm text-[var(--text-secondary)]">
                         Compartido por {host?.userName || 'Anfitrión'}
                     </p>
-                </section>
+                </footer>
             </div>
 
             {/* Desktop-only floating chat trigger. On mobile, MobileNav provides the chat button */}

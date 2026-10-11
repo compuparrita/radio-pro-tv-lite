@@ -26,7 +26,7 @@ type WatchPartyTab = 'create' | 'join';
 const watchPartyHelp = parseHelpMarkdown(watchPartyHelpMarkdown);
 const watchPartyHelpIcons = [PlusCircle, Users, Radio];
 
-const inputClassName = 'h-11 w-full rounded-xl border border-white/10 bg-white/[0.04] px-4 text-sm text-white placeholder:text-white/30 outline-none transition focus:border-cyan-300/60 focus:ring-2 focus:ring-cyan-300/10';
+const inputClassName = 'h-11 w-full rounded-xl border border-[var(--dark-border)] bg-[var(--glass-bg)] px-4 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-secondary)] outline-none transition focus:border-[var(--primary-color)] focus:ring-2 focus:ring-[var(--primary-color)]/20';
 const secondaryButtonClassName = 'btn btn-secondary btn-sm';
 
 function WatchPartyModal({ isOpen, onClose, inviteCode, onInviteCancel, onInviteJoined, onReturnToApp, PanelShellComponent }: WatchPartyModalHostProps) {
@@ -162,6 +162,27 @@ function WatchPartyModal({ isOpen, onClose, inviteCode, onInviteCancel, onInvite
         </footer>
     ) : null;
 
+    const panelTitle = isHelpOpen
+        ? 'Ayuda'
+        : inviteCode
+            ? 'Unirse a una sala'
+            : room && isHost
+                ? (
+                    <>
+                        Compartir sala
+                        {!onReturnToApp && (
+                            <button
+                                className="absolute right-[4.5rem] top-[calc(env(safe-area-inset-top)_+_1.25rem)] whitespace-nowrap text-xs font-medium text-[var(--text-secondary)] underline-offset-4 hover:text-[var(--primary-color)] hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--focus-ring)]"
+                                onClick={onClose}
+                                type="button"
+                            >
+                                Volver a la app
+                            </button>
+                        )}
+                    </>
+                )
+                : 'WatchParty';
+
     const modalContent = (
         <PanelShellComponent
             ariaLabel="Panel Cine y WatchParty"
@@ -177,12 +198,16 @@ function WatchPartyModal({ isOpen, onClose, inviteCode, onInviteCancel, onInvite
             footer={panelFooter}
             isOpen={isOpen}
             onBack={isHelpOpen ? () => setIsHelpOpen(false) : undefined}
+            showBackButton={!isHelpOpen}
             onClose={onClose}
-            title={isHelpOpen ? 'Ayuda' : inviteCode ? 'Unirse a una sala' : room && isHost ? 'Compartir sala' : 'WatchParty'}
+            title={panelTitle}
             titleId="watchparty-title"
         >
                     {isHelpOpen ? (
                         <div className="space-y-4 pb-1 text-sm text-[var(--text-secondary)]">
+                            <button className="text-sm font-medium text-[var(--primary-color)] hover:underline" onClick={() => setIsHelpOpen(false)} type="button">
+                                Volver a la gestión de sala
+                            </button>
                             <div className="border-b border-[var(--glass-border)] pb-4">
                                 <p className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--primary-color)]"><Radio aria-hidden="true" size={12} />{watchPartyHelp.title}</p>
                                 <h3 id="watchparty-help-title" className="mt-1 text-base font-semibold tracking-tight text-[var(--text-primary)]">{watchPartyHelp.subtitle}</h3>
@@ -267,17 +292,17 @@ function WatchPartyModal({ isOpen, onClose, inviteCode, onInviteCancel, onInvite
                                                 <p className="mt-2 font-mono text-3xl font-semibold tracking-[0.24em] text-white">
                                                     {roomCode ?? room.roomCode}
                                                 </p>
-                                                <div className="mt-4 flex flex-wrap justify-center gap-2 sm:justify-start">
-                                                    <button className={secondaryButtonClassName} onClick={() => void handleCopyCode()} type="button">
-                                                        {copied ? <Check aria-hidden="true" size={15} /> : <Copy aria-hidden="true" size={15} />}
-                                                        {copied ? 'Copiado' : 'Copiar código'}
-                                                    </button>
-                                                    <button className={secondaryButtonClassName} onClick={() => setIsHelpOpen(true)} type="button">
-                                                        <HelpCircle aria-hidden="true" size={15} />
-                                                        {'¿Cómo funciona?'}
-                                                    </button>
-                                                </div>
                                             </div>
+                                        </div>
+                                        <div className="mt-4 flex w-full flex-nowrap gap-2">
+                                            <button className={secondaryButtonClassName + ' order-2 min-w-0 flex-1 whitespace-nowrap sm:text-sm'} onClick={() => void handleCopyCode()} type="button">
+                                                {copied ? <Check aria-hidden="true" size={15} /> : <Copy aria-hidden="true" size={15} />}
+                                                {copied ? 'Copiado' : 'Copiar código'}
+                                            </button>
+                                            <button className={secondaryButtonClassName + ' order-1 min-w-0 flex-1 whitespace-nowrap sm:text-sm'} onClick={() => setIsHelpOpen(true)} type="button">
+                                                <HelpCircle aria-hidden="true" size={15} />
+                                                {'¿Cómo funciona?'}
+                                            </button>
                                         </div>
                                         {copyError && <p className="mt-2 text-center text-xs text-red-300" role="alert">{copyError}</p>}
                                     </>
@@ -330,10 +355,10 @@ function WatchPartyModal({ isOpen, onClose, inviteCode, onInviteCancel, onInvite
                         </>
                     ) : (
                         <>
-                            <div aria-label="Opciones de WatchParty" className="grid grid-cols-2 rounded-xl bg-white/[0.04] p-1" role="tablist">
+                            <div aria-label="Opciones de WatchParty" className="grid grid-cols-2 rounded-xl bg-[var(--glass-bg)] p-1" role="tablist">
                                 <button
                                     aria-selected={activeTab === 'create'}
-                                    className={'rounded-lg px-3 py-2.5 text-sm font-medium transition ' + (activeTab === 'create' ? 'bg-white/[0.09] text-white' : 'text-white/45 hover:text-white/75')}
+                                    className={'rounded-lg px-3 py-2.5 text-sm font-medium transition ' + (activeTab === 'create' ? 'bg-[var(--primary-color)]/15 text-[var(--primary-color)]' : 'text-[var(--text-secondary)] hover:bg-[var(--glass-bg)] hover:text-[var(--text-primary)]')}
                                     onClick={() => { setActiveTab('create'); clearError(); }}
                                     role="tab"
                                     type="button"
@@ -342,7 +367,7 @@ function WatchPartyModal({ isOpen, onClose, inviteCode, onInviteCancel, onInvite
                                 </button>
                                 <button
                                     aria-selected={activeTab === 'join'}
-                                    className={'rounded-lg px-3 py-2.5 text-sm font-medium transition ' + (activeTab === 'join' ? 'bg-white/[0.09] text-white' : 'text-white/45 hover:text-white/75')}
+                                    className={'rounded-lg px-3 py-2.5 text-sm font-medium transition ' + (activeTab === 'join' ? 'bg-[var(--primary-color)]/15 text-[var(--primary-color)]' : 'text-[var(--text-secondary)] hover:bg-[var(--glass-bg)] hover:text-[var(--text-primary)]')}
                                     onClick={() => { setActiveTab('join'); clearError(); }}
                                     role="tab"
                                     type="button"
@@ -353,12 +378,12 @@ function WatchPartyModal({ isOpen, onClose, inviteCode, onInviteCancel, onInvite
 
                             <form className="space-y-4" onSubmit={handleSubmit}>
                                 {activeTab === 'create' ? (
-                                    <label className="block space-y-2 text-sm text-white/65">
+                                    <label className="block space-y-2 text-sm text-[var(--text-secondary)]">
                                         Nombre de la sala
                                         <input className={inputClassName} onChange={(event) => setRoomName(event.target.value)} placeholder="Noche de cine" required value={roomName} />
                                     </label>
                                 ) : (
-                                    <label className="block space-y-2 text-sm text-white/65">
+                                    <label className="block space-y-2 text-sm text-[var(--text-secondary)]">
                                         {'Código de sala'}
                                         <input
                                             className={inputClassName + ' text-center uppercase tracking-[0.2em]'}

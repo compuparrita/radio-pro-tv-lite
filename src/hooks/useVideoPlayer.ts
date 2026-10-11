@@ -6,6 +6,7 @@ import { registerPlayerTimeProvider, unregisterPlayerTimeProvider } from '../uti
 import { resolveWatchPartyMediaCapabilities } from '../utils/watchPartyMediaCapabilities';
 
 type PlayerType = 'html5' | 'videojs' | 'iframe' | null;
+type HlsPresentationStatus = 'loading' | 'unknown' | 'audio' | 'video' | 'error';
 
 /**
  * Quality Level Information
@@ -87,6 +88,30 @@ export const useVideoPlayer = (
     const currentMediaKey = currentStation
         ? `${currentStation.id}:${currentStation.url}:${currentStation.iframeUrl ?? ''}`
         : '';
+    const externalPlaybackIntentRef = useRef<{ mediaKey: string; isPlaying: boolean } | null>(null);
+    const externalLivePausePendingRef = useRef(false);
+    const externalHlsLoadingPausedRef = useRef<string | null>(null);
+    const lastPlaybackStateRef = useRef(isPlaying);
+    const markExternalPlaybackIntent = useCallback((nextIsPlaying: boolean) => {
+        externalPlaybackIntentRef.current = { mediaKey: currentMediaKey, isPlaying: nextIsPlaying };
+    }, [currentMediaKey]);
+
+    useEffect(() => {
+        const handleExternalPlaybackIntent = (event: Event) => {
+            const customEvent = event as CustomEvent<boolean>;
+            if (typeof customEvent.detail === 'boolean') {
+                markExternalPlaybackIntent(customEvent.detail);
+            }
+        };
+        window.addEventListener('radiofm:external-playback-intent', handleExternalPlaybackIntent);
+        return () => window.removeEventListener('radiofm:external-playback-intent', handleExternalPlaybackIntent);
+    }, [markExternalPlaybackIntent]);
+
+    useEffect(() => {
+        externalPlaybackIntentRef.current = null;
+        externalLivePausePendingRef.current = false;
+        externalHlsLoadingPausedRef.current = null;
+    }, [currentMediaKey]);
 
     const applyRemoteAction = (player: any, action: WatchPartyPlaybackAction, seconds?: number) => {
         try {
@@ -172,28 +197,6 @@ export const useVideoPlayer = (
         }
     };
 
-    const goLive = () => {
-        if (playerType === 'videojs') {
-            videojsPlayerRef.current?.liveTracker?.seekToLiveEdge?.();
-            return;
-        }
-        if (playerType === 'iframe' && isYouTube) {
-            const player = ytPlayerRef.current;
-            const duration = Number(player?.getDuration?.());
-            if (player && Number.isFinite(duration)) player.seekTo(duration, true);
-            return;
-        }
-        const mediaElement = videoRef.current;
-        if (mediaElement instanceof HTMLMediaElement) {
-            const seekable = mediaElement.seekable;
-            if (seekable.length > 0) {
-                mediaElement.currentTime = seekable.end(seekable.length - 1);
-            } else if (Number.isFinite(mediaElement.duration)) {
-                mediaElement.currentTime = mediaElement.duration;
-            }
-        }
-    };
-
     const reportSeek = (seconds: number) => {
         if (remoteSeekSuppressionRef.current || !watchPartyCapabilities.seek) return;
         onSeek?.(seconds);
@@ -230,6 +233,18 @@ export const useVideoPlayer = (
     // Detect if iframeUrl is actually an m3u8 stream mistakenly saved in iframeUrl
     const isM3u8Iframe = !isYouTube && (currentStation?.iframeUrl?.includes('.m3u8') ?? false) && !currentStation?.iframeUrl?.includes('bradmax.com');
     const effectiveUrl = (isM3u8Iframe ? currentStation?.iframeUrl : currentStation?.url) || '';
+    const normalizedStationName = (currentStation?.name ?? '')
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .trim()
+        .replace(/\s+/g, ' ')
+        .toLowerCase();
+    const isOndaBrava = String(currentStation?.id) === '32' && normalizedStationName === 'onda brava radio';
+    const playbackSourceUrl = isOndaBrava
+        ? '/onda-brava-stream'
+        : currentStation?.useProxy
+            ? `/proxy-stream?url=${encodeURIComponent(effectiveUrl)}`
+            : effectiveUrl;
 
     // Synchronous mode detection to prevent double-render unmounts
     const isIframe = isYouTube || (!isM3u8Iframe && (!!currentStation?.iframeUrl || !!currentStation?.embedCanal));
@@ -239,17 +254,60 @@ export const useVideoPlayer = (
         effectiveUrl.includes('/repretel-') ||
         isM3u8Iframe
     );
+    const isKnownAudioSource = !isHls && /\.(?:mp3|aac|aacp|m4a|ogg|oga|opus|wav|flac)(?:$|[?#])/i.test(effectiveUrl);
     const watchPartyCapabilities = resolveWatchPartyMediaCapabilities(
         currentStation,
         isHls ? { playPause: true, seek: false, positionSync: false, driftCorrection: false } : undefined,
     );
     const playerType: PlayerType = isIframe ? 'iframe' : (isHls ? 'videojs' : 'html5');
-    const hasVideo = currentStation?.type === 'video' || isYouTube || isHls || isIframe;
+    const goLive = useCallback(() => {
+        if (playerType === 'videojs') {
+            videojsPlayerRef.current?.liveTracker?.seekToLiveEdge?.();
+            return;
+        }
+        if (playerType === 'iframe' && isYouTube) {
+            const player = ytPlayerRef.current;
+            const duration = Number(player?.getDuration?.());
+            if (player && Number.isFinite(duration)) player.seekTo(duration, true);
+            return;
+        }
+        const mediaElement = videoRef.current;
+        if (mediaElement instanceof HTMLMediaElement) {
+            const seekable = mediaElement.seekable;
+            if (seekable.length > 0) {
+                mediaElement.currentTime = seekable.end(seekable.length - 1);
+            } else if (Number.isFinite(mediaElement.duration)) {
+                mediaElement.currentTime = mediaElement.duration;
+            }
+        }
+    }, [playerType, isYouTube]);
+    const [hlsPresentation, setHlsPresentation] = useState<{
+        mediaKey: string;
+        status: HlsPresentationStatus;
+    }>({ mediaKey: '', status: 'unknown' });
+    const activeHlsPresentation = hlsPresentation.mediaKey === currentMediaKey
+        ? hlsPresentation.status
+        : (isHls ? 'loading' : 'unknown');
+    // Station.type is only the provisional presentation while HLS metadata is unresolved.
+    // HLS itself selects Video.js; dimensions/parsed renditions determine the final presentation.
+    const hasVideo = isYouTube || isIframe || (!isKnownAudioSource && (
+        isHls
+            ? activeHlsPresentation === 'video'
+                ? true
+                : activeHlsPresentation === 'audio'
+                    ? false
+                    : currentStation?.type === 'video'
+            : currentStation?.type === 'video'
+    ));
 
     // Quality levels state
     const [qualityLevels, setQualityLevels] = useState<QualityLevel[]>([]);
     const [currentLevel, setCurrentLevel] = useState<number>(-1); // -1 = Auto
     const [isAutoMode, setIsAutoMode] = useState<boolean>(true);
+
+    useEffect(() => {
+        setHlsPresentation({ mediaKey: currentMediaKey, status: isHls ? 'loading' : 'unknown' });
+    }, [currentMediaKey, isHls]);
 
     // Ref to track auto mode inside event listeners (avoids stale closures)
     const isAutoModeRef = useRef<boolean>(true);
@@ -440,10 +498,7 @@ export const useVideoPlayer = (
             if (isCancelled) return;
 
             if (playerType === 'html5' && videoEl instanceof HTMLMediaElement) {
-                let targetSrc = effectiveUrl;
-                if (currentStation.useProxy) {
-                    targetSrc = `/proxy-stream?url=${encodeURIComponent(effectiveUrl)}`;
-                }
+                const targetSrc = playbackSourceUrl;
                 videoEl.src = targetSrc;
                 videoEl.volume = volume;
                 videoEl.load();
@@ -498,7 +553,7 @@ export const useVideoPlayer = (
                 videojsPlayerRef.current = null;
             }
         };
-    }, [currentStation?.id, playerType, effectiveUrl, videoElement]);
+    }, [currentStation?.id, currentMediaKey, playerType, effectiveUrl, videoElement]);
 
     // 2. Inicialización de Video.js (Para HLS / Video)
     useEffect(() => {
@@ -547,6 +602,59 @@ export const useVideoPlayer = (
             videojsPlayerRef.current = player;
             player.volume(volume);
 
+            const classifyHlsPresentation = (allowAudioOnly: boolean) => {
+                if (isCancelled || videojsPlayerRef.current !== player) return;
+
+                const mediaElement = videoEl as HTMLVideoElement;
+                const width = Number(player.videoWidth?.() || mediaElement.videoWidth || 0);
+                const height = Number(player.videoHeight?.() || mediaElement.videoHeight || 0);
+                const tech = player.tech({ IWillNotUseThisInPlugins: true }) as any;
+                const vhs = (player as any).vhs || tech?.vhs;
+                const representations: any[] = (
+                    vhs?.representations?.() || vhs?.playlists?.master?.playlists || []
+                );
+                const hasVideoRendition = representations.some((representation) =>
+                    Number(representation.width || representation.attributes?.RESOLUTION?.width || 0) > 0
+                    || Number(representation.height || representation.attributes?.RESOLUTION?.height || 0) > 0
+                );
+
+                let videoTrackCount: number | null = null;
+                try {
+                    const tracks = player.videoTracks?.() || (mediaElement as any).videoTracks;
+                    if (tracks && 'tracks_' in tracks && Array.isArray(tracks.tracks_)) {
+                        videoTrackCount = tracks.tracks_.length;
+                    } else if (tracks && 'length' in tracks && typeof tracks.length === 'number') {
+                        videoTrackCount = tracks.length;
+                    }
+                } catch {
+                    // Track lists are not implemented consistently by every browser/tech.
+                }
+
+                if (width > 0 || height > 0 || hasVideoRendition || (videoTrackCount ?? 0) > 0) {
+                    setHlsPresentation({ mediaKey: currentMediaKey, status: 'video' });
+                    return;
+                }
+
+                const mediaReady = mediaElement.readyState >= HTMLMediaElement.HAVE_FUTURE_DATA;
+                if (allowAudioOnly && mediaReady && width === 0 && height === 0) {
+                    setHlsPresentation({ mediaKey: currentMediaKey, status: 'audio' });
+                    return;
+                }
+
+                setHlsPresentation((previous) => {
+                    if (previous.mediaKey === currentMediaKey && (previous.status === 'audio' || previous.status === 'video')) {
+                        return previous;
+                    }
+                    return { mediaKey: currentMediaKey, status: 'unknown' };
+                });
+            };
+
+            player.on('loadedmetadata', () => classifyHlsPresentation(false));
+            player.on('loadeddata', () => classifyHlsPresentation(false));
+            player.on('canplay', () => classifyHlsPresentation(true));
+            player.on('playing', () => classifyHlsPresentation(true));
+            player.on('resize', () => classifyHlsPresentation(true));
+
             player.one('canplay', () => {
                 console.info('[Bootstrap] firstCanPlay', {
                     stationId: currentStation.id,
@@ -569,6 +677,9 @@ export const useVideoPlayer = (
             player.on('canplay', () => logHlsEvent('canplay'));
             player.on('error', () => {
                 const mediaError = player.error();
+                if (mediaError && (mediaError.code === 4 || mediaError.code === 2)) {
+                    setHlsPresentation({ mediaKey: currentMediaKey, status: 'error' });
+                }
                 console.error('[HLS] error code=', mediaError?.code, {
                     message: mediaError?.message,
                     source: player.currentSrc(),
@@ -577,10 +688,7 @@ export const useVideoPlayer = (
                 });
             });
 
-            let finalUrl = effectiveUrl;
-            if (currentStation.useProxy) {
-                finalUrl = `/proxy-stream?url=${encodeURIComponent(effectiveUrl)}`;
-            }
+            const finalUrl = playbackSourceUrl;
 
             console.info('[Bootstrap] assignSource', { stage: 'initial', stationId: currentStation.id, url: finalUrl });
             console.info('[HLS] source=', { stage: 'initial', url: finalUrl });
@@ -606,7 +714,7 @@ export const useVideoPlayer = (
                 if (isCancelled) return;
                 console.log('[VideoPlayer] Player Ready - Attaching VHS listeners');
 
-                const vhsListenersAttached = { current: false };
+                const attachedVhs = { current: null as any };
 
                 const updateQualityLevels = () => {
                     if (isCancelled) return;
@@ -615,11 +723,11 @@ export const useVideoPlayer = (
                     const currentVhs = (player as any).vhs || currentTech?.vhs;
 
                     if (currentVhs) {
-                        // Attach VHS specific listeners only once
-                        if (!vhsListenersAttached.current) {
+                        // Reattach to the active VHS tech if Video.js reset/recreated it.
+                        if (attachedVhs.current !== currentVhs) {
                             currentVhs.on('usage-stats-ready', updateQualityLevels);
                             currentVhs.on('mediachange', updateQualityLevels);
-                            vhsListenersAttached.current = true;
+                            attachedVhs.current = currentVhs;
                             console.log('[VideoPlayer] VHS Tech detected and listeners attached');
                         }
 
@@ -750,7 +858,7 @@ export const useVideoPlayer = (
                 videojsPlayerRef.current = null;
             }
         };
-    }, [currentStation?.id, playerType, effectiveUrl, videoElement]);
+    }, [currentStation?.id, currentMediaKey, playerType, effectiveUrl, videoElement]);
 
     // 3. Control de Reproducción (Play/Pause/Volume)
     useEffect(() => {
@@ -773,10 +881,122 @@ export const useVideoPlayer = (
             if (!currentStation || (!currentStation.url && !currentStation.iframeUrl && !currentStation.embedCanal)) return;
 
             try {
+                const playbackStateChanged = lastPlaybackStateRef.current !== isPlaying;
+                lastPlaybackStateRef.current = isPlaying;
+                const externalIntent = externalPlaybackIntentRef.current;
+                const isMatchingExternalIntent = externalIntent?.mediaKey === currentMediaKey
+                    && externalIntent.isPlaying === isPlaying;
+                if (externalIntent) externalPlaybackIntentRef.current = null;
+
                 if (isPlaying) {
                     if (playerType === 'videojs' && videojsPlayerRef.current) {
+                        const player = videojsPlayerRef.current;
+                        const liveTracker = player.liveTracker;
+                        if (externalLivePausePendingRef.current) {
+                            let wentLive = false;
+                            const loadingWasPaused = externalHlsLoadingPausedRef.current === currentMediaKey;
+                            if (isMatchingExternalIntent && isHls && loadingWasPaused) {
+                                let playlistRefreshed = false;
+                                let controller: any = null;
+                                try {
+                                    const tech = player.tech({ IWillNotUseThisInPlugins: true });
+                                    controller = tech?.vhs?.playlistController_ ?? null;
+                                } catch {}
+
+                                const mainPlaylistLoader = controller?.mainPlaylistLoader_;
+                                if (mainPlaylistLoader && typeof mainPlaylistLoader.load === 'function') {
+                                    playlistRefreshed = await new Promise<boolean>((resolve) => {
+                                        const auxiliaryPlaylistLoaders = [
+                                            controller?.mediaTypes_?.AUDIO?.activePlaylistLoader,
+                                            controller?.mediaTypes_?.SUBTITLES?.activePlaylistLoader,
+                                        ].filter((loader: any, index: number, loaders: any[]) =>
+                                            loader && loader !== mainPlaylistLoader && loaders.indexOf(loader) === index,
+                                        );
+                                        let settled = false;
+                                        let playlistUpdated = false;
+                                        let timeoutId: number | undefined;
+                                        let previousSeekableEnd: number | null = null;
+                                        try {
+                                            const seekable = player.seekable();
+                                            if (seekable?.length) previousSeekableEnd = seekable.end(seekable.length - 1);
+                                        } catch {}
+                                        const cleanup = () => {
+                                            if (timeoutId !== undefined) window.clearTimeout(timeoutId);
+                                            mainPlaylistLoader.off('loadedplaylist', onPlaylistUpdated);
+                                            mainPlaylistLoader.off('error', onLoaderError);
+                                            player.off(['seekableendchange', 'progress', 'durationchange'], checkReady);
+                                            player.off('pause', onPlaybackInterrupted);
+                                            player.off('dispose', onDispose);
+                                        };
+                                        const finish = (refreshed: boolean) => {
+                                            if (settled) return;
+                                            settled = true;
+                                            cleanup();
+                                            resolve(refreshed);
+                                        };
+                                        const checkReady = () => {
+                                            if (!playlistUpdated) return;
+                                            try {
+                                                const seekable = player.seekable();
+                                                if (!seekable?.length) return;
+                                                const start = seekable.start(0);
+                                                const end = seekable.end(seekable.length - 1);
+                                                if (Number.isFinite(start) && Number.isFinite(end) && end > start
+                                                    && (previousSeekableEnd === null || end > previousSeekableEnd)) {
+                                                    finish(true);
+                                                }
+                                            } catch {
+                                                // Wait for VHS to publish the seekable range from the refreshed playlist.
+                                            }
+                                        };
+                                        const onPlaylistUpdated = () => {
+                                            playlistUpdated = true;
+                                            checkReady();
+                                        };
+                                        const onLoaderError = () => finish(false);
+                                        const onPlaybackInterrupted = () => {
+                                            if (!isPlayingRef.current) finish(false);
+                                        };
+                                        const onDispose = () => finish(false);
+
+                                        mainPlaylistLoader.on('loadedplaylist', onPlaylistUpdated);
+                                        mainPlaylistLoader.one('error', onLoaderError);
+                                        player.on(['seekableendchange', 'progress', 'durationchange'], checkReady);
+                                        player.on('pause', onPlaybackInterrupted);
+                                        player.one('dispose', onDispose);
+                                        timeoutId = window.setTimeout(() => finish(false), 8000);
+                                        try {
+                                            mainPlaylistLoader.load();
+                                            auxiliaryPlaylistLoaders.forEach((loader: any) => {
+                                                if (typeof loader.load === 'function') loader.load();
+                                            });
+                                        } catch {
+                                            finish(false);
+                                        }
+                                    });
+                                }
+
+                                if (!isPlayingRef.current) return;
+                                if (!playlistRefreshed) {
+                                    console.warn('[HLS loading] playlist refresh unavailable; using normal play path');
+                                }
+                                if (liveTracker?.isLive?.()) {
+                                    goLive();
+                                    wentLive = true;
+                                }
+                                if (playlistRefreshed) console.info('[HLS loading] resume');
+                                externalHlsLoadingPausedRef.current = null;
+                                externalLivePausePendingRef.current = false;
+                            }
+                            if (isMatchingExternalIntent && isHls && liveTracker?.isLive?.() && !wentLive) {
+                                goLive();
+                            }
+                            if (isMatchingExternalIntent || playbackStateChanged) {
+                                externalLivePausePendingRef.current = false;
+                            }
+                        }
                         try {
-                            const playPromise = videojsPlayerRef.current.play();
+                            const playPromise = player.play();
                             if (playPromise !== undefined) {
                                 await playPromise;
                             }
@@ -787,10 +1007,7 @@ export const useVideoPlayer = (
                         }
                     } else if (playerType === 'html5' && videoEl instanceof HTMLMediaElement) {
                         if (!videoEl.src && effectiveUrl) {
-                            let targetSrc = effectiveUrl;
-                            if (currentStation.useProxy) {
-                                targetSrc = `/proxy-stream?url=${encodeURIComponent(effectiveUrl)}`;
-                            }
+                            const targetSrc = playbackSourceUrl;
                             videoEl.src = targetSrc;
                             videoEl.load();
                         }
@@ -804,8 +1021,32 @@ export const useVideoPlayer = (
                     }
                 } else {
                     if (playerType === 'videojs' && videojsPlayerRef.current) {
+                        const player = videojsPlayerRef.current;
+                        const liveTracker = player.liveTracker;
+                        if (isMatchingExternalIntent) {
+                            externalHlsLoadingPausedRef.current = null;
+                            externalLivePausePendingRef.current = Boolean(isHls && liveTracker?.isLive?.());
+                            if (isHls && liveTracker?.isLive?.()) {
+                                player.pause();
+                                try {
+                                    const tech = player.tech({ IWillNotUseThisInPlugins: true });
+                                    const controller = tech?.vhs?.playlistController_;
+                                    if (typeof controller?.pauseLoading === 'function') {
+                                        controller.pauseLoading();
+                                        externalHlsLoadingPausedRef.current = currentMediaKey;
+                                        console.info('[HLS loading] pause');
+                                    }
+                                } catch (pauseLoadingError) {
+                                    console.warn('[HLS loading] pauseLoading unavailable; playback was paused normally', pauseLoadingError);
+                                }
+                                return;
+                            }
+                        } else if (playbackStateChanged) {
+                            externalLivePausePendingRef.current = false;
+                            externalHlsLoadingPausedRef.current = null;
+                        }
                         try {
-                            videojsPlayerRef.current.pause();
+                            player.pause();
                         } catch (e) {
                             console.warn('[VideoPlayer] VideoJS pause error:', e);
                         }
@@ -823,11 +1064,15 @@ export const useVideoPlayer = (
                 if (error.name !== 'AbortError') {
                     console.error('[VideoPlayer] Playback error:', error);
                 }
+            } finally {
+                if (!isPlaying && externalPlaybackIntentRef.current?.mediaKey === currentMediaKey) {
+                    externalPlaybackIntentRef.current = null;
+                }
             }
         };
 
         handlePlayback();
-    }, [isPlaying, volume, playerType, effectiveUrl, isYouTube, videoElement]);
+    }, [isPlaying, volume, playerType, effectiveUrl, isYouTube, isHls, currentMediaKey, currentStation, videoElement, goLive]);
 
     /**
      * Set quality level manually
@@ -1025,6 +1270,7 @@ export const useVideoPlayer = (
         setQualityLevel,
         isYouTube,
         executeRemoteAction,
+        markExternalPlaybackIntent,
         goLive
     };
 };

@@ -12,6 +12,7 @@ import {
     useSensors,
     DragEndEvent
 } from '@dnd-kit/core';
+import type { Modifier } from '@dnd-kit/core';
 import {
     arrayMove,
     SortableContext,
@@ -23,16 +24,17 @@ import { CSS } from '@dnd-kit/utilities';
 
 import { SidebarInfo } from './SidebarInfo';
 
+const restrictStationDragToVerticalAxis: Modifier = ({ transform }) => ({
+    ...transform,
+    x: 0,
+});
+
 const StationItem = React.memo<{
     station: Station;
     currentStationId?: string;
-    favorites: string[];
     playStation: (s: Station) => void;
-    toggleFavorite: (id: string) => void;
     isDraggable: boolean;
-}>(({ station, currentStationId, favorites, playStation, toggleFavorite, isDraggable }) => {
-    const isFavorite = favorites.includes(station.id);
-
+}>(({ station, currentStationId, playStation, isDraggable }) => {
     const {
         attributes,
         listeners,
@@ -55,7 +57,7 @@ const StationItem = React.memo<{
         <div
             ref={setNodeRef}
             style={style}
-            className={`flex items-center gap-2 px-2.5 py-2.5 border-b border-[var(--dark-border)] transition-all group
+            className={`flex items-center gap-2 px-2.5 py-2.5 border-b border-[var(--dark-border)] transition-all group select-none
                 ${isSelected
                     ? 'bg-[var(--primary-color)]/25 border-l-4 border-l-[var(--primary-color)] shadow-[inset_0_0_24px_rgba(0,0,0,0.2)] ring-1 ring-inset ring-[var(--primary-color)]/20'
                     : 'border-l-4 border-l-transparent hover:bg-white/5 hover:border-l-[var(--primary-color)]/40'
@@ -84,19 +86,6 @@ const StationItem = React.memo<{
                 </div>
             </div>
             <div className="flex items-center gap-1.5 flex-shrink-0">
-                <button
-                    onClick={(e) => {
-                        e.stopPropagation();
-                        toggleFavorite(station.id);
-                    }}
-                    className="p-1.5 hover:bg-white/10 rounded-md transition-colors"
-                    aria-label={isFavorite ? "Quitar de favoritos" : "Agregar a favoritos"}
-                >
-                    <Star
-                        size={16}
-                        className={isFavorite ? "text-[var(--warning-color)] fill-[var(--warning-color)]" : "text-[var(--text-secondary)] opacity-50 group-hover:opacity-100"}
-                    />
-                </button>
                 {isSelected && <div className="w-2.5 h-2.5 rounded-full bg-[var(--primary-color)] shadow-[0_0_8px_var(--primary-color)] animate-pulse flex-shrink-0"></div>}
 
                 {isDraggable && (
@@ -116,7 +105,7 @@ const StationItem = React.memo<{
 });
 
 export const StationList: React.FC = () => {
-    const { stations, currentStation, playStation, favorites, toggleFavorite, activeTab, setActiveTab, reorderStations, selectedCategory, setSelectedCategory, radioCategories, tvCategories } = useRadio();
+    const { stations, currentStation, playStation, favorites, activeTab, setActiveTab, reorderStations, selectedCategory, setSelectedCategory, radioCategories, tvCategories } = useRadio();
     const [filter, setFilter] = useState('');
     const [activeMobileMenu, setActiveMobileMenu] = useState<'all' | 'tv' | null>(null);
     const [ytResults, setYtResults] = useState<any[]>([]);
@@ -539,6 +528,7 @@ export const StationList: React.FC = () => {
                     <DndContext
                         sensors={sensors}
                         collisionDetection={closestCenter}
+                        modifiers={[restrictStationDragToVerticalAxis]}
                         onDragEnd={handleDragEnd}
                     >
                         <SortableContext
@@ -550,9 +540,7 @@ export const StationList: React.FC = () => {
                                     key={station.id}
                                     station={station}
                                     currentStationId={currentStation?.id}
-                                    favorites={favorites}
                                     playStation={playStation}
-                                    toggleFavorite={toggleFavorite}
                                     isDraggable={isReorderAllowed}
                                 />
                             ))}

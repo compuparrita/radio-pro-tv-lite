@@ -61,7 +61,6 @@ const GeneralHelpModal: React.FC<GeneralHelpModalHostProps> = ({ isOpen, onClose
                 </div>
             )}
             isOpen={isOpen}
-            lockBodyScroll
             onClose={onClose}
             title={(
                 <span className="inline-flex items-center gap-3">

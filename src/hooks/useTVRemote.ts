@@ -22,6 +22,11 @@ export const useTVRemote = () => {
             });
             return;
         }
+        if (!room) {
+            window.dispatchEvent(new CustomEvent('radiofm:external-playback-intent', {
+                detail: !isPlaying,
+            }));
+        }
         togglePlay();
     };
 
@@ -46,7 +51,7 @@ export const useTVRemote = () => {
             switch (e.key) {
                 case 'ArrowLeft':
                 case 'MediaTrackPrevious':
-                    if (!isModalOpen) {
+                    if (!isModalOpen && !isButtonFocused) {
                         e.preventDefault();
                         prevStation();
                     }
@@ -54,7 +59,7 @@ export const useTVRemote = () => {
 
                 case 'ArrowRight':
                 case 'MediaTrackNext':
-                    if (!isModalOpen) {
+                    if (!isModalOpen && !isButtonFocused) {
                         e.preventDefault();
                         nextStation();
                     }

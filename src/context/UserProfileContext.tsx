@@ -95,9 +95,6 @@ function loadInitialProfile(): UserProfile | null {
 
 export function UserProfileProvider({ children }: { children: ReactNode }) {
     const [profile, setProfile] = useState<UserProfile | null>(loadInitialProfile);
-    // Keep the app mounted for this session after profile deletion so an active WatchParty is not torn down.
-    // A reload will show the existing setup form because no profile is persisted.
-    const [profileSetupComplete, setProfileSetupComplete] = useState(Boolean(profile));
 
     const saveProfile = useCallback((input: UserProfileInput) => {
         const normalizedProfile = normalizeProfile(input);
@@ -111,7 +108,6 @@ export function UserProfileProvider({ children }: { children: ReactNode }) {
             notifyLegacyIdentityConsumers(normalizedProfile, false);
         }
         setProfile(normalizedProfile);
-        setProfileSetupComplete(true);
     }, []);
 
     const updateProfile = useCallback((updates: Partial<UserProfile>) => {
@@ -137,11 +133,11 @@ export function UserProfileProvider({ children }: { children: ReactNode }) {
 
     const value = useMemo(() => ({
         profile,
-        hasProfile: profileSetupComplete,
+        hasProfile: Boolean(profile),
         saveProfile,
         updateProfile,
         clearProfile,
-    }), [profile, profileSetupComplete, saveProfile, updateProfile, clearProfile]);
+    }), [profile, saveProfile, updateProfile, clearProfile]);
 
     return <UserProfileContext.Provider value={value}>{children}</UserProfileContext.Provider>;
 }

@@ -12,6 +12,7 @@ import {
     useSensors,
     DragEndEvent
 } from '@dnd-kit/core';
+import type { Modifier } from '@dnd-kit/core';
 import {
     arrayMove,
     SortableContext,
@@ -20,6 +21,11 @@ import {
     useSortable
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
+
+const restrictStationDragToVerticalAxis: Modifier = ({ transform }) => ({
+    ...transform,
+    x: 0,
+});
 
 interface StationManagerProps {
     isOpen: boolean;
@@ -72,7 +78,7 @@ const SortableStationItem = ({
         <div
             ref={setNodeRef}
             style={style}
-            className={`flex items-center gap-2 p-1 group transition-all border ${isEditing
+            className={`flex items-center gap-2 p-1 group transition-all border select-none ${isEditing
                 ? 'bg-blue-500/10 border-blue-500/30'
                 : isCurrent
                     ? 'bg-[var(--primary-color)]/10 border-[var(--primary-color)]/30'
@@ -241,7 +247,7 @@ export const StationManager: React.FC<StationManagerProps> = ({ isOpen, onClose 
 
         let rawUrl = formData.url?.trim() || '';
         let rawIframe = formData.iframeUrl?.trim() || formData.embedCanal?.trim() || '';
-        let finalType = (formData.type as 'audio' | 'video') || 'audio';
+        const finalType = (formData.type as 'audio' | 'video') || 'audio';
         let finalLogo = formData.logo?.trim() || '';
         let finalEmbedCanal = undefined;
         let finalIframeUrl = rawIframe;
@@ -262,7 +268,6 @@ export const StationManager: React.FC<StationManagerProps> = ({ isOpen, onClose 
         if (ytId) {
             finalIframeUrl = `https://www.youtube.com/embed/${ytId}`;
             rawUrl = '';
-            finalType = 'video';
             if (!finalLogo) {
                 finalLogo = `https://img.youtube.com/vi/${ytId}/mqdefault.jpg`;
             }
@@ -273,23 +278,20 @@ export const StationManager: React.FC<StationManagerProps> = ({ isOpen, onClose 
                 if (srcMatch) finalIframeUrl = srcMatch[1];
             }
 
-            // Si es m3u8 en iframe, pasarlo a URL directa
+            // Si es m3u8 en iframe, pasarlo a URL directa sin inferir el tipo de contenido.
             if (finalIframeUrl.includes('.m3u8') && !finalIframeUrl.includes('bradmax.com')) {
                 rawUrl = finalIframeUrl;
                 finalIframeUrl = '';
-                finalType = 'video';
             } else {
                 // Determinar si es un nombre corto o una URL
                 const isShort = !finalIframeUrl.includes('://') && finalIframeUrl.length < 30 && !finalIframeUrl.includes('/');
                 if (isShort) {
                     finalEmbedCanal = finalIframeUrl.replace('.html', '').replace('.php', '').split('?')[0];
                     finalIframeUrl = `https://embed.saohgdasregions.fun/embed2/${finalEmbedCanal}.html`;
-                    finalType = 'video';
                 } else if (finalIframeUrl.includes('embed.saohgdasregions.fun')) {
                     const parts = finalIframeUrl.split('/');
                     const filename = parts[parts.length - 1];
                     finalEmbedCanal = filename.split('.')[0].split('?')[0];
-                    finalType = 'video';
                 }
             }
         }
@@ -659,6 +661,7 @@ export const StationManager: React.FC<StationManagerProps> = ({ isOpen, onClose 
                             <DndContext
                                 sensors={sensors}
                                 collisionDetection={closestCenter}
+                                modifiers={[restrictStationDragToVerticalAxis]}
                                 onDragEnd={handleDragEnd}
                             >
                                 <SortableContext

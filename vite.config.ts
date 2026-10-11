@@ -31,6 +31,10 @@ export default defineConfig({
           });
         }
       },
+      '/onda-brava-stream': {
+        target: 'http://localhost:3001',
+        changeOrigin: true
+      },
       '/proxy-stream': {
         target: 'http://localhost:3001',
         changeOrigin: true

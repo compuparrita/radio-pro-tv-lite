@@ -6,12 +6,14 @@ import {
     deleteStationFromCloud,
     updateStationsOrderInCloud,
     subscribeToStationsChanges,
+    mapStationFromCloudRow,
     getCurrentUserId,
     fetchUserFavoritesFromCloud,
     saveFavoriteToCloud,
     removeFavoriteFromCloud,
     subscribeToUserFavorites
 } from '../services/supabase';
+import type { StationRealtimeChange, StationRealtimeStatus } from '../services/supabase';
 
 const RadioContext = createContext<RadioContextType | undefined>(undefined);
 
@@ -50,123 +52,294 @@ export const TV_CATEGORIES = ['Noticias', 'Música tv', 'Cine & Series', 'Docume
 
 const STATIONS_CACHE_KEY = 'radioStations';
 const STATIONS_CACHED_AT_KEY = 'radioStations_cachedAt';
-const STATIONS_CACHE_TTL = 24 * 60 * 60 * 1000; // 24 horas de vigencia de caché local
 const STATIONS_REALTIME_DEBOUNCE_MS = 1500; // Coalescing de 1.5s para eventos Realtime consecutivos
+let stationsReadInFlight: Promise<Station[]> | null = null;
+
+const fetchStationsSnapshot = () => {
+    if (!stationsReadInFlight) {
+        stationsReadInFlight = fetchStationsFromCloud().finally(() => {
+            stationsReadInFlight = null;
+        });
+    }
+    return stationsReadInFlight;
+};
+
+const readStationsCache = (): Station[] | null => {
+    if (typeof window === 'undefined') return null;
+    try {
+        const saved = localStorage.getItem(STATIONS_CACHE_KEY);
+        if (!saved) return null;
+        const parsed = JSON.parse(saved);
+        return Array.isArray(parsed) ? parsed : null;
+    } catch {
+        return null;
+    }
+};
+
+const hasRowField = (row: Record<string, unknown>, field: string) =>
+    Object.prototype.hasOwnProperty.call(row, field);
+
+const hasCompleteStationRow = (row: Record<string, unknown>) =>
+    ['id', 'name', 'url', 'logo', 'country', 'type', 'iframe_url', 'use_proxy', 'category', 'embed_canal', 'position']
+        .every((field) => hasRowField(row, field));
+
+const sameStation = (a: Station, b: Station) =>
+    a.id === b.id
+    && a.name === b.name
+    && a.url === b.url
+    && a.logo === b.logo
+    && a.country === b.country
+    && a.type === b.type
+    && (a.iframeUrl ?? '') === (b.iframeUrl ?? '')
+    && Boolean(a.useProxy) === Boolean(b.useProxy)
+    && (a.category ?? 'Otros') === (b.category ?? 'Otros')
+    && (a.embedCanal ?? '') === (b.embedCanal ?? '')
+    && a.watchPartyCapabilities === b.watchPartyCapabilities;
+
+const sameStationList = (a: Station[], b: Station[]) =>
+    a.length === b.length && a.every((station, index) => sameStation(station, b[index]));
+
+// Returns null when the event is incomplete enough that applying it could corrupt the catalog.
+const applyStationRealtimeChange = (stations: Station[], change: StationRealtimeChange): Station[] | null => {
+    if (change.eventType === 'DELETE') {
+        const id = change.old?.id;
+        if (typeof id !== 'string' || !id) return null;
+        const next = stations.filter((station) => station.id !== id);
+        return next.length === stations.length ? stations : next;
+    }
+
+    if (change.eventType !== 'INSERT' && change.eventType !== 'UPDATE') return null;
+
+    const row = change.new;
+    if (!row || typeof row.id !== 'string' || !row.id) return null;
+    if (hasRowField(row, 'type') && row.type !== 'audio' && row.type !== 'video') return null;
+    const existingIndex = stations.findIndex((station) => station.id === row.id);
+    const existing = existingIndex >= 0 ? stations[existingIndex] : undefined;
+    const rowFields = ['name', 'url', 'logo', 'country', 'type', 'iframe_url', 'use_proxy', 'category', 'embed_canal'];
+
+    if (change.eventType === 'INSERT' && !hasCompleteStationRow(row)) return null;
+    if (!existing && !hasCompleteStationRow(row)) return null;
+    if (existing && (!hasRowField(row, 'position') || !rowFields.some((field) => hasRowField(row, field)))) {
+        return null;
+    }
+
+    const station = mapStationFromCloudRow(row, existing);
+    if (!station.id) return null;
+    const next = stations.slice();
+
+    if (existingIndex >= 0) {
+        next[existingIndex] = station;
+    } else {
+        next.push(station);
+    }
+
+    if (hasRowField(row, 'position')) {
+        const position = row.position;
+        if (typeof position !== 'number' || !Number.isInteger(position) || position < 0) return null;
+        const currentIndex = next.findIndex((item) => item.id === station.id);
+        const [positionedStation] = next.splice(currentIndex, 1);
+        next.splice(Math.min(position, next.length), 0, positionedStation);
+    }
+
+    return sameStationList(stations, next) ? stations : next;
+};
 
 export const RadioProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     const [stations, setStations] = useState<Station[]>(() => {
-        if (typeof window === 'undefined') return [];
-        try {
-            const saved = localStorage.getItem(STATIONS_CACHE_KEY);
-            if (saved) {
-                const parsed = JSON.parse(saved);
-                if (Array.isArray(parsed) && parsed.length > 0) return parsed;
-            }
-        } catch {}
-        return [];
+        return readStationsCache() ?? [];
     });
+    const stationsRef = React.useRef(stations);
+    const stationsMutationVersionRef = React.useRef(0);
+    const successfulRemoteSyncVersionRef = React.useRef(0);
+    const pendingStationWritesRef = React.useRef<Promise<void>>(Promise.resolve());
     const [isInitialLoad, setIsInitialLoad] = useState(() => {
-        if (typeof window === 'undefined') return true;
-        try {
-            const saved = localStorage.getItem(STATIONS_CACHE_KEY);
-            return !saved;
-        } catch {
-            return true;
-        }
+        return readStationsCache() === null;
     });
+
+    const commitStations = (next: Station[], options: { syncedAt?: number; mutation?: boolean; persist?: boolean } = {}) => {
+        const current = stationsRef.current;
+        const changed = !sameStationList(current, next);
+
+        if (changed) {
+            stationsRef.current = next;
+            if (options.mutation) stationsMutationVersionRef.current += 1;
+            setStations(next);
+        }
+
+        if (options.persist === false) return;
+        if (!changed && options.syncedAt === undefined) return;
+
+        try {
+            localStorage.setItem(STATIONS_CACHE_KEY, JSON.stringify(changed ? next : current));
+            if (options.syncedAt !== undefined) {
+                localStorage.setItem(STATIONS_CACHED_AT_KEY, options.syncedAt.toString());
+            }
+        } catch (error) {
+            console.warn('[RadioContext] No se pudo actualizar la caché local de emisoras:', error);
+        }
+    };
+
+    const trackStationWrite = (write: Promise<boolean>) => {
+        const settledWrite = write.then(() => undefined, () => undefined);
+        pendingStationWritesRef.current = Promise.all([pendingStationWritesRef.current, settledWrite])
+            .then(() => undefined);
+    };
 
     // Bootstrap stations: Estrategia Cache-First (Caché local inmediato + Sync condicional + Coalescing Realtime)
     useEffect(() => {
         let isMounted = true;
         let realtimeDebounceTimer: ReturnType<typeof setTimeout> | null = null;
+        let remoteSyncInFlight: Promise<'synced' | 'failed' | 'superseded'> | null = null;
+        let followupSyncRequested = false;
+        let hasConfirmedSubscription = false;
+        let interruptedBeforeSubscribe = false;
+        let subscriptionInterrupted = false;
 
-        const initStations = async () => {
-            const saved = localStorage.getItem(STATIONS_CACHE_KEY);
-            const cachedAtStr = localStorage.getItem(STATIONS_CACHED_AT_KEY);
-            const cachedAt = cachedAtStr ? Number(cachedAtStr) : 0;
-            const isCacheFresh = cachedAt > 0 && (Date.now() - cachedAt < STATIONS_CACHE_TTL);
-
-            // 1. Si existe caché local válido y dentro del TTL, mostrarlo y omitir consulta remota
-            if (saved) {
-                try {
-                    const parsed = JSON.parse(saved);
-                    if (Array.isArray(parsed) && parsed.length > 0) {
-                        setStations(parsed);
-                        setIsInitialLoad(false);
-
-                        if (isCacheFresh) {
-                            console.log('[RadioContext] Catálogo cargado desde caché local válido (TTL vigente). Omitiendo GET Supabase.');
-                            return;
-                        } else {
-                            console.log('[RadioContext] Caché local expirado (> 24h). Sincronizando en segundo plano...');
-                        }
-                    }
-                } catch (e) {
-                    console.error('Error al leer caché local de radioStations:', e);
-                }
+        const requestFullReconciliation = (): Promise<'synced' | 'failed' | 'superseded'> => {
+            if (realtimeDebounceTimer) {
+                clearTimeout(realtimeDebounceTimer);
+                realtimeDebounceTimer = null;
+            }
+            if (remoteSyncInFlight) {
+                followupSyncRequested = true;
+                return remoteSyncInFlight;
             }
 
-            // 2. Si no hay caché o expiró el TTL, consultar catálogo maestro en la nube de Supabase
-            try {
-                const cloudStations = await fetchStationsFromCloud();
-                if (isMounted && cloudStations && cloudStations.length > 0) {
-                    setStations(cloudStations);
-                    localStorage.setItem(STATIONS_CACHE_KEY, JSON.stringify(cloudStations));
-                    localStorage.setItem(STATIONS_CACHED_AT_KEY, Date.now().toString());
+            const readAndCommitSnapshot = async (): Promise<'synced' | 'failed' | 'superseded'> => {
+                const mutationVersionAtStart = stationsMutationVersionRef.current;
+                try {
+                    const cloudStations = await fetchStationsSnapshot();
+                    if (!isMounted) return 'failed';
+                    if (mutationVersionAtStart !== stationsMutationVersionRef.current) {
+                        followupSyncRequested = true;
+                        return 'superseded';
+                    }
+
+                    const currentStations = stationsRef.current;
+                    const reconciledStations = cloudStations.map((cloudStation) => {
+                        const current = currentStations.find((station) => station.id === cloudStation.id);
+                        return current ? { ...current, ...cloudStation } : cloudStation;
+                    });
+                    commitStations(reconciledStations, { syncedAt: Date.now() });
+                    successfulRemoteSyncVersionRef.current += 1;
+                    return 'synced';
+                } catch (error) {
+                    console.warn('[RadioContext] No se pudo reconciliar el catálogo con Supabase; se conserva la caché local:', error);
+                    return 'failed';
                 }
-            } catch (error) {
-                console.warn('[RadioContext] Sin conexión a Supabase, conservando catálogo local o stations.json:', error);
-                if (!saved) {
-                    await fetchDefaultStations();
+            };
+
+            const waitForStationWrites = async () => {
+                while (true) {
+                    const pendingWrites = pendingStationWritesRef.current;
+                    await pendingWrites;
+                    if (pendingWrites === pendingStationWritesRef.current) return;
                 }
-            } finally {
-                if (isMounted) {
-                    setIsInitialLoad(false);
+            };
+
+            let request: Promise<'synced' | 'failed' | 'superseded'>;
+            request = (async () => {
+                let result = await readAndCommitSnapshot();
+                while (followupSyncRequested && isMounted) {
+                    followupSyncRequested = false;
+                    await waitForStationWrites();
+                    // A read started after all pending writes covers any requests received while waiting.
+                    followupSyncRequested = false;
+                    result = await readAndCommitSnapshot();
                 }
+                return result;
+            })().finally(() => {
+                if (remoteSyncInFlight === request) remoteSyncInFlight = null;
+            });
+
+            remoteSyncInFlight = request;
+            return request;
+        };
+
+        const scheduleFullReconciliation = () => {
+            if (realtimeDebounceTimer) clearTimeout(realtimeDebounceTimer);
+            realtimeDebounceTimer = setTimeout(() => {
+                realtimeDebounceTimer = null;
+                void requestFullReconciliation();
+            }, STATIONS_REALTIME_DEBOUNCE_MS);
+        };
+
+        const handleRealtimeChange = (change: StationRealtimeChange) => {
+            if (!isMounted) return;
+            stationsMutationVersionRef.current += 1;
+            const updatedStations = applyStationRealtimeChange(stationsRef.current, change);
+
+            if (updatedStations === null) {
+                if (remoteSyncInFlight) followupSyncRequested = true;
+                else scheduleFullReconciliation();
+                return;
+            }
+
+            commitStations(updatedStations);
+        };
+
+        const handleRealtimeStatus = (status: StationRealtimeStatus, error?: Error) => {
+            if (!isMounted) return;
+
+            if (status === 'SUBSCRIBED') {
+                const recovered = hasConfirmedSubscription
+                    ? subscriptionInterrupted
+                    : interruptedBeforeSubscribe;
+                hasConfirmedSubscription = true;
+                subscriptionInterrupted = false;
+                interruptedBeforeSubscribe = false;
+                if (recovered) void requestFullReconciliation();
+                return;
+            }
+
+            if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
+                if (hasConfirmedSubscription) subscriptionInterrupted = true;
+                else interruptedBeforeSubscribe = true;
+                if (error) console.warn(`[RadioContext Realtime] Canal ${status}:`, error);
             }
         };
 
         const fetchDefaultStations = async () => {
+            const mutationVersionAtStart = stationsMutationVersionRef.current;
+            const remoteSyncVersionAtStart = successfulRemoteSyncVersionRef.current;
             try {
                 const response = await fetch('/stations.json', {
-                    headers: {
-                        'ngrok-skip-browser-warning': 'true'
-                    }
+                    headers: { 'ngrok-skip-browser-warning': 'true' }
                 });
                 if (!response.ok) throw new Error('Failed to fetch stations.json');
                 const data = await response.json();
-                if (isMounted) {
-                    setStations(data);
-                    localStorage.setItem(STATIONS_CACHE_KEY, JSON.stringify(data));
-                    localStorage.setItem(STATIONS_CACHED_AT_KEY, Date.now().toString());
+                if (!Array.isArray(data)) throw new Error('Invalid stations.json catalog');
+                if (isMounted
+                    && mutationVersionAtStart === stationsMutationVersionRef.current
+                    && remoteSyncVersionAtStart === successfulRemoteSyncVersionRef.current
+                    && successfulRemoteSyncVersionRef.current === 0
+                    && !remoteSyncInFlight) {
+                    commitStations(data, { persist: false });
                 }
             } catch (error) {
                 console.error('Error fetching fallback stations:', error);
-                if (isMounted) setStations([]);
+                // Keep the existing state and cache intact if even the static fallback fails.
             }
         };
 
-        initStations();
+        const initStations = async () => {
+            const cachedStations = readStationsCache();
 
-        // 3. Suscripción en tiempo real con coalescing (debounce de 1.5s para evitar tormentas de GETs)
-        const unsubscribe = subscribeToStationsChanges(() => {
-            if (realtimeDebounceTimer) {
-                clearTimeout(realtimeDebounceTimer);
+            if (cachedStations !== null) {
+                commitStations(cachedStations);
+                setIsInitialLoad(false);
             }
-            realtimeDebounceTimer = setTimeout(async () => {
-                try {
-                    console.log('[RadioContext Realtime] Ejecutando sincronización de emisoras coalescida...');
-                    const updatedStations = await fetchStationsFromCloud();
-                    if (isMounted && updatedStations && updatedStations.length > 0) {
-                        setStations(updatedStations);
-                        localStorage.setItem(STATIONS_CACHE_KEY, JSON.stringify(updatedStations));
-                        localStorage.setItem(STATIONS_CACHED_AT_KEY, Date.now().toString());
-                    }
-                } catch (err) {
-                    console.error('[RadioContext Realtime] Error al sincronizar cambio en tiempo real:', err);
-                }
-            }, STATIONS_REALTIME_DEBOUNCE_MS);
-        });
+
+            const syncResult = await requestFullReconciliation();
+            if (syncResult === 'failed' && cachedStations === null && isMounted) {
+                await fetchDefaultStations();
+            }
+
+            if (isMounted) setIsInitialLoad(false);
+        };
+
+        const unsubscribe = subscribeToStationsChanges(handleRealtimeChange, handleRealtimeStatus);
+        void initStations();
 
         return () => {
             isMounted = false;
@@ -357,14 +530,6 @@ export const RadioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         }
     }, [activeTab, isInitialLoad, selectedCategory]);
 
-    // Save to localStorage
-    useEffect(() => {
-        if (!isInitialLoad && stations.length > 0) {
-            localStorage.setItem(STATIONS_CACHE_KEY, JSON.stringify(stations));
-            localStorage.setItem(STATIONS_CACHED_AT_KEY, Date.now().toString());
-        }
-    }, [stations, isInitialLoad]);
-
     // Save favorites to localStorage
     useEffect(() => {
         try {
@@ -410,28 +575,23 @@ export const RadioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     };
 
     const addStation = (station: Station) => {
-        setStations(prev => {
-            const updated = [...prev, station];
-            saveStationToCloud(station, updated.length - 1);
-            return updated;
-        });
+        const updated = [...stationsRef.current, station];
+        commitStations(updated, { mutation: true });
+        trackStationWrite(saveStationToCloud(station, updated.length - 1));
     };
 
     const removeStation = (stationId: string) => {
-        setStations(prev => {
-            const updated = prev.filter(s => s.id !== stationId);
-            deleteStationFromCloud(stationId);
-            return updated;
-        });
+        const updated = stationsRef.current.filter((station) => station.id !== stationId);
+        commitStations(updated, { mutation: true });
+        trackStationWrite(deleteStationFromCloud(stationId));
     };
 
     const updateStation = (updatedStation: Station) => {
-        setStations(prev => {
-            const updated = prev.map(s => s.id === updatedStation.id ? updatedStation : s);
-            const index = updated.findIndex(s => s.id === updatedStation.id);
-            saveStationToCloud(updatedStation, index >= 0 ? index : 0);
-            return updated;
-        });
+        const current = stationsRef.current;
+        const updated = current.map((station) => station.id === updatedStation.id ? updatedStation : station);
+        const index = updated.findIndex((station) => station.id === updatedStation.id);
+        commitStations(updated, { mutation: true });
+        trackStationWrite(saveStationToCloud(updatedStation, index >= 0 ? index : 0));
     };
 
     // Get the currently relevant list of stations based on activeTab and selectedCategory
@@ -493,24 +653,25 @@ export const RadioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     };
 
     const importStations = (importedStations: Station[]) => {
-        setStations(prev => {
-            const newStations = [...prev];
-            importedStations.forEach(s => {
-                if (s.name && (s.url || s.iframeUrl || s.embedCanal)) {
-                    newStations.push({
-                        ...s,
-                        id: s.id && !prev.some(p => p.id === s.id) ? s.id : `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
-                        type: s.type || 'audio'
-                    });
-                }
-            });
-            return newStations;
+        const previous = stationsRef.current;
+        const newStations = [...previous];
+        importedStations.forEach((station) => {
+            if (station.name && (station.url || station.iframeUrl || station.embedCanal)) {
+                newStations.push({
+                    ...station,
+                    id: station.id && !previous.some((existing) => existing.id === station.id)
+                        ? station.id
+                        : `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
+                    type: station.type || 'audio'
+                });
+            }
         });
+        commitStations(newStations, { mutation: true });
     };
 
     const reorderStations = (reorderedStations: Station[]) => {
-        setStations(reorderedStations);
-        updateStationsOrderInCloud(reorderedStations);
+        commitStations(reorderedStations, { mutation: true });
+        trackStationWrite(updateStationsOrderInCloud(reorderedStations));
     };
 
     const contextValue = React.useMemo(() => ({

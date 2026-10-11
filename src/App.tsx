@@ -1,10 +1,11 @@
-import { useState, useEffect, useRef } from 'react';
-import { Settings } from 'lucide-react';
+import { useState, useEffect, useLayoutEffect, useRef } from 'react';
 import { RadioProvider } from './context/RadioContext';
 import { ChatProvider } from './context/ChatContext';
 import { WatchPartyProvider, useWatchParty } from './context/WatchPartyContext';
 import { WatchPartyChatProvider } from './context/WatchPartyChatContext';
 import { UserProfileProvider, useUserProfile } from './context/UserProfileContext';
+import { socketService } from './services/socketService';
+import { PANEL_EXIT_DURATION_MS } from './components/panels/PanelShell';
 import { Header } from './components/Header';
 import { Player } from './components/Player';
 import { StationList } from './components/StationList';
@@ -15,11 +16,16 @@ import { MobileNav } from './components/MobileNav';
 import { useTVRemote } from './hooks/useTVRemote';
 import { PanelHost } from './components/panels/PanelHost';
 import { UserProfileForm } from './components/UserProfileForm';
-import { HelpCircle } from 'lucide-react';
 import { GuestCinemaLayout } from './components/GuestCinemaLayout';
 import { getWatchPartySessionTitle } from './utils/watchPartySessionTitle';
 
 const ROOM_CODE_PATTERN = /^[A-HJ-NP-Z2-9]{6}$/;
+type Theme = 'dark' | 'light' | 'youth';
+
+interface AppContentProps {
+    theme: Theme;
+    onThemeClick: () => void;
+}
 
 function clearRoomInviteParameter() {
     const url = new URL(window.location.href);
@@ -27,7 +33,7 @@ function clearRoomInviteParameter() {
     window.history.replaceState(window.history.state, '', `${url.pathname}${url.search}${url.hash}`);
 }
 
-function AppContent() {
+function AppContent({ theme, onThemeClick }: AppContentProps) {
     const { room, roomCode, isHost, isConnected } = useWatchParty();
     const [isManagerOpen, setIsManagerOpen] = useState(false);
     const [isChatOpen, setIsChatOpen] = useState(false);
@@ -36,11 +42,10 @@ function AppContent() {
     const [isGuestCinemaMode, setIsGuestCinemaMode] = useState(true);
     const [isChatHelpOpen, setIsChatHelpOpen] = useState(false);
     const [pendingRoomInvite, setPendingRoomInvite] = useState<string | null>(null);
-    const [theme, setTheme] = useState<'dark' | 'light' | 'youth'>(() => {
-        const saved = localStorage.getItem('theme');
-        return (saved as 'dark' | 'light' | 'youth') || 'light';
-    });
     const [isAppHelpOpen, setIsAppHelpOpen] = useState(false);
+    const [isGlobalMenuOpen, setIsGlobalMenuOpen] = useState(false);
+    const [isGlobalMenuActionPending, setIsGlobalMenuActionPending] = useState(false);
+    const globalMenuActionTimeoutRef = useRef<number | null>(null);
     const [sidebarWidth, setSidebarWidth] = useState(() => {
         const saved = localStorage.getItem('sidebarWidth');
         return saved ? parseInt(saved) : 360;
@@ -80,6 +85,26 @@ function AppContent() {
     const roomChatTicker = room && roomCode && !isChatOpen
         ? <RoomChatTicker roomCode={roomCode} isGuestCinema={isGuestCinema} />
         : null;
+    const isGlobalMenuDisabled = isWatchPartyOpen || isChatHelpOpen || isAppHelpOpen || isProfileOpen || isManagerOpen || isChatOpen || isGlobalMenuActionPending;
+
+    const openStationManagerFromGlobalMenu = () => {
+        setIsGlobalMenuOpen(false);
+        setIsGlobalMenuActionPending(true);
+        if (globalMenuActionTimeoutRef.current !== null) {
+            window.clearTimeout(globalMenuActionTimeoutRef.current);
+        }
+        globalMenuActionTimeoutRef.current = window.setTimeout(() => {
+            globalMenuActionTimeoutRef.current = null;
+            setIsGlobalMenuActionPending(false);
+            setIsManagerOpen(true);
+        }, PANEL_EXIT_DURATION_MS + 40);
+    };
+
+    useEffect(() => () => {
+        if (globalMenuActionTimeoutRef.current !== null) {
+            window.clearTimeout(globalMenuActionTimeoutRef.current);
+        }
+    }, []);
 
     useEffect(() => {
         setIsGuestCinemaMode(Boolean(room && !isHost));
@@ -134,20 +159,6 @@ function AppContent() {
         setIsWatchPartyOpen(false);
     };
 
-    // Apply theme to body
-    useEffect(() => {
-        document.body.className = theme === 'dark' ? '' : theme === 'light' ? 'light-mode' : 'youth-mode';
-        localStorage.setItem('theme', theme);
-    }, [theme]);
-
-    const cycleTheme = () => {
-        setTheme(prev => {
-            if (prev === 'dark') return 'light';
-            if (prev === 'light') return 'youth';
-            return 'dark';
-        });
-    };
-
     const startResizing = (e: React.MouseEvent) => {
         e.preventDefault();
         setIsResizing(true);
@@ -199,6 +210,8 @@ function AppContent() {
     useEffect(() => {
         let timeoutId: number;
         const body = document.body;
+        const appScrollElement = document.getElementById('root');
+        body.classList.add('cursor-tracker-enabled');
 
         const handleActivity = () => {
             if (!body.classList.contains('user-is-active')) {
@@ -216,7 +229,7 @@ function AppContent() {
         window.addEventListener('mousedown', handleActivity, { passive: true });
         window.addEventListener('keydown', handleActivity, { passive: true });
         window.addEventListener('touchstart', handleActivity, { passive: true });
-        window.addEventListener('scroll', handleActivity, { passive: true });
+        appScrollElement?.addEventListener('scroll', handleActivity, { passive: true });
 
         // Initial state
         handleActivity();
@@ -227,8 +240,9 @@ function AppContent() {
             window.removeEventListener('mousedown', handleActivity);
             window.removeEventListener('keydown', handleActivity);
             window.removeEventListener('touchstart', handleActivity);
-            window.removeEventListener('scroll', handleActivity);
+            appScrollElement?.removeEventListener('scroll', handleActivity);
             body.classList.remove('user-is-active');
+            body.classList.remove('cursor-tracker-enabled');
         };
     }, []);
 
@@ -239,15 +253,18 @@ function AppContent() {
             window.history.scrollRestoration = 'manual';
         }
 
+        const appScrollElement = document.getElementById('root');
+        if (!appScrollElement) return;
+
         const savedScroll = sessionStorage.getItem('appScrollPosition');
         if (savedScroll) {
             const targetY = parseInt(savedScroll, 10);
             if (!isNaN(targetY) && targetY > 0) {
                 // Intentar restaurar de inmediato y reintentar conforme se renderiza el contenido dinámico
-                window.scrollTo({ top: targetY, behavior: 'instant' });
-                const t1 = setTimeout(() => window.scrollTo({ top: targetY, behavior: 'instant' }), 100);
-                const t2 = setTimeout(() => window.scrollTo({ top: targetY, behavior: 'instant' }), 300);
-                const t3 = setTimeout(() => window.scrollTo({ top: targetY, behavior: 'instant' }), 600);
+                appScrollElement.scrollTo({ top: targetY, behavior: 'instant' });
+                const t1 = setTimeout(() => appScrollElement.scrollTo({ top: targetY, behavior: 'instant' }), 100);
+                const t2 = setTimeout(() => appScrollElement.scrollTo({ top: targetY, behavior: 'instant' }), 300);
+                const t3 = setTimeout(() => appScrollElement.scrollTo({ top: targetY, behavior: 'instant' }), 600);
                 return () => {
                     clearTimeout(t1);
                     clearTimeout(t2);
@@ -259,12 +276,14 @@ function AppContent() {
 
     useEffect(() => {
         const cinemaModeQuery = window.matchMedia('(max-width: 1023px) and (orientation: landscape) and (max-height: 800px) and (pointer: coarse)');
+        const appScrollElement = document.getElementById('root');
+        if (!appScrollElement) return;
 
         let saveTimeout: number;
         const handleScroll = () => {
             // Guardar posición de scroll solo si no estamos en cinema mode
             if (!cinemaModeQuery.matches) {
-                const currentY = window.scrollY;
+                const currentY = appScrollElement.scrollTop;
                 lastPortraitScrollY.current = currentY;
 
                 window.clearTimeout(saveTimeout);
@@ -276,7 +295,7 @@ function AppContent() {
 
         const handleBeforeUnload = () => {
             if (!cinemaModeQuery.matches) {
-                sessionStorage.setItem('appScrollPosition', window.scrollY.toString());
+                sessionStorage.setItem('appScrollPosition', appScrollElement.scrollTop.toString());
             }
         };
 
@@ -285,7 +304,7 @@ function AppContent() {
                 // We just exited cinema mode (back to portrait/normal)
                 // Restore the scroll after a brief delay to allow layout to stabilization
                 setTimeout(() => {
-                    window.scrollTo({
+                    appScrollElement.scrollTo({
                         top: lastPortraitScrollY.current,
                         behavior: 'instant' // Instant jump to prevent disorientation
                     });
@@ -294,13 +313,13 @@ function AppContent() {
         };
 
         // Attach listeners
-        window.addEventListener('scroll', handleScroll, { passive: true });
+        appScrollElement.addEventListener('scroll', handleScroll, { passive: true });
         window.addEventListener('beforeunload', handleBeforeUnload);
         cinemaModeQuery.addEventListener('change', handleOrientationChange);
 
         return () => {
             window.clearTimeout(saveTimeout);
-            window.removeEventListener('scroll', handleScroll);
+            appScrollElement.removeEventListener('scroll', handleScroll);
             window.removeEventListener('beforeunload', handleBeforeUnload);
             cinemaModeQuery.removeEventListener('change', handleOrientationChange);
         };
@@ -349,7 +368,7 @@ function AppContent() {
                 <div className="mobile-nav-container">
                     <MobileNav
                         onChatClick={() => setIsChatOpen(true)}
-                        onThemeClick={cycleTheme}
+                        onThemeClick={onThemeClick}
                         onWatchPartyClick={handleMobileWatchPartyNavigation}
                         isGuestCinema={isGuestCinema}
                     />
@@ -372,11 +391,12 @@ function AppContent() {
                 style={{ zIndex: 1000 }}
             >
                 <Header
-                    theme={theme}
-                    onThemeClick={cycleTheme}
                     onChatClick={() => setIsChatOpen(true)}
                     onWatchPartyClick={handleMobileWatchPartyNavigation}
                     onProfileClick={() => setIsProfileOpen(true)}
+                    onGlobalMenuClick={() => setIsGlobalMenuOpen((open) => !open)}
+                    isGlobalMenuOpen={isGlobalMenuOpen}
+                    isGlobalMenuDisabled={isGlobalMenuDisabled}
                 />
             </div>
 
@@ -460,19 +480,6 @@ function AppContent() {
 
                 <div className="mt-20 md:mt-16 text-[var(--text-secondary)] text-sm mb-4 px-4 footer-container">
                     <div className="flex flex-col md:flex-row items-center justify-center gap-6 md:gap-8 border-t border-[var(--dark-border)] pt-8 md:pt-6">
-                        <button
-                            onClick={() => setIsManagerOpen(true)}
-                            className="btn btn-ghost"
-                        >
-                            <Settings size={16} /> Gestor de Emisoras
-                        </button>
-                        <button
-                            onClick={() => setIsAppHelpOpen(true)}
-                            className="btn btn-ghost"
-                        >
-                            <HelpCircle size={16} /> Ayuda de la App
-                        </button>
-                        <span className="hidden md:inline text-[var(--dark-border)]">|</span>
                         <p className="opacity-80">© 2025 Radio Streaming Pro - Versión ti8ocb</p>
                     </div>
                 </div>
@@ -513,12 +520,26 @@ function AppContent() {
                         isOpen: true,
                         onClose: () => setIsProfileOpen(false),
                     },
+                } : isGlobalMenuOpen ? {
+                    kind: 'global-menu',
+                    props: {
+                        isOpen: true,
+                        onClose: () => setIsGlobalMenuOpen(false),
+                        theme,
+                        onThemeClick,
+                        onOpenHelp: () => {
+                            setIsGlobalMenuOpen(false);
+                            setIsAppHelpOpen(true);
+                        },
+                        onOpenStationManager: openStationManagerFromGlobalMenu,
+                    },
                 } : null}
             />
             <div className="mobile-nav-container">
                 <MobileNav
                     onChatClick={() => setIsChatOpen(true)}
-                    onThemeClick={cycleTheme}
+                    onThemeClick={onThemeClick}
+                    onProfileClick={() => setIsProfileOpen(true)}
                     onWatchPartyClick={handleMobileWatchPartyNavigation}
                     isGuestCinema={isGuestCinema}
                 />
@@ -528,23 +549,53 @@ function AppContent() {
     );
 }
 
-function UserProfileGate() {
+function ActiveApplication({ theme, onThemeClick }: AppContentProps) {
+    return (
+        <RadioProvider>
+            <ChatProvider>
+                <WatchPartyProvider>
+                    <WatchPartyChatProvider>
+                        <AppContent theme={theme} onThemeClick={onThemeClick} />
+                    </WatchPartyChatProvider>
+                </WatchPartyProvider>
+            </ChatProvider>
+        </RadioProvider>
+    );
+}
+
+function UserProfileGate({ theme, onThemeClick }: AppContentProps) {
     const { hasProfile } = useUserProfile();
-    return hasProfile ? <AppContent /> : <UserProfileForm />;
+    useEffect(() => {
+        if (!hasProfile) socketService.disconnect();
+    }, [hasProfile]);
+
+    return hasProfile ? <ActiveApplication theme={theme} onThemeClick={onThemeClick} /> : <UserProfileForm />;
 }
 
 function App() {
+    const [theme, setTheme] = useState<Theme>(() => {
+        const saved = localStorage.getItem('theme');
+        return (saved as Theme) || 'youth';
+    });
+
+    useLayoutEffect(() => {
+        document.body.classList.remove('light-mode', 'youth-mode');
+        if (theme === 'light') document.body.classList.add('light-mode');
+        if (theme === 'youth') document.body.classList.add('youth-mode');
+        localStorage.setItem('theme', theme);
+    }, [theme]);
+
+    const cycleTheme = () => {
+        setTheme((currentTheme) => {
+            if (currentTheme === 'dark') return 'light';
+            if (currentTheme === 'light') return 'youth';
+            return 'dark';
+        });
+    };
+
     return (
         <UserProfileProvider>
-            <RadioProvider>
-                <ChatProvider>
-                    <WatchPartyProvider>
-                        <WatchPartyChatProvider>
-                            <UserProfileGate />
-                        </WatchPartyChatProvider>
-                    </WatchPartyProvider>
-                </ChatProvider>
-            </RadioProvider>
+            <UserProfileGate theme={theme} onThemeClick={cycleTheme} />
         </UserProfileProvider>
     );
 }
