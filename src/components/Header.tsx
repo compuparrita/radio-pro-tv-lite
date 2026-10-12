@@ -1,8 +1,7 @@
 import React, { useState } from 'react';
-import { Radio, MessageCircle, Antenna, Star, Monitor, ChevronDown, User, Menu } from 'lucide-react';
+import { Radio, MessageCircle, User, Menu, Search } from 'lucide-react';
 import { useChat } from '../context/ChatContext';
 import { useWatchParty } from '../context/WatchPartyContext';
-import { useRadio } from '../context/RadioContext';
 import WatchPartyModal from './WatchPartyModal';
 import { PanelShell } from './panels/PanelShell';
 
@@ -13,86 +12,22 @@ interface HeaderProps {
     onGlobalMenuClick: () => void;
     isGlobalMenuOpen: boolean;
     isGlobalMenuDisabled: boolean;
+    searchQuery: string;
+    onSearchChange: (value: string) => void;
+    onYouTubeSearch: () => void;
+    onGoogleSearch: () => void;
 }
 
-export const Header: React.FC<HeaderProps> = ({ onChatClick, onWatchPartyClick, onProfileClick, onGlobalMenuClick, isGlobalMenuOpen, isGlobalMenuDisabled }) => {
+export const Header: React.FC<HeaderProps> = ({ onChatClick, onWatchPartyClick, onProfileClick, onGlobalMenuClick, isGlobalMenuOpen, isGlobalMenuDisabled, searchQuery, onSearchChange, onYouTubeSearch, onGoogleSearch }) => {
     const { unreadCount, onlineListeners, connectionStatus } = useChat();
     const { room } = useWatchParty();
-    const { activeTab, setActiveTab, radioCategories, tvCategories, selectedCategory, setSelectedCategory } = useRadio();
     const [isWatchPartyOpen, setIsWatchPartyOpen] = useState(false);
-    const [activeMenu, setActiveMenu] = React.useState<'radios' | 'tv' | null>(null);
-    const [hoverProgressMenu, setHoverProgressMenu] = React.useState<'radios' | 'tv' | null>(null);
-    const closeTimeoutRef = React.useRef<number | null>(null);
-    const autoSelectTimeoutRef = React.useRef<number | null>(null);
-
-    const handleMouseEnter = (menu: 'radios' | 'tv') => {
-        // Limpiar timeouts de cierre pendientes
-        if (closeTimeoutRef.current) {
-            window.clearTimeout(closeTimeoutRef.current);
-            closeTimeoutRef.current = null;
-        }
-
-        // Iniciar indicador visual de progreso
-        setHoverProgressMenu(menu);
-
-        // Programar auto-activación a los 2 segundos (2000ms: Ojo, ahora es a 1s )
-        if (autoSelectTimeoutRef.current) {
-            window.clearTimeout(autoSelectTimeoutRef.current);
-        }
-
-        autoSelectTimeoutRef.current = window.setTimeout(() => {
-            if (menu === 'radios') {
-                setActiveTab('all');
-                setSelectedCategory('Todas');
-            } else if (menu === 'tv') {
-                setActiveTab('tv');
-                setSelectedCategory('Todas');
-            }
-            setActiveMenu(menu);
-            setHoverProgressMenu(null);
-            autoSelectTimeoutRef.current = null;
-        }, 1000);
-    };
-
-    const handleMouseLeave = () => {
-        // Cancelar la auto-activación de 3 segundos si el usuario retira el cursor antes
-        if (autoSelectTimeoutRef.current) {
-            window.clearTimeout(autoSelectTimeoutRef.current);
-            autoSelectTimeoutRef.current = null;
-        }
-        setHoverProgressMenu(null);
-
-        closeTimeoutRef.current = window.setTimeout(() => {
-            setActiveMenu(null);
-        }, 200);
-    };
-
-    React.useEffect(() => {
-        return () => {
-            if (closeTimeoutRef.current) window.clearTimeout(closeTimeoutRef.current);
-            if (autoSelectTimeoutRef.current) window.clearTimeout(autoSelectTimeoutRef.current);
-        };
-    }, []);
-
-    // Close menu when clicking outside
-    React.useEffect(() => {
-        const handleClickOutside = () => {
-            setActiveMenu(null);
-            setHoverProgressMenu(null);
-            if (autoSelectTimeoutRef.current) {
-                window.clearTimeout(autoSelectTimeoutRef.current);
-                autoSelectTimeoutRef.current = null;
-            }
-        };
-        window.addEventListener('click', handleClickOutside);
-        return () => window.removeEventListener('click', handleClickOutside);
-    }, []);
-
+    const primaryActionClass = 'btn btn-primary btn-sm text-white';
     return (
         <header className="w-full z-[100] lg:bg-[var(--dark-bg)]/95 lg:backdrop-blur-md border-b border-white/5 py-4 lg:py-3 transition-colors duration-300">
             <div className="max-w-[1700px] mx-auto flex flex-col items-center lg:flex-row lg:justify-between lg:items-center px-[10px] gap-4">
                 {/* Logo & Title */}
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-3 shrink-0">
                     <button
                         aria-expanded={isGlobalMenuOpen}
                         aria-label={isGlobalMenuOpen ? 'Cerrar menú global' : 'Abrir menú global'}
@@ -107,160 +42,34 @@ export const Header: React.FC<HeaderProps> = ({ onChatClick, onWatchPartyClick, 
                     <h1 className="text-2xl md:text-3xl lg:text-2xl font-black tracking-tighter text-transparent bg-clip-text bg-gradient-to-r from-[var(--primary-color)] via-[var(--secondary-color)] to-[var(--accent-color)]">
                         <span className="flex items-center gap-2">
                             <Radio size={28} className="shrink-0 text-[var(--primary-color)]" />
-                            <span>TV Radio <span className="text-[var(--text-primary)]">Streaming Pro</span></span>
+                            <span className="reading-text">TV Radio <span className="text-[var(--text-primary)]">Streaming Pro</span></span>
                         </span>
                        {/* <span className="block pl-9 text-[10px] font-semibold tracking-normal text-[var(--text-secondary)]">TV en vivo • Radio • YouTube • Cine compartido</span> */}
                     </h1>
                 </div>
-                {/* Navigation Filters - Desktop Only */}
-                <div className="hidden lg:flex items-center bg-white/5 p-1 border border-white/5 flex-shrink-0">
-                    <div
-                        className="relative"
-                        onClick={(e) => e.stopPropagation()}
-                        onMouseLeave={handleMouseLeave}
-                        onMouseEnter={() => {
-                            if (closeTimeoutRef.current) {
-                                window.clearTimeout(closeTimeoutRef.current);
-                                closeTimeoutRef.current = null;
-                            }
-                        }}
-                    >
-                        <button
-                            onMouseEnter={() => handleMouseEnter('radios')}
-                            onClick={() => {
-                                if (autoSelectTimeoutRef.current) {
-                                    window.clearTimeout(autoSelectTimeoutRef.current);
-                                    autoSelectTimeoutRef.current = null;
-                                }
-                                setHoverProgressMenu(null);
-                                if (activeMenu === 'radios') {
-                                    setActiveMenu(null);
-                                } else {
-                                    setActiveTab('all');
-                                    // If already in 'all', clicking acts as a reset for the filter
-                                    if (activeTab === 'all') setSelectedCategory('Todas');
-                                    setActiveMenu('radios');
-                                }
-                            }}
-                            className={`relative overflow-hidden flex items-center gap-2 px-2.5 py-1.5 transition-all font-bold text-[10px] md:text-xs uppercase tracking-wider whitespace-nowrap ${activeTab === 'all' ? 'bg-[var(--primary-color)] text-white shadow-[0_0_15px_rgba(139,92,246,0.3)]' : 'text-[var(--text-secondary)] hover:text-white hover:bg-white/5'}`}
-                        >
-                            {/* Barra de progreso de 3 segundos al posar el mouse */}
-                            {hoverProgressMenu === 'radios' && (
-                                <span className="absolute bottom-0 left-0 top-0 bg-white/20 pointer-events-none animate-header-progress" />
-                            )}
-                            <Antenna size={15} className="relative z-10" />
-                            <span className="relative z-10">{activeTab === 'all' && selectedCategory !== 'Todas' ? selectedCategory : 'Radios'}</span>
-                            <ChevronDown size={14} className={`relative z-10 transition-transform duration-300 ${activeMenu === 'radios' ? 'rotate-180 text-white/70' : 'text-white/30'}`} />
-                        </button>
-
-                        {/* Dropdown Menu */}
-                        {activeMenu === 'radios' && (
-                            <div className="absolute top-full left-0 pt-1 min-w-[100px] w-max bg-transparent z-50 animate-in fade-in slide-in-from-top-2 duration-200">
-                                <div className="bg-[var(--dark-surface)] border border-white/10 shadow-2xl py-2">
-                                    {radioCategories.map(cat => (
-                                        <button
-                                            key={cat}
-                                            onClick={(e) => {
-                                                e.stopPropagation();
-                                                setActiveTab('all');
-                                                setSelectedCategory(cat);
-                                                setActiveMenu(null);
-                                            }}
-                                            className={`block w-full text-left px-3 py-2 text-[11px] font-bold uppercase tracking-widest whitespace-nowrap transition-colors hover:bg-white/5 ${selectedCategory === cat && activeTab === 'all' ? 'text-[var(--primary-color)]' : 'text-[var(--text-secondary)] hover:text-white'}`}
-                                        >
-                                            {cat}
-                                        </button>
-                                    ))}
-                                </div>
-                            </div>
-                        )}
-                    </div>
-
-                    <button
-                        onClick={() => {
-                            setActiveTab('favorites');
-                            setSelectedCategory('Todas');
-                        }}
-                        className={`flex items-center gap-2 px-2.5 py-1.5 transition-all font-bold text-[10px] md:text-xs uppercase tracking-wider whitespace-nowrap ${activeTab === 'favorites' ? 'bg-[var(--primary-color)] text-white shadow-[0_0_15px_rgba(139,92,246,0.3)]' : 'text-[var(--text-secondary)] hover:text-white hover:bg-white/5'}`}
-                    >
-                        <Star size={15} className={`${activeTab === 'favorites' ? 'fill-[#f59e0b] text-[#f59e0b]' : 'text-[#f59e0b]'}`} />
-                        <span>Favoritos</span>
-                    </button>
-
-                    <div
-                        className="relative"
-                        onClick={(e) => e.stopPropagation()}
-                        onMouseLeave={handleMouseLeave}
-                        onMouseEnter={() => {
-                            if (closeTimeoutRef.current) {
-                                window.clearTimeout(closeTimeoutRef.current);
-                                closeTimeoutRef.current = null;
-                            }
-                        }}
-                    >
-                        <button
-                            onMouseEnter={() => handleMouseEnter('tv')}
-                            onClick={() => {
-                                if (autoSelectTimeoutRef.current) {
-                                    window.clearTimeout(autoSelectTimeoutRef.current);
-                                    autoSelectTimeoutRef.current = null;
-                                }
-                                setHoverProgressMenu(null);
-                                if (activeMenu === 'tv') {
-                                    setActiveMenu(null);
-                                } else {
-                                    setActiveTab('tv');
-                                    // If already in 'tv', clicking acts as a reset for the filter
-                                    if (activeTab === 'tv') setSelectedCategory('Todas');
-                                    setActiveMenu('tv');
-                                }
-                            }}
-                            className={`relative overflow-hidden flex items-center gap-2 px-2.5 py-1.5 transition-all font-bold text-[10px] md:text-xs uppercase tracking-wider whitespace-nowrap group ${activeTab === 'tv' ? 'bg-[var(--primary-color)] text-white shadow-[0_0_15px_rgba(139,92,246,0.3)]' : 'text-[var(--text-secondary)] hover:text-white hover:bg-white/5'}`}
-                        >
-                            {/* Barra de progreso de 3 segundos al posar el mouse */}
-                            {hoverProgressMenu === 'tv' && (
-                                <span className="absolute bottom-0 left-0 top-0 bg-white/20 pointer-events-none animate-header-progress" />
-                            )}
-                            <Monitor size={15} className="relative z-10" />
-                            <span className="relative z-10">{activeTab === 'tv' && selectedCategory !== 'Todas' ? selectedCategory : 'TV & YT'}</span>
-                            <ChevronDown size={14} className={`relative z-10 transition-transform duration-300 ${activeMenu === 'tv' ? 'rotate-180 text-white/70' : 'text-white/30'}`} />
-
-                        </button>
-
-                        {/* Dropdown Menu */}
-                        {activeMenu === 'tv' && (
-                            <div className="absolute top-full left-0 pt-1 min-w-[100px] w-max bg-transparent z-50 animate-in fade-in slide-in-from-top-2 duration-200">
-                                <div className="bg-[var(--dark-surface)] border border-white/10 shadow-2xl py-2">
-                                    {tvCategories.map(cat => (
-                                        <button
-                                            key={cat}
-                                            onClick={(e) => {
-                                                e.stopPropagation();
-                                                setActiveTab('tv');
-                                                setSelectedCategory(cat);
-                                                setActiveMenu(null);
-                                            }}
-                                            className={`block w-full text-left px-3 py-2 text-[11px] font-bold uppercase tracking-widest whitespace-nowrap transition-colors hover:bg-white/5 ${selectedCategory === cat && activeTab === 'tv' ? 'text-[var(--primary-color)]' : 'text-[var(--text-secondary)] hover:text-white'}`}
-                                        >
-                                            {cat}
-                                        </button>
-                                    ))}
-                                </div>
-                            </div>
-                        )}
+                {/* Global Search */}
+                <div className="relative w-full min-w-0 max-w-xl lg:w-auto lg:min-w-[180px] lg:flex-1 lg:mx-4">
+                    <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-secondary)]" />
+                    <input type="text" placeholder="Emisoras o en YouTube..." value={searchQuery}
+                        onChange={(e) => onSearchChange(e.target.value)}
+                        onKeyDown={(e) => { if (e.key === 'Enter' && searchQuery.trim()) onYouTubeSearch(); }}
+                        className="w-full min-w-0 bg-[var(--dark-surface)] border border-[var(--dark-border)] rounded-none py-2.5 pl-10 pr-20 focus:outline-none focus:border-[var(--primary-color)] transition-colors text-sm" />
+                    <div className="absolute right-1.5 top-1/2 -translate-y-1/2 flex gap-1">
+                        <button onClick={onYouTubeSearch} className="px-2.5 py-1 bg-red-600 hover:bg-red-700 text-white text-xs transition-colors" title="Buscar en YouTube (Interno)">YT</button>
+                        <button onClick={onGoogleSearch} className="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white text-xs transition-colors" title="Buscar en Google">G</button>
                     </div>
                 </div>
 
                 {/* Actions Section - Desktop Only */}
-                <div className="hidden lg:flex items-center gap-4">
+                <div className="hidden lg:flex items-center gap-4 shrink-0">
                     {/* Chat Button */}
                     <button
                         onClick={onChatClick}
-                        className="btn btn-primary btn-sm relative"
+                        className={`${primaryActionClass} relative`}
                         title="Chatear online"
                     >
                         <MessageCircle size={18} />
-                        <span className="tracking-wider">Chat</span>
+                        <span className="tracking-wider reading-text">Chat</span>
                         {/* Online count pill */}
                         <span className="flex items-center gap-1 bg-black/25 rounded-full px-1.5 py-0.5 text-[10px] font-bold leading-none">
                             <span className={`w-1.5 h-1.5 rounded-full inline-block ${
@@ -287,19 +96,19 @@ export const Header: React.FC<HeaderProps> = ({ onChatClick, onWatchPartyClick, 
                                 setIsWatchPartyOpen(true);
                             }
                         }}
-                        className="btn btn-secondary btn-sm"
+                        className={primaryActionClass}
                         type="button"
                     >
-                        <span className="tracking-wider">{room ? '🎞 Sala' : '🎬 Cine'}</span>
+                        <span className="tracking-wider reading-text">{room ? '🎞 Sala' : '🎬 Cine'}</span>
                     </button>
 					<button
                     onClick={() => onProfileClick?.()}
-                    className="btn btn-secondary btn-sm"
+                    className={primaryActionClass}
                     title="Administrar perfil local"
                     type="button"
                 >
                     <User size={16} />
-                    <span className="tracking-wider">Perfil</span>
+                    <span className="tracking-wider reading-text">Perfil</span>
                 </button>
                 </div>
             </div>

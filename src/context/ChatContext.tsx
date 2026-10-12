@@ -145,9 +145,16 @@ function showDesktopNotification(senderName: string, messageText: string, onOpen
 }
 
 const CHAT_CACHE_KEY = 'chatCachedMessages';
-const CHAT_CACHED_AT_KEY = 'chatCachedAt';
-const CHAT_CACHE_TTL = 5 * 60 * 1000; // 5 minutos de validez para el snapshot
 const MAX_CACHED_MESSAGES = 40; // Mantener un snapshot seguro y acotado
+
+function mergeChatMessages(groups: ChatMessage[][]): ChatMessage[] {
+    const byId = new Map<string, ChatMessage>();
+    for (const message of groups.flat()) {
+        const previous = byId.get(message.id);
+        if (!previous || (previous.isPending && !message.isPending)) byId.set(message.id, message);
+    }
+    return Array.from(byId.values()).sort((a, b) => a.timestamp - b.timestamp);
+}
 
 function saveChatMessagesToCache(msgs: ChatMessage[]) {
     if (typeof window === 'undefined') return;
@@ -161,7 +168,6 @@ function saveChatMessagesToCache(msgs: ChatMessage[]) {
             return m;
         });
         localStorage.setItem(CHAT_CACHE_KEY, JSON.stringify(sanitized));
-        localStorage.setItem(CHAT_CACHED_AT_KEY, Date.now().toString());
     } catch (e) {
         console.warn('[ChatContext] Error al guardar caché local de mensajes:', e);
     }
@@ -470,43 +476,37 @@ export const ChatProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     // Conectar a Supabase (Carga de Historial Cache-First + Realtime + Presencia)
     useEffect(() => {
         let isMounted = true;
+        let historyFailed = false;
+        let historyStarted = false;
         setConnectionStatus('connecting');
 
-        const cachedAtStr = localStorage.getItem(CHAT_CACHED_AT_KEY);
-        const cachedAt = cachedAtStr ? Number(cachedAtStr) : 0;
-        const cachedMessages = loadChatMessagesFromCache();
-        const isCacheFresh = cachedAt > 0 && (Date.now() - cachedAt < CHAT_CACHE_TTL) && cachedMessages.length > 0;
-
-        // 1. Cargar historial: Usar caché local si está vigente, o consultar Supabase si expiró
-        if (isCacheFresh) {
-            console.log('[ChatContext] Historial de chat cargado desde caché local válido (TTL vigente). Omitiendo GET Supabase.');
-            setConnectionStatus('connected');
-            flushPendingMessages();
-        } else {
+        // Subscribe before the snapshot, then reconcile both sources to close the initial-load gap.
+        const loadHistory = () => {
+            if (historyStarted) return;
+            historyStarted = true;
             fetchChatHistoryFromCloud(50)
                 .then((history) => {
-                    if (isMounted) {
-                        setMessages((prev) => {
-                            // Conservar mensajes locales pendientes de envío que aún no están en la nube
-                            const localPending = prev.filter((m) => m.isPending);
-                            const merged = [...history];
-                            for (const lp of localPending) {
-                                if (!merged.some((m) => m.id === lp.id)) {
-                                    merged.push(lp);
-                                }
-                            }
-                            saveChatMessagesToCache(merged);
-                            return merged;
-                        });
-                        setConnectionStatus('connected');
-                        flushPendingMessages();
-                    }
+                    if (!isMounted) return;
+                    historyFailed = false;
+                    setMessages((prev) => {
+                        const merged = mergeChatMessages([history, prev]);
+                        const pending = merged.filter((message) => message.isPending);
+                        const recent = merged.filter((message) => !message.isPending).slice(-50);
+                        const reconciled = mergeChatMessages([recent, pending]);
+                        saveChatMessagesToCache(reconciled);
+                        return reconciled;
+                    });
+                    setConnectionStatus('connected');
+                    flushPendingMessages();
                 })
                 .catch((err) => {
                     console.error('Error cargando historial de chat de Supabase:', err);
-                    if (isMounted) setConnectionStatus('error');
+                    if (isMounted) {
+                        historyFailed = true;
+                        setConnectionStatus('error');
+                    }
                 });
-        }
+        };
 
         // 2. Suscribirse a nuevos mensajes en tiempo real
         const myUserId = getUserId(userIdentity);
@@ -517,7 +517,7 @@ export const ChatProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
                 setMessages((prev) => {
                     if (prev.some((m) => m.id === newMsg.id)) return prev;
-                    const updated = [...prev, newMsg];
+                    const updated = mergeChatMessages([prev, [newMsg]]);
                     saveChatMessagesToCache(updated);
                     return updated;
                 });
@@ -558,8 +558,10 @@ export const ChatProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 if (!isMounted) return;
                 if (status === 'CLOSED' || status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
                     setConnectionStatus('disconnected');
+                    loadHistory();
                 } else if (status === 'SUBSCRIBED') {
-                    setConnectionStatus('connected');
+                    loadHistory();
+                    if (!historyFailed) setConnectionStatus('connected');
                 }
             }
         );
@@ -692,7 +694,7 @@ export const ChatProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         // Inserción optimista para respuesta instantánea en UI
         setMessages((prev) => {
             if (prev.some((m) => m.id === chatMessage.id)) return prev;
-            return [...prev, chatMessage];
+            return mergeChatMessages([prev, [chatMessage]]);
         });
 
         // ── Si no hay conexión o estamos desconectados ──────────
@@ -733,7 +735,6 @@ export const ChatProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         localStorage.setItem('chatClearedAt', now.toString());
         localStorage.removeItem('chatDeletedIds');
         localStorage.removeItem(CHAT_CACHE_KEY);
-        localStorage.removeItem(CHAT_CACHED_AT_KEY);
         localStorage.setItem('lastReadMessageCount', '0');
         setUnreadCount(0);
         setMessages([]);

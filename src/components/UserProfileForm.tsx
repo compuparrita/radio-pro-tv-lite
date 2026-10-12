@@ -92,17 +92,17 @@ export function UserProfileForm({ mode = 'setup', variant = 'page', onSaved, onC
                     </div>
                 )}
                 <h1 className={isCompact ? 'text-lg font-semibold tracking-tight text-[var(--text-primary)]' : 'text-2xl font-semibold tracking-tight text-[var(--text-primary)] sm:text-3xl'}>
-                    {isEditing ? 'Editar perfil' : 'Centro Multimedia'}
+                    <span className="reading-text">{isEditing ? 'Editar perfil' : 'Centro Multimedia'}</span>
                 </h1>
                 {!isEditing && (
                     <p className="mt-2 text-sm leading-6 text-[var(--text-secondary)]">
-                        Bienvenido. Tu perfil se utiliza para conversar, compartir salas y conservar tu actividad en este dispositivo.
+                        <span className="reading-text">Bienvenido. Tu perfil se utiliza para conversar, compartir salas y conservar tu actividad en este dispositivo.</span>
                     </p>
                 )}
 
                 <div className={`${isCompact ? 'mt-4 space-y-4' : 'mt-7 space-y-5'}`}>
                     <label className="block space-y-2 text-sm font-medium text-[var(--text-primary)]">
-                        Nombre <span className="text-[var(--primary-color)]">*</span>
+                        <span className="reading-text">Nombre</span> <span className="text-[var(--primary-color)]">*</span>
                         <span className="relative block">
                             <User aria-hidden="true" className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[var(--text-secondary)]" size={17} />
                             <input
@@ -120,7 +120,7 @@ export function UserProfileForm({ mode = 'setup', variant = 'page', onSaved, onC
                     </label>
 
                     <label className="block space-y-2 text-sm font-medium text-[var(--text-primary)]">
-                        Teléfono <span className="font-normal text-[var(--text-secondary)]">(opcional)</span>
+                        <span className="reading-text">Teléfono</span> <span className="reading-text font-normal text-[var(--text-secondary)]">(opcional)</span>
                         <input
                             aria-describedby={phoneError ? 'profile-phone-error' : 'profile-phone-hint'}
                             aria-invalid={Boolean(phoneError)}
@@ -138,9 +138,9 @@ export function UserProfileForm({ mode = 'setup', variant = 'page', onSaved, onC
                             value={phone}
                         />
                         {phoneError ? (
-                            <span className="block text-xs font-normal text-[var(--danger-color)]" id="profile-phone-error" role="alert">{phoneError}</span>
+                            <span className="block text-xs font-normal text-[var(--danger-color)]" id="profile-phone-error" role="alert"><span className="reading-text">{phoneError}</span></span>
                         ) : (
-                            <span className="block text-xs font-normal text-[var(--text-secondary)]" id="profile-phone-hint">Costa Rica: +506 y 8 dígitos</span>
+                            <span className="block text-xs font-normal text-[var(--text-secondary)]" id="profile-phone-hint"><span className="reading-text">Costa Rica: +506 y 8 dígitos</span></span>
                         )}
                     </label>
 
@@ -152,12 +152,12 @@ export function UserProfileForm({ mode = 'setup', variant = 'page', onSaved, onC
                                 onChange={(event) => setRememberDevice(event.target.checked)}
                                 type="checkbox"
                             />
-                            Recordar este dispositivo
+                            <span className="reading-text">Recordar este dispositivo</span>
                         </label>
                     )}
                 </div>
 
-                {error && <p className="mt-4 border-l-2 border-[var(--danger-color)] pl-3 text-sm text-[var(--danger-color)]" role="alert">{error}</p>}
+                {error && <p className="mt-4 border-l-2 border-[var(--danger-color)] pl-3 text-sm text-[var(--danger-color)]" role="alert"><span className="reading-text">{error}</span></p>}
 
                 <div className={`${isCompact ? 'mt-5' : 'mt-7'} flex gap-2`}>
                     {isCompact && onCancel && (
@@ -179,7 +179,7 @@ export function UserProfileForm({ mode = 'setup', variant = 'page', onSaved, onC
 
                 {!isEditing && !isCompact && (
                     <p className="mt-5 text-center text-xs leading-5 text-[var(--text-secondary)]">
-                        El teléfono se utiliza únicamente como identificador para historial y favoritos.
+                        <span className="reading-text">El teléfono se utiliza únicamente como identificador para historial y favoritos.</span>
                     </p>
                 )}
             </form>

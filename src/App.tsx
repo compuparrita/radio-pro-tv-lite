@@ -18,6 +18,7 @@ import { PanelHost } from './components/panels/PanelHost';
 import { UserProfileForm } from './components/UserProfileForm';
 import { GuestCinemaLayout } from './components/GuestCinemaLayout';
 import { getWatchPartySessionTitle } from './utils/watchPartySessionTitle';
+import type { TextSize } from './components/GlobalMenu';
 
 const ROOM_CODE_PATTERN = /^[A-HJ-NP-Z2-9]{6}$/;
 type Theme = 'dark' | 'light' | 'youth';
@@ -25,6 +26,8 @@ type Theme = 'dark' | 'light' | 'youth';
 interface AppContentProps {
     theme: Theme;
     onThemeClick: () => void;
+    textSize: TextSize;
+    onTextSizeChange: (size: TextSize) => void;
 }
 
 function clearRoomInviteParameter() {
@@ -33,7 +36,7 @@ function clearRoomInviteParameter() {
     window.history.replaceState(window.history.state, '', `${url.pathname}${url.search}${url.hash}`);
 }
 
-function AppContent({ theme, onThemeClick }: AppContentProps) {
+function AppContent({ theme, onThemeClick, textSize, onTextSizeChange }: AppContentProps) {
     const { room, roomCode, isHost, isConnected } = useWatchParty();
     const [isManagerOpen, setIsManagerOpen] = useState(false);
     const [isChatOpen, setIsChatOpen] = useState(false);
@@ -53,6 +56,8 @@ function AppContent({ theme, onThemeClick }: AppContentProps) {
     const [isResizing, setIsResizing] = useState(false);
     const [headerHeight, setHeaderHeight] = useState(0);
     const [isDesktop, setIsDesktop] = useState(typeof window !== 'undefined' ? window.innerWidth >= 1024 : true);
+    const [stationSearchQuery, setStationSearchQuery] = useState('');
+    const searchYouTubeRef = useRef<((query: string) => void) | null>(null);
     const headerRef = useRef<HTMLDivElement>(null);
 
     // Precise header height tracking for universal sticky offset
@@ -397,6 +402,10 @@ function AppContent({ theme, onThemeClick }: AppContentProps) {
                     onGlobalMenuClick={() => setIsGlobalMenuOpen((open) => !open)}
                     isGlobalMenuOpen={isGlobalMenuOpen}
                     isGlobalMenuDisabled={isGlobalMenuDisabled}
+                    searchQuery={stationSearchQuery}
+                    onSearchChange={setStationSearchQuery}
+                    onYouTubeSearch={() => searchYouTubeRef.current?.(stationSearchQuery)}
+                    onGoogleSearch={() => window.open(`https://www.google.com/search?q=${encodeURIComponent(stationSearchQuery)}`, '_blank')}
                 />
             </div>
 
@@ -430,13 +439,13 @@ function AppContent({ theme, onThemeClick }: AppContentProps) {
                         {room && isHost && (
                             <h1 className="mb-3 text-base font-bold tracking-wide sm:text-lg">
                                 <span aria-hidden="true">🎬 </span>
-                                {getWatchPartySessionTitle(room.id, room.createdAt)}
+                                <span className="reading-text">{getWatchPartySessionTitle(room.id, room.createdAt)}</span>
                             </h1>
                         )}
                         <Player />
                         {/* On mobile/tablet vertical, the list is part of the same parent as the player */}
                         <div className="lg:hidden mt-6 mobile-list-container">
-                            <StationList />
+                            <StationList filter={stationSearchQuery} onFilterChange={setStationSearchQuery} onSearchHandlerReady={(handler) => { searchYouTubeRef.current = handler; }} isSearchActive={!isDesktop} />
                         </div>
                     </div>
 
@@ -474,13 +483,13 @@ function AppContent({ theme, onThemeClick }: AppContentProps) {
                             minWidth: 0
                         }}
                     >
-                        <StationList />
+                        <StationList filter={stationSearchQuery} onFilterChange={setStationSearchQuery} onSearchHandlerReady={(handler) => { searchYouTubeRef.current = handler; }} isSearchActive={isDesktop} />
                     </div>
                 </div>
 
                 <div className="mt-20 md:mt-16 text-[var(--text-secondary)] text-sm mb-4 px-4 footer-container">
                     <div className="flex flex-col md:flex-row items-center justify-center gap-6 md:gap-8 border-t border-[var(--dark-border)] pt-8 md:pt-6">
-                        <p className="opacity-80">© 2025 Radio Streaming Pro - Versión ti8ocb</p>
+                        <p className="opacity-80"><span className="reading-text">© 2025 Radio Streaming Pro - Versión ti8ocb</span></p>
                     </div>
                 </div>
             </div>
@@ -527,6 +536,8 @@ function AppContent({ theme, onThemeClick }: AppContentProps) {
                         onClose: () => setIsGlobalMenuOpen(false),
                         theme,
                         onThemeClick,
+                        textSize,
+                        onTextSizeChange,
                         onOpenHelp: () => {
                             setIsGlobalMenuOpen(false);
                             setIsAppHelpOpen(true);
@@ -549,13 +560,18 @@ function AppContent({ theme, onThemeClick }: AppContentProps) {
     );
 }
 
-function ActiveApplication({ theme, onThemeClick }: AppContentProps) {
+function ActiveApplication({ theme, onThemeClick, textSize, onTextSizeChange }: AppContentProps) {
     return (
         <RadioProvider>
             <ChatProvider>
                 <WatchPartyProvider>
                     <WatchPartyChatProvider>
-                        <AppContent theme={theme} onThemeClick={onThemeClick} />
+                        <AppContent
+                            theme={theme}
+                            onThemeClick={onThemeClick}
+                            textSize={textSize}
+                            onTextSizeChange={onTextSizeChange}
+                        />
                     </WatchPartyChatProvider>
                 </WatchPartyProvider>
             </ChatProvider>
@@ -563,19 +579,36 @@ function ActiveApplication({ theme, onThemeClick }: AppContentProps) {
     );
 }
 
-function UserProfileGate({ theme, onThemeClick }: AppContentProps) {
+function UserProfileGate({ theme, onThemeClick, textSize, onTextSizeChange }: AppContentProps) {
     const { hasProfile } = useUserProfile();
     useEffect(() => {
         if (!hasProfile) socketService.disconnect();
     }, [hasProfile]);
 
-    return hasProfile ? <ActiveApplication theme={theme} onThemeClick={onThemeClick} /> : <UserProfileForm />;
+    return hasProfile
+        ? <ActiveApplication
+            theme={theme}
+            onThemeClick={onThemeClick}
+            textSize={textSize}
+            onTextSizeChange={onTextSizeChange}
+        />
+        : <UserProfileForm />;
 }
 
 function App() {
     const [theme, setTheme] = useState<Theme>(() => {
         const saved = localStorage.getItem('theme');
         return (saved as Theme) || 'youth';
+    });
+    const [textSize, setTextSize] = useState<TextSize>(() => {
+        try {
+            const saved = localStorage.getItem('textSize');
+            if (saved === '1') return 1;
+            if (saved === '3') return 3;
+            return 2;
+        } catch {
+            return 2;
+        }
     });
 
     useLayoutEffect(() => {
@@ -584,6 +617,15 @@ function App() {
         if (theme === 'youth') document.body.classList.add('youth-mode');
         localStorage.setItem('theme', theme);
     }, [theme]);
+
+    useLayoutEffect(() => {
+        document.documentElement.dataset.textSize = String(textSize);
+        try {
+            localStorage.setItem('textSize', String(textSize));
+        } catch {
+            // Keep the current selection active for this session if storage is unavailable.
+        }
+    }, [textSize]);
 
     const cycleTheme = () => {
         setTheme((currentTheme) => {
@@ -595,7 +637,12 @@ function App() {
 
     return (
         <UserProfileProvider>
-            <UserProfileGate theme={theme} onThemeClick={cycleTheme} />
+            <UserProfileGate
+                theme={theme}
+                onThemeClick={cycleTheme}
+                textSize={textSize}
+                onTextSizeChange={setTextSize}
+            />
         </UserProfileProvider>
     );
 }

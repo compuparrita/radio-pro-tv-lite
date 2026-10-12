@@ -78,17 +78,17 @@ const HelpModal: React.FC<HelpModalHostProps> = ({ isOpen, onClose, PanelShellCo
                                 </div>
                                 <div className="flex-1 min-w-0">
                                     <div className="flex items-center justify-between gap-2 mb-1.5 flex-wrap">
-                                        <h3 className="font-bold text-sm sm:text-base text-white">{section.title}</h3>
+                                        <h3 className="font-bold text-sm sm:text-base text-white"><span className="reading-text">{section.title}</span></h3>
                                         <span className="text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full bg-white/5 border border-white/10 text-[var(--text-secondary)]">
                                             {section.badge}
                                         </span>
                                     </div>
                                     <p className="text-xs sm:text-sm text-[var(--text-secondary)] leading-relaxed mb-3">
-                                        {section.content}
+                                        <span className="reading-text">{section.content}</span>
                                     </p>
                                     <div className="text-[11px] font-medium text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2.5 py-1.5 rounded-lg flex items-center gap-1.5">
                                         <span className="font-bold uppercase tracking-wider text-[10px]">Tip:</span>
-                                        <span>{section.tip}</span>
+                                        <span className="reading-text">{section.tip}</span>
                                     </div>
                                 </div>
                             </div>

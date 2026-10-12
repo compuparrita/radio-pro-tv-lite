@@ -20,6 +20,7 @@ Cliente o ventana desktop minimalista, wide/rectangular, centrada en el contenid
 - Ofrecer controles mínimos: inicialmente play/pause y los estrictamente necesarios.
 - Mantener el contenido como foco principal.
 - Reutilizar la tecnología WatchParty existente cuando sea conveniente.
+- La dirección de producto a largo plazo es una ventana compacta centrada en el vídeo, con controles externos de reproducción, chat integrado y herramientas de logística de WatchParty.
 
 ## Decisiones cerradas
 

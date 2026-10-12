@@ -97,7 +97,7 @@ const SortableStationItem = ({
             <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2">
                     <span className={`font-bold truncate text-xs max-w-[120px] sm:max-w-[300px] ${isCurrent ? 'text-[var(--primary-color)]' : isEditing ? 'text-blue-400' : ''}`}>
-                        {station.name}
+                        <span className="reading-text">{station.name}</span>
                     </span>
                     <div className="flex items-center gap-1">
                         {isCurrent && (
@@ -116,7 +116,7 @@ const SortableStationItem = ({
                     </div>
                 </div>
                 <div className="text-[12px] text-cyan-500 truncate font-mono opacity-60 mt-0.5">
-                    {station.iframeUrl ? 'IFRAME MODE' : station.url}
+                    <span className="reading-text">{station.iframeUrl ? 'IFRAME MODE' : station.url}</span>
                 </div>
             </div>
 
@@ -409,7 +409,7 @@ export const StationManager: React.FC<StationManagerProps> = ({ isOpen, onClose 
                             <div className="p-1 bg-[var(--primary-color)]/20 text-[var(--primary-color)]">
                                 <Save size={18} />
                             </div>
-                            Gestionar Emisoras
+                            <span className="reading-text">Gestionar Emisoras</span>
                         </h2>
                         <span className="hidden sm:inline-flex items-center gap-1 text-[10px] text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded-full font-semibold">
                             <Cloud size={12} /> Supabase Cloud
@@ -439,8 +439,8 @@ export const StationManager: React.FC<StationManagerProps> = ({ isOpen, onClose 
                                         <Sparkles size={20} />
                                     </div>
                                     <div>
-                                        <h3 className="font-bold text-base text-white">Guía del Gestor de Emisoras</h3>
-                                        <p className="text-xs text-[var(--text-secondary)]">Sincronización en la nube y tipos de stream</p>
+                                        <h3 className="font-bold text-base text-white"><span className="reading-text">Guía del Gestor de Emisoras</span></h3>
+                                        <p className="text-xs text-[var(--text-secondary)]"><span className="reading-text">Sincronización en la nube y tipos de stream</span></p>
                                     </div>
                                 </div>
                                 <button
@@ -454,36 +454,36 @@ export const StationManager: React.FC<StationManagerProps> = ({ isOpen, onClose 
                             <div className="p-4 sm:p-5 overflow-y-auto space-y-3.5 custom-scrollbar flex-1 text-xs sm:text-sm">
                                 <div className="p-3.5 rounded-xl bg-white/[0.03] border border-white/5 space-y-1.5">
                                     <div className="flex items-center gap-2 font-bold text-emerald-400 text-xs uppercase tracking-wider">
-                                        <Cloud size={14} /> Sincronización Automática
+                                        <Cloud size={14} /> <span className="reading-text">Sincronización Automática</span>
                                     </div>
-                                    <p className="text-[var(--text-secondary)] leading-relaxed">
+                                    <p className="reading-text text-[var(--text-secondary)] leading-relaxed">
                                         Cualquier emisora que agregues, edites, borres o reordenes se sincroniza de inmediato con <strong>Supabase</strong>. Todos los oyentes y dispositivos verán los cambios en tiempo real.
                                     </p>
                                 </div>
 
                                 <div className="p-3.5 rounded-xl bg-white/[0.03] border border-white/5 space-y-1.5">
                                     <div className="flex items-center gap-2 font-bold text-blue-400 text-xs uppercase tracking-wider">
-                                        <Music size={14} /> Emisoras de Radio (Audio)
+                                        <Music size={14} /> <span className="reading-text">Emisoras de Radio (Audio)</span>
                                     </div>
-                                    <p className="text-[var(--text-secondary)] leading-relaxed">
+                                    <p className="reading-text text-[var(--text-secondary)] leading-relaxed">
                                         Pega la URL del stream de audio (.mp3, .aac o enlace Icecast/Shoutcast). Si el stream tiene bloqueo de navegador (Mixed Content o CORS), activa la casilla <strong>"Usar Servidor Proxy"</strong>.
                                     </p>
                                 </div>
 
                                 <div className="p-3.5 rounded-xl bg-white/[0.03] border border-white/5 space-y-1.5">
                                     <div className="flex items-center gap-2 font-bold text-red-400 text-xs uppercase tracking-wider">
-                                        <Monitor size={14} /> Canales de Televisión (Video)
+                                        <Monitor size={14} /> <span className="reading-text">Canales de Televisión (Video)</span>
                                     </div>
-                                    <p className="text-[var(--text-secondary)] leading-relaxed">
+                                    <p className="reading-text text-[var(--text-secondary)] leading-relaxed">
                                         Puedes usar enlaces directos HLS (<strong>.m3u8</strong>), videos o transmisiones de <strong>YouTube</strong>, o reproductores web embebidos (<strong>Iframes</strong>).
                                     </p>
                                 </div>
 
                                 <div className="p-3.5 rounded-xl bg-white/[0.03] border border-white/5 space-y-1.5">
                                     <div className="flex items-center gap-2 font-bold text-amber-400 text-xs uppercase tracking-wider">
-                                        <Menu size={14} /> Reordenar Lista
+                                        <Menu size={14} /> <span className="reading-text">Reordenar Lista</span>
                                     </div>
-                                    <p className="text-[var(--text-secondary)] leading-relaxed">
+                                    <p className="reading-text text-[var(--text-secondary)] leading-relaxed">
                                         Usa el icono de tres barras a la derecha de cada emisora en la lista para arrastrarla y colocarla en el orden que prefieras.
                                     </p>
                                 </div>
@@ -514,7 +514,7 @@ export const StationManager: React.FC<StationManagerProps> = ({ isOpen, onClose 
                             <div className="flex items-center justify-between mb-2">
                                 <h3 className="text-sm font-bold flex items-center gap-2">
                                     {editingId ? <Edit2 size={16} className="text-[var(--secondary-color)]" /> : <Plus size={16} className="text-[var(--primary-color)]" />}
-                                    {editingId ? 'Editar' : 'Agregar'}
+                                    <span className="reading-text">{editingId ? 'Editar' : 'Agregar'}</span>
                                 </h3>
 
                                 <div className="flex p-0.4 bg-black/40 border border-white/10">

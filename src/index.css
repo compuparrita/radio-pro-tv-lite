@@ -3,8 +3,9 @@
 @tailwind utilities;
 
 :root {
+  --reading-text-scale: 1;
   --primary-color: #0077FF;
-  --on-primary: #000000;
+  --on-primary: #ffffff;
   --secondary-color: #003F5C;
   --accent-color: #FF9500;
   --success-color: #10b981;
@@ -27,8 +28,19 @@
   --glass-border: rgba(255, 255, 255, 0.08);
 }
 
+:root[data-text-size="1"] {
+  --reading-text-scale: 0.90;
+}
+
+:root[data-text-size="2"] {
+  --reading-text-scale: 1;
+}
+
+:root[data-text-size="3"] {
+  --reading-text-scale: 1.10;
+}
+
 body {
-  font-family: 'Outfit', 'Inter', sans-serif;
   background: var(--dark-bg);
   color: var(--text-primary);
   line-height: 1.6;
@@ -552,6 +564,51 @@ body.light-mode ::-webkit-scrollbar-thumb {
 
   .btn-block {
     width: 100%;
+  }
+}
+
+/* Opt-in reading text only; controls and other utility text retain their current sizes. */
+.reading-text {
+  font-size: calc(1em * var(--reading-text-scale));
+  line-height: inherit;
+}
+
+.reading-text-help-title {
+  font-size: calc(0.875rem * var(--reading-text-scale));
+}
+
+.reading-text-help-copy {
+  font-size: calc(0.75rem * var(--reading-text-scale));
+}
+
+.reading-text-help-tip {
+  font-size: calc(11px * var(--reading-text-scale));
+}
+
+.reading-text-help-tip-label {
+  font-size: calc(10px * var(--reading-text-scale));
+}
+
+.reading-text-profile-value,
+.reading-text-profile-message {
+  font-size: calc(0.875rem * var(--reading-text-scale));
+}
+
+.reading-text-profile-confirmation {
+  font-size: calc(0.875rem * var(--reading-text-scale));
+}
+
+.reading-text-menu-label {
+  font-size: calc(0.875rem * var(--reading-text-scale));
+}
+
+@media (min-width: 640px) {
+  .reading-text-help-title {
+    font-size: calc(1rem * var(--reading-text-scale));
+  }
+
+  .reading-text-help-copy {
+    font-size: calc(0.875rem * var(--reading-text-scale));
   }
 }
 
@@ -1094,6 +1151,24 @@ body.light-mode .station-list-body > div:nth-child(even) {
 }
 
 /* Scrollbar – thinner for station list */
+.station-list-sticky {
+  position: sticky;
+  top: calc(var(--header-final-height, 40px) + 3px);
+}
+
+@media (max-width: 1023px) {
+  .station-list-sticky {
+    top: calc(var(--mobile-player-sticky-height, 0px) + env(safe-area-inset-top, 0px));
+  }
+}
+
+.mobile-station-tabs {
+  position: sticky;
+  top: calc(var(--mobile-player-sticky-height, 0px) + env(safe-area-inset-top, 0px));
+  z-index: 40;
+  background: var(--dark-bg);
+}
+
 .station-scroll::-webkit-scrollbar { width: 4px; }
 .station-scroll::-webkit-scrollbar-track { background: transparent; }
 .station-scroll::-webkit-scrollbar-thumb {

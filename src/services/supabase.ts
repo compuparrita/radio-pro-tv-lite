@@ -165,37 +165,26 @@ export function subscribeToStationsChanges(
 // ==========================================
 
 export async function fetchChatHistoryFromCloud(limit: number = 50): Promise<ChatMessage[]> {
-    try {
-        const { data, error } = await supabase
-            .from('messages')
-            .select('*')
-            .order('timestamp', { ascending: false })
-            .limit(limit);
+    const { data, error } = await supabase
+        .from('messages')
+        .select('*')
+        .order('timestamp', { ascending: false })
+        .limit(limit);
 
-        if (error) {
-            console.error('[Supabase] Error al consultar historial de chat:', error);
-            return [];
-        }
+    if (error) throw error;
+    if (!data) return [];
 
-        if (!data) return [];
-
-        // Los ordenamos cronológicamente (más antiguo a más reciente)
-        const messages: ChatMessage[] = data.map((row: any) => ({
-            id: row.id,
-            userId: row.user_id || '',
-            userName: row.user_name || 'Anónimo',
-            message: row.message || '',
-            timestamp: Number(row.timestamp),
-            mediaTitle: row.media_title || undefined,
-            mediaAuthor: row.media_author || undefined,
-            mediaThumbnail: row.media_thumbnail || undefined
-        })).reverse();
-
-        return messages;
-    } catch (err) {
-        console.error('[Supabase] Fallo al recuperar mensajes:', err);
-        return [];
-    }
+    // PostgREST devuelve los más recientes primero; la interfaz los muestra cronológicamente.
+    return data.map((row: any) => ({
+        id: row.id,
+        userId: row.user_id || '',
+        userName: row.user_name || 'Anónimo',
+        message: row.message || '',
+        timestamp: Number(row.timestamp),
+        mediaTitle: row.media_title || undefined,
+        mediaAuthor: row.media_author || undefined,
+        mediaThumbnail: row.media_thumbnail || undefined
+    })).reverse();
 }
 
 export async function sendChatMessageToCloud(message: ChatMessage, phone?: string): Promise<boolean> {
@@ -500,22 +489,13 @@ export function getCurrentUserId(): string {
 }
 
 export async function fetchUserFavoritesFromCloud(userId: string): Promise<string[]> {
-    try {
-        const { data, error } = await supabase
-            .from('favorites')
-            .select('station_id')
-            .eq('user_id', userId);
+    const { data, error } = await supabase
+        .from('favorites')
+        .select('station_id')
+        .eq('user_id', userId);
 
-        if (error) {
-            console.warn('[Supabase] Error al consultar favoritos en la nube:', error.message);
-            return [];
-        }
-
-        return data ? data.map((r: any) => r.station_id) : [];
-    } catch (err) {
-        console.warn('[Supabase] Error de red al consultar favoritos:', err);
-        return [];
-    }
+    if (error) throw error;
+    return data ? data.map((r: any) => r.station_id) : [];
 }
 
 export async function saveFavoriteToCloud(userId: string, stationId: string): Promise<boolean> {

@@ -12,6 +12,84 @@ interface ChatModalProps {
     roomCode?: string | null;
 }
 
+interface ChatModalLayout {
+    width: number;
+    height: number;
+    x: number;
+    y: number;
+}
+
+type ChatLayoutInteraction = {
+    kind: 'drag' | 'resize';
+    pointerId: number;
+    startX: number;
+    startY: number;
+    startLayout: ChatModalLayout;
+};
+
+const CHAT_LAYOUT_STORAGE_KEY = 'radiofm:chat-modal:layout:v1';
+const LEGACY_CHAT_WIDTH_STORAGE_KEY = 'chatModalWidth';
+
+const clampChatLayout = (layout: ChatModalLayout, viewportWidth: number, viewportHeight: number): ChatModalLayout => {
+    const minWidth = Math.min(340, Math.max(240, viewportWidth - 16));
+    const maxWidth = Math.max(minWidth, Math.min(750, viewportWidth - 16));
+    const minHeight = Math.min(320, Math.max(180, viewportHeight - 16));
+    const maxHeight = Math.max(minHeight, Math.min(1000, viewportHeight - 16));
+    const width = Math.min(maxWidth, Math.max(minWidth, layout.width));
+    const height = Math.min(maxHeight, Math.max(minHeight, layout.height));
+
+    return {
+        width,
+        height,
+        x: Math.min(Math.max(0, layout.x), Math.max(0, viewportWidth - width)),
+        y: Math.min(Math.max(0, layout.y), Math.max(0, viewportHeight - height)),
+    };
+};
+
+const defaultChatLayout = (viewportWidth: number, viewportHeight: number, preferredWidth = 400): ChatModalLayout => {
+    const minHeight = Math.min(320, Math.max(180, viewportHeight - 16));
+    const width = Math.min(Math.max(240, viewportWidth - 16), Math.max(Math.min(340, viewportWidth - 16), preferredWidth));
+    const height = Math.min(1000, Math.max(minHeight, viewportHeight - 100));
+    return clampChatLayout({ width, height, x: viewportWidth - width - 24, y: viewportHeight - height - 4 }, viewportWidth, viewportHeight);
+};
+
+const readChatLayout = (viewportWidth: number, viewportHeight: number): { layout: ChatModalLayout; migrated: boolean } => {
+    const fallback = defaultChatLayout(viewportWidth, viewportHeight);
+    try {
+        const saved = localStorage.getItem(CHAT_LAYOUT_STORAGE_KEY);
+        if (saved) {
+            const parsed: unknown = JSON.parse(saved);
+            if (parsed && typeof parsed === 'object') {
+                const value = parsed as Partial<ChatModalLayout>;
+                const values = [value.width, value.height, value.x, value.y];
+                if (values.every((part) => typeof part === 'number' && Number.isFinite(part)) &&
+                    value.width! >= 240 && value.width! <= 750 &&
+                    value.height! >= 180 && value.height! <= 1000 &&
+                    Math.abs(value.x!) <= 10000 && Math.abs(value.y!) <= 10000) {
+                    return { layout: clampChatLayout(value as ChatModalLayout, viewportWidth, viewportHeight), migrated: false };
+                }
+            }
+            return { layout: fallback, migrated: false };
+        }
+
+        const legacyWidth = Number(localStorage.getItem(LEGACY_CHAT_WIDTH_STORAGE_KEY));
+        if (Number.isFinite(legacyWidth) && legacyWidth >= 240 && legacyWidth <= 750) {
+            return { layout: defaultChatLayout(viewportWidth, viewportHeight, legacyWidth), migrated: true };
+        }
+    } catch {
+        // Use a safe viewport-based layout when storage is unavailable or invalid.
+    }
+    return { layout: fallback, migrated: false };
+};
+
+const saveChatLayout = (layout: ChatModalLayout) => {
+    try {
+        localStorage.setItem(CHAT_LAYOUT_STORAGE_KEY, JSON.stringify(layout));
+    } catch {
+        // Chat remains usable when local storage is unavailable.
+    }
+};
+
 interface YouTubeCardProps {
     ytId: string;
     mediaTitle?: string;
@@ -95,7 +173,7 @@ const YouTubeCard: React.FC<YouTubeCardProps> = ({
             {/* Contenedor de Información debajo de la miniatura (Estilo YouTube) */}
             <div className="p-2.5 flex flex-col gap-1 text-left">
                 <h5 className="font-bold text-xs leading-snug line-clamp-2 text-white/95 group-hover:text-sky-300 transition-colors">
-                    {title || 'Cargando video de YouTube...'}
+                    <span className="reading-text">{title || 'Cargando video de YouTube...'}</span>
                 </h5>
                 {author && (
                     <p className="text-[10px] text-white/60 font-medium truncate">
@@ -489,7 +567,7 @@ const VoiceNotePlayer: React.FC<{
                     {/* Fila debajo del waveform: tiempo + hora + descarga (estilo WhatsApp) */}
                     <div className="flex items-center justify-between px-0.5 text-[10px] text-white/55 font-mono leading-none">
                         <span className="font-semibold text-white/75">{displayTimeText}</span>
-                        <div className="flex items-center gap-1.5 font-sans">
+                        <div className="flex items-center gap-1.5">
                             {timestamp && formatTimeFn && (
                                 <span>{formatTimeFn(timestamp)}</span>
                             )}
@@ -609,10 +687,10 @@ const AttachmentCard: React.FC<{
             </div>
             <div className="min-w-0 flex-1">
                 <p className="text-xs font-bold truncate group-hover:underline text-white">
-                    {title || 'Documento adjunto'}
+                    <span className="reading-text">{title || 'Documento adjunto'}</span>
                 </p>
                 <p className="text-[9px] text-[var(--text-secondary)] uppercase font-semibold">
-                    {type === 'pdf' ? 'Archivo PDF' : 'Documento'}
+                    <span className="reading-text">{type === 'pdf' ? 'Archivo PDF' : 'Documento'}</span>
                 </p>
             </div>
             <Download size={15} className="text-white/60 group-hover:text-white transition-colors flex-shrink-0" />
@@ -654,7 +732,7 @@ const MessageText = ({ text, msg, stations, playStation, setIsOpen, isOwnMessage
     const hasFileAttachment = !!(msg?.mediaThumbnail && !isYouTubeThumbnail);
 
     return (
-        <div className="break-words">
+        <div className="break-words reading-text">
             {hasFileAttachment && (
                 <AttachmentCard
                     url={msg.mediaThumbnail}
@@ -782,6 +860,7 @@ export const ChatModal: React.FC<ChatModalProps> = ({ externalOpen, onOpenChange
     const { stations, playStation } = useRadio();
 
     const [isOpen, setIsOpen] = useState(false);
+    const [mobileVisualViewport, setMobileVisualViewport] = useState<{ height: number; offsetTop: number } | null>(null);
     const [currentMessage, setCurrentMessage] = useState('');
     const [error, setError] = useState('');
     const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -792,11 +871,10 @@ export const ChatModal: React.FC<ChatModalProps> = ({ externalOpen, onOpenChange
     const [suggestions, setSuggestions] = useState<any[]>([]);
     const [selectedIndex, setSelectedIndex] = useState(0);
     const [showSuggestions, setShowSuggestions] = useState(false);
-    const [chatWidth, setChatWidth] = useState<number>(() => {
-        const saved = localStorage.getItem('chatModalWidth');
-        return saved ? parseInt(saved, 10) : 400; // Ancho predeterminado cómodo y estilizado
-    });
-    const [isResizing, setIsResizing] = useState(false);
+    const [chatLayout, setChatLayout] = useState<ChatModalLayout>(() => defaultChatLayout(window.innerWidth, window.innerHeight));
+    const chatLayoutRef = useRef(chatLayout);
+    const [layoutInteraction, setLayoutInteraction] = useState<ChatLayoutInteraction | null>(null);
+    const isResizing = Boolean(layoutInteraction && layoutInteraction.kind !== 'drag');
     const [isMenuOpen, setIsMenuOpen] = useState(false);
     const [activeMenuCoords, setActiveMenuCoords] = useState<{
         id: string;
@@ -851,40 +929,148 @@ export const ChatModal: React.FC<ChatModalProps> = ({ externalOpen, onOpenChange
         };
     }, []);
 
-    // Lógica de redimensionamiento del chat (arrastre desde el borde izquierdo)
+    // Keep the mobile chat inside the actually visible viewport when the virtual keyboard opens.
     useEffect(() => {
-        const handleMouseMove = (e: MouseEvent) => {
-            if (!isResizing) return;
-            // El chat está pegado a la derecha, por lo que su ancho es: window.innerWidth - e.clientX
-            const newWidth = window.innerWidth - e.clientX;
-            // Limitar entre 340px y el 85% de la pantalla o 720px
-            const maxWidth = Math.min(window.innerWidth * 0.85, 750);
-            if (newWidth >= 340 && newWidth <= maxWidth) {
-                setChatWidth(newWidth);
-            }
-        };
-
-        const handleMouseUp = () => {
-            if (isResizing) {
-                setIsResizing(false);
-                localStorage.setItem('chatModalWidth', chatWidth.toString());
-            }
-        };
-
-        if (isResizing) {
-            document.addEventListener('mousemove', handleMouseMove);
-            document.addEventListener('mouseup', handleMouseUp);
-            document.body.style.userSelect = 'none';
-            document.body.style.cursor = 'ew-resize';
+        if (!isOpen) {
+            setMobileVisualViewport(null);
+            return;
         }
 
-        return () => {
-            document.removeEventListener('mousemove', handleMouseMove);
-            document.removeEventListener('mouseup', handleMouseUp);
-            document.body.style.userSelect = '';
-            document.body.style.cursor = '';
+        const mobileQuery = window.matchMedia('(max-width: 1023px) and (pointer: coarse)');
+        const visualViewport = window.visualViewport;
+        const updateViewport = () => {
+            if (!mobileQuery.matches) {
+                setMobileVisualViewport(null);
+                return;
+            }
+
+            const nextViewport = {
+                height: visualViewport?.height ?? window.innerHeight,
+                offsetTop: visualViewport?.offsetTop ?? 0
+            };
+            setMobileVisualViewport((current) => (
+                current &&
+                Math.round(current.height) === Math.round(nextViewport.height) &&
+                Math.round(current.offsetTop) === Math.round(nextViewport.offsetTop)
+                    ? current
+                    : nextViewport
+            ));
         };
-    }, [isResizing, chatWidth]);
+
+        updateViewport();
+        visualViewport?.addEventListener('resize', updateViewport);
+        visualViewport?.addEventListener('scroll', updateViewport);
+        window.addEventListener('resize', updateViewport);
+        window.addEventListener('orientationchange', updateViewport);
+        mobileQuery.addEventListener('change', updateViewport);
+
+        return () => {
+            visualViewport?.removeEventListener('resize', updateViewport);
+            visualViewport?.removeEventListener('scroll', updateViewport);
+            window.removeEventListener('resize', updateViewport);
+            window.removeEventListener('orientationchange', updateViewport);
+            mobileQuery.removeEventListener('change', updateViewport);
+        };
+    }, [isOpen]);
+
+    const updateChatLayout = (nextLayout: ChatModalLayout) => {
+        chatLayoutRef.current = nextLayout;
+        setChatLayout(nextLayout);
+    };
+
+    useEffect(() => {
+        if (!isOpen) setLayoutInteraction(null);
+    }, [isOpen]);
+
+    useEffect(() => {
+        if (!isOpen) return;
+        const { layout, migrated } = readChatLayout(window.innerWidth, window.innerHeight);
+        updateChatLayout(layout);
+        if (migrated) saveChatLayout(layout);
+    }, [isOpen]);
+
+    useEffect(() => {
+        if (!isOpen) return;
+        const handleViewportResize = () => {
+            if (window.matchMedia('(max-width: 1023px) and (pointer: coarse)').matches) return;
+            const current = chatLayoutRef.current;
+            const clamped = clampChatLayout(current, window.innerWidth, window.innerHeight);
+            if (clamped.width !== current.width || clamped.height !== current.height || clamped.x !== current.x || clamped.y !== current.y) {
+                updateChatLayout(clamped);
+                saveChatLayout(clamped);
+            }
+        };
+        window.addEventListener('resize', handleViewportResize);
+        return () => window.removeEventListener('resize', handleViewportResize);
+    }, [isOpen]);
+
+    useEffect(() => {
+        if (!layoutInteraction) return;
+
+        const handlePointerMove = (event: PointerEvent) => {
+            if (event.pointerId !== layoutInteraction.pointerId) return;
+            const dx = event.clientX - layoutInteraction.startX;
+            const dy = event.clientY - layoutInteraction.startY;
+            const start = layoutInteraction.startLayout;
+            let next = start;
+
+            if (layoutInteraction.kind === 'drag') {
+                next = { ...start, x: start.x + dx, y: start.y + dy };
+            } else {
+                const width = start.width - dx;
+                const height = start.height - dy;
+                next = { ...start, width, height, x: start.x + dx, y: start.y + dy };
+            }
+
+            updateChatLayout(clampChatLayout(next, window.innerWidth, window.innerHeight));
+        };
+
+        const finishInteraction = (event: PointerEvent) => {
+            if (event.pointerId !== layoutInteraction.pointerId) return;
+            setLayoutInteraction(null);
+            saveChatLayout(chatLayoutRef.current);
+        };
+
+        const previousUserSelect = document.body.style.userSelect;
+        const previousCursor = document.body.style.cursor;
+        document.body.style.userSelect = 'none';
+        document.body.style.cursor = layoutInteraction.kind === 'drag' ? 'move' : 'nwse-resize';
+        window.addEventListener('pointermove', handlePointerMove);
+        window.addEventListener('pointerup', finishInteraction);
+        window.addEventListener('pointercancel', finishInteraction);
+        window.addEventListener('lostpointercapture', finishInteraction);
+
+        return () => {
+            window.removeEventListener('pointermove', handlePointerMove);
+            window.removeEventListener('pointerup', finishInteraction);
+            window.removeEventListener('pointercancel', finishInteraction);
+            window.removeEventListener('lostpointercapture', finishInteraction);
+            document.body.style.userSelect = previousUserSelect;
+            document.body.style.cursor = previousCursor;
+        };
+    }, [layoutInteraction]);
+
+    const beginLayoutInteraction = (event: React.PointerEvent<HTMLElement>, kind: ChatLayoutInteraction['kind']) => {
+        if (event.pointerType !== 'mouse' || window.innerWidth < 768 || mobileVisualViewport) return;
+        if (kind === 'resize') {
+            event.stopPropagation();
+        }
+        if (kind === 'drag') {
+            const target = event.target as HTMLElement;
+            if (target.closest('button, a, input, textarea, select, [role="menu"]')) return;
+        }
+        event.preventDefault();
+        // Keep the gesture owned by its handle even if the pointer crosses the
+        // application scrollbar or leaves the chat panel.
+        event.currentTarget.setPointerCapture(event.pointerId);
+        setLayoutInteraction({
+            kind,
+            pointerId: event.pointerId,
+            startX: event.clientX,
+            startY: event.clientY,
+            startLayout: chatLayoutRef.current,
+        });
+    };
 
     // Close options menu or message dropdown menu on click outside
     useEffect(() => {
@@ -926,9 +1112,6 @@ export const ChatModal: React.FC<ChatModalProps> = ({ externalOpen, onOpenChange
             // 2. Delayed scroll for animations/rendering stabilization
             const timerScroll = setTimeout(() => scrollToBottom(), 100);
 
-            // Lock body scroll
-            document.body.style.overflow = 'hidden';
-
             // 3. Focus solo en escritorio (no en móviles para que no salte el teclado virtual)
             const isDesktop = typeof window !== 'undefined' && window.innerWidth >= 768;
             const timerFocus = setTimeout(() => {
@@ -941,10 +1124,7 @@ export const ChatModal: React.FC<ChatModalProps> = ({ externalOpen, onOpenChange
             return () => {
                 clearTimeout(timerScroll);
                 clearTimeout(timerFocus);
-                document.body.style.overflow = '';
             };
-        } else {
-            document.body.style.overflow = '';
         }
     }, [messages, isOpen, chatTypingUsers]);
 
@@ -1590,8 +1770,15 @@ const compressImageFile = (file: File): Promise<{ data: string; previewUrl: stri
         <>
 
             {/* Chat Modal */}
-            {isOpen && (
-                <div className="fixed inset-0 z-[99999] flex items-start md:items-end justify-end p-0 md:p-1 md:pr-6">
+            {isOpen && createPortal(
+                <div
+                    className="fixed inset-0 z-[1000000] flex items-start md:items-end justify-end p-0 md:p-1 md:pr-6"
+                    style={mobileVisualViewport ? {
+                        top: `${mobileVisualViewport.offsetTop}px`,
+                        bottom: 'auto',
+                        height: `${mobileVisualViewport.height}px`
+                    } : undefined}
+                >
                     {/* Backdrop (mobile only) */}
                     <div
                         className="absolute inset-0 bg-black/50"
@@ -1599,26 +1786,29 @@ const compressImageFile = (file: File): Promise<{ data: string; previewUrl: stri
                     />
 
                     {/* Modal Content */}
-                    <div 
-                        style={{ width: typeof window !== 'undefined' && window.innerWidth >= 768 ? `${chatWidth}px` : '100%' }}
+                    <div
+                        style={{
+                            width: typeof window !== 'undefined' && window.innerWidth >= 768 ? `${chatLayout.width}px` : '100%',
+                            ...(typeof window !== 'undefined' && window.innerWidth >= 768 && !mobileVisualViewport
+                                ? { position: 'fixed' as const, left: `${chatLayout.x}px`, top: `${chatLayout.y}px`, height: `${chatLayout.height}px` }
+                                : {}),
+                        }}
                         className="relative w-full h-full md:h-[calc(min(1000px,100vh-var(--header-final-height,70px)-30px))] bg-[var(--dark-surface)] rounded-none md:rounded-lg shadow-2xl flex flex-col animate-slide-in-right"
                     >
-                        {/* Resizer Handle (Desktop only) - Borde izquierdo para arrastrar y cambiar ancho */}
+                        {/* Single two-axis resize handle; separate from the header drag area. */}
                         <div
-                            onMouseDown={(e) => {
-                                e.preventDefault();
-                                setIsResizing(true);
-                            }}
-                            className="hidden md:flex absolute -left-2 top-0 bottom-0 w-4 cursor-ew-resize items-center justify-center group z-50 select-none"
-                            title="Arrastra para cambiar el ancho del chat"
+                            aria-label="Cambiar el tamaño del chat"
+                            onPointerDown={(event) => beginLayoutInteraction(event, 'resize')}
+                            className="hidden md:block absolute left-0 top-0 z-50 h-5 w-5 cursor-nwse-resize select-none"
+                            title="Arrastra para cambiar el ancho y alto del chat"
                         >
-                            <div className={`w-1 h-12 rounded-full transition-all duration-200 ${isResizing ? 'bg-[var(--primary-color)] h-24 w-1.5 shadow-[0_0_10px_var(--primary-color)]' : 'bg-white/20 group-hover:bg-[var(--primary-color)] group-hover:h-16'}`} />
+                            <div className={`absolute left-1 top-1 h-2.5 w-2.5 border-l-2 border-t-2 transition-colors ${isResizing ? 'border-[var(--primary-color)]' : 'border-white/40 hover:border-[var(--primary-color)]'}`} />
                         </div>
 
                         {/* Header */}
                         {isMultiSelectMode && !isRoomChat ? (
                             /* WhatsApp-style selection action bar */
-                            <div className="p-2 border-b border-[var(--dark-border)] flex items-center justify-between bg-[var(--dark-surface)] rounded-none animate-in fade-in duration-150">
+                            <div className="p-2 md:pl-7 border-b border-[var(--dark-border)] flex items-center justify-between bg-[var(--dark-surface)] rounded-none animate-in fade-in duration-150">
                                 <div className="flex items-center gap-3">
                                     <button
                                         type="button"
@@ -1655,7 +1845,7 @@ const compressImageFile = (file: File): Promise<{ data: string; previewUrl: stri
                                 </div>
                             </div>
                         ) : (
-                            <div className="p-2 border-b border-[var(--dark-border)] flex items-center justify-between bg-gradient-to-r from-[var(--primary-color)] to-[var(--secondary-color)] rounded-none">
+                            <div className="p-2 md:pl-7 border-b border-[var(--dark-border)] flex items-center justify-between bg-gradient-to-r from-[var(--primary-color)] to-[var(--secondary-color)] rounded-none">
                                 {/* Left Side: Hamburger Menu + User Info */}
                                 <div className="flex items-center gap-2 relative" ref={menuRef}>
                                     {/* Hamburger Menu Button (Left side - standard mobile navigation) */}
@@ -1697,12 +1887,15 @@ const compressImageFile = (file: File): Promise<{ data: string; previewUrl: stri
                                         </div>
                                     )}
 
-                                    <div>
+                                    <div
+                                        className="cursor-move select-none"
+                                        onPointerDown={(event) => beginLayoutInteraction(event, 'drag')}
+                                    >
                                         <span className="block text-[10px] font-semibold uppercase tracking-wide text-white/75">
                                             {isRoomChat ? '💬 Chat de la sala' : '🌍 Chat general'}
                                         </span>
                                         <h3 className="text-white font-bold text-sm drop-shadow-md">
-                                            {isIdentified && userIdentity ? userIdentity.name : 'Chat en Vivo'}
+                                            <span className="reading-text">{isIdentified && userIdentity ? userIdentity.name : 'Chat en Vivo'}</span>
                                         </h3>
                                         <div className="flex items-center gap-2 text-xs text-white/90 drop-shadow-md">
                                             {connectionStatus === 'connected' ? (
@@ -1769,13 +1962,13 @@ const compressImageFile = (file: File): Promise<{ data: string; previewUrl: stri
                             <>
                                 <div
                                     onScroll={() => { if (activeMenuCoords) setActiveMenuCoords(null); }}
-                                    className="flex-1 overflow-y-auto p-2 space-y-2 custom-scrollbar"
+                                    className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-2 space-y-2 custom-scrollbar"
                                 >
                                     {messages.length === 0 ? (
                                         <div className="text-center text-[var(--text-secondary)] py-12">
                                             <MessageCircle size={48} className="mx-auto mb-3 opacity-50" />
-                                            <p>No hay mensajes aún</p>
-                                            <p className="text-sm">¡Sé el primero en escribir!</p>
+                                            <p><span className="reading-text">No hay mensajes aún</span></p>
+                                            <p className="text-sm"><span className="reading-text">¡Sé el primero en escribir!</span></p>
                                         </div>
                                     ) : (
                                         messages.map((msg, index) => {
@@ -2095,7 +2288,7 @@ const compressImageFile = (file: File): Promise<{ data: string; previewUrl: stri
                                                     onKeyDown={handleKeyDown}
                                                     placeholder={
                                                         connectionStatus === 'connected'
-                                                            ? (pendingFile ? "Añade un comentario (opcional)..." : "Mensaje...")
+                                                            ? (pendingFile ? "Añade un comentario (opcional)..." : "Mensaje... /best... url...")
                                                             : "Sin conexión — se enviará al reconectar..."
                                                     }
                                                     className="flex-1 min-h-[38px] max-h-[120px] py-2 px-2 bg-transparent text-white placeholder-white/45 border-none outline-none resize-none text-sm leading-relaxed chat-textarea-scroll"
@@ -2155,11 +2348,12 @@ const compressImageFile = (file: File): Promise<{ data: string; previewUrl: stri
                             </>
                         )}
                     </div>
-                </div>
+                </div>,
+                document.body
             )}
 
             {/* Visualizador de imagen a pantalla completa (Lightbox estilo WhatsApp) */}
-            {lightboxMedia && (
+            {lightboxMedia && createPortal(
                 <div
                     className="fixed inset-0 z-[9999999] bg-black/90 backdrop-blur-md flex flex-col items-center justify-between p-3 md:p-6 animate-in fade-in duration-150"
                     onClick={() => setLightboxMedia(null)}
@@ -2220,7 +2414,8 @@ const compressImageFile = (file: File): Promise<{ data: string; previewUrl: stri
                     <div className="text-[11px] text-white/50 text-center pb-1">
                         Haz clic fuera de la imagen o presiona <kbd className="px-1.5 py-0.5 rounded bg-white/10 text-white/70">Esc</kbd> para cerrar
                     </div>
-                </div>
+                </div>,
+                document.body
             )}
 
             {/* ── Portal del menú contextual ──────────────────────────────────────

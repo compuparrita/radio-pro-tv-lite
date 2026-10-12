@@ -22,15 +22,15 @@ export const SidebarInfo: React.FC = () => {
     }, [time]);
 
     return (
-        <div className="flex flex-col gap-2 p-2 bg-white/5 rounded-none border border-white/10 mb-4">
+        <div className="hidden lg:flex lg:flex-col lg:gap-1 lg:p-1.5 bg-[var(--dark-surface)] rounded-none border border-[var(--dark-border)] mb-1">
             <div className="flex items-center justify-between px-1">
-                <span className="text-[12px] font-medium text-green-400">{greeting}</span>
+                <span className="text-[12px] font-medium text-green-400"><span className="reading-text">{greeting}</span></span>
                 <div className="flex items-center gap-1.5 font-mono text-[var(--text-secondary)] text-[16px]">
                     <Clock size={16} />
-                    <span>{format(time, 'hh:mm a')}</span>
+                    <span className="reading-text">{format(time, 'hh:mm a')}</span>
                 </div>
             </div>
-            <div className="flex items-center justify-between bg-black/30 p-1.5 rounded-none">
+            <div className="flex items-center justify-between bg-[var(--dark-bg)] p-1.5 rounded-none">
                 <div className="flex items-center gap-1.5 text-[10px]">
                     <Users size={18} className={
                         connectionStatus === 'connected'

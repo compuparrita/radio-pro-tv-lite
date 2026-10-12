@@ -74,8 +74,9 @@ export const MobileNav: React.FC<MobileNavProps> = ({ onChatClick, onProfileClic
                     onClick={onThemeClick}
                     className="flex flex-col items-center justify-center gap-1 min-w-[38px] active:opacity-50 transition-opacity"
                     title="Cambiar tema"
+                    type="button"
                 >
-                    <Palette size={19} className="text-gray-400" strokeWidth={1.5} />
+                    <Palette aria-hidden="true" size={19} className="text-gray-400" strokeWidth={1.5} />
                     <span className="text-[9px] text-gray-400">Tema</span>
                 </button>
 

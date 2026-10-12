@@ -23,7 +23,7 @@ export function GuestCinemaLayout({ isConnected, onChatClick, onExitCinema }: Gu
             <div className="mx-auto flex min-h-screen w-full max-w-[1600px] flex-col gap-6 px-4 py-5 sm:gap-8 sm:px-8 sm:py-8 lg:px-12">
                 <header className="flex shrink-0 items-center justify-between gap-4 border-b border-white/10 pb-4">
                     <h1 className="text-base font-bold tracking-wide sm:text-lg">
-                        <span aria-hidden="true">🎬 </span>{sessionTitle}
+                        <span aria-hidden="true">🎬 </span><span className="reading-text">{sessionTitle}</span>
                     </h1>
                     <div className="flex shrink-0 items-center gap-3 sm:gap-5">
                         <div className="flex items-center gap-2 text-xs font-semibold text-[var(--text-secondary)] sm:text-sm" role="status" aria-live="polite">
@@ -49,10 +49,10 @@ export function GuestCinemaLayout({ isConnected, onChatClick, onExitCinema }: Gu
 
                 <footer className="shrink-0 border-t border-white/10 pt-4 sm:pt-5" aria-label="Contenido compartido">
                     <h2 className="truncate text-base font-semibold sm:text-lg">
-                        {mediaInfo?.title || 'Contenido compartido'}
+                        <span className="reading-text">{mediaInfo?.title || 'Contenido compartido'}</span>
                     </h2>
                     <p className="mt-1 text-sm text-[var(--text-secondary)]">
-                        Compartido por {host?.userName || 'Anfitrión'}
+                        <span className="reading-text">Compartido por {host?.userName || 'Anfitrión'}</span>
                     </p>
                 </footer>
             </div>

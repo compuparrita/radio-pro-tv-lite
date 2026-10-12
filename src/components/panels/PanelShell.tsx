@@ -157,8 +157,8 @@ export function PanelShell({
             >
                 <header className={'flex items-start border-b border-[var(--glass-border)] px-5 py-5 sm:px-6 ' + (hasBackAction ? 'justify-start gap-2' : 'justify-between')}>
                     <div className={hasBackAction ? 'order-2' : ''}>
-                        <h2 className="text-xl font-semibold tracking-tight text-[var(--text-primary)]" id={titleId}>{title}</h2>
-                        {description && <p className="mt-1 text-sm text-[var(--text-secondary)]">{description}</p>}
+                        <h2 className="text-xl font-semibold tracking-tight text-[var(--text-primary)]" id={titleId}><span className="reading-text">{title}</span></h2>
+                        {description && <p className="mt-1 text-sm text-[var(--text-secondary)]"><span className="reading-text">{description}</span></p>}
                     </div>
                     <button
                         aria-label={navigationLabel}

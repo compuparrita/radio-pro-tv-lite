@@ -2,7 +2,7 @@
 
 ## Estado
 
-El menú hamburguesa global izquierdo es una visión futura. No se declara implementado por este documento.
+El menú global izquierdo está implementado dentro de la composición normal de la aplicación mediante `PanelHost` y la variante izquierda de `PanelShell`.
 
 ## Objetivo
 
@@ -12,18 +12,18 @@ Ofrecer acceso compacto a navegación global y preferencias, separado de los pan
 
 La referencia es la captura proporcionada por el usuario: un panel lateral compacto y claro. La referencia orienta la calidad y disposición general; no se debe copiar literalmente ni asumir detalles no definidos.
 
-La infraestructura prevista es `PanelHost → PanelShell`, con una futura variante de PanelShell que se abra desde la izquierda.
+La infraestructura actual es `PanelHost → PanelShell`; `PanelShell` admite `side="left"` para esta superficie.
 
 ## UX / funcionamiento previsto
 
-Posibles entradas, sujetas a definición posterior:
+Entradas actuales:
 
 - LITE.
-- Station Manager.
+- Selector de tema.
+- Selector de tamaño del texto.
 - Ayuda general.
-- Perfil.
-- Preferencias tipográficas.
-- Preferencias limitadas de contraste/color.
+- Administrar estaciones.
+- QR de acceso general a RadioFM.
 
 Izquierda significa navegación global y preferencias. Derecha significa contexto de la actividad. El panel izquierdo debe sentirse compacto y no sustituir las superficies contextuales derechas.
 
@@ -31,20 +31,17 @@ Izquierda significa navegación global y preferencias. Derecha significa context
 
 - Reutilizar el patrón arquitectónico PanelHost/PanelShell, no crear un sistema de paneles paralelo.
 - Mantener la semántica izquierda = global/preferencias y derecha = contexto.
-- La lista anterior es candidata; no implica que todas las entradas estén aprobadas como alcance final.
+- El selector tipográfico ofrece Pequeño/Normal/Grande (`0.90`/`1.00`/`1.10`) y persiste `textSize`; la escala se aplica solo a textos marcados.
 
 ## Pendientes
 
-- Definir apertura/cierre, estados activos, comportamiento responsive y relación con un panel derecho que ya esté abierto.
-- Diseñar la futura variante izquierda sin afectar los consumidores existentes de PanelShell.
-- Decidir el orden y alcance definitivo de las entradas.
+- Completar la validación visual del selector en móvil, escritorio y temas Dark, Light y Youth.
 
 ## No implementar todavía
 
-- No crear la variante izquierda como parte de una fase no relacionada.
 - No asumir que el menú necesita duplicar lógica, backdrop o infraestructura de PanelShell.
-- No convertir cada destino listado en una nueva vista antes de definir el flujo.
+- Mantener estas acciones conectadas a sus handlers existentes; no duplicar sus vistas ni persistencia.
 
 ## Relación con el proyecto actual
 
-PanelHost y PanelShell existen para las vistas contextuales actuales. Este capítulo propone su extensión futura; no modifica el mapa de paneles activos ni el comportamiento actual de navegación.
+PanelHost y PanelShell presentan tanto superficies contextuales como el menú global, cada una con su lado y alcance. La existencia del menú no implica coexistencia simultánea con un panel contextual ni autoriza cambios a la navegación de salas.

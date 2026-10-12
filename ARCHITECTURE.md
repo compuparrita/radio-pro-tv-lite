@@ -15,7 +15,7 @@
 #### Frontend (SPA & Mobile / Smart TV)
 - **Framework:** React 18.2 (TypeScript 5.2)
 - **Bundler / Dev Server:** Vite 7.3
-- **Estilos:** Tailwind CSS 3.4 + PostCSS + Variables CSS nativas para soporte dinámico de temas (`dark`, `light`, `youth`).
+- **Estilos:** Tailwind CSS 3.4 + PostCSS + Variables CSS nativas para soporte dinámico de temas (`dark`, `light`, `youth`) y escala tipográfica optativa de textos de lectura.
 - **Reproducción Multimedia:**
   - `video.js` (v8.23) + `@videojs/http-streaming` (v3.17) para flujos HLS (.m3u8) y selección adaptativa de calidad.
   - `hls.js` (v1.4)
@@ -46,6 +46,11 @@
 - **Frontend Build (Web):** `npm run build` (`tsc && vite build`)
 - **Backend Dev:** `cd server && npm run dev` (usa `nodemon`)
 - **Build Android TV Lite:** `npm run build:tv-lite` (ejecuta `scripts/prepare-tv-lite.js` y sincroniza con Capacitor).
+
+### 1.5 Preferencia tipográfica de lectura
+- `App.tsx` persiste el nivel `textSize` (`1`, `2`, `3`) en `localStorage` y publica el nivel activo como `document.documentElement.dataset.textSize`.
+- `src/index.css` deriva `--reading-text-scale` (`0.90`, `1.00`, `1.10`); `.reading-text` es optativa y debe aplicarse únicamente a contenido legible elegido explícitamente. El nivel Normal conserva el tamaño base.
+- La variable en `:root` se hereda también por los paneles montados mediante portal. No aplicar la escala globalmente ni a controles compactos o dimensiones estructurales.
 
 ---
 
@@ -87,6 +92,7 @@ src/
 - **`App.tsx`:** Controla la disposición adaptable (Mobile vs Desktop), calcula dinámicamente alturas de encabezado (ResizeObserver), aplica temas en el DOM, inicializa soporte de mando a distancia (`useTVRemote`), y gestiona la apertura de modales (`ChatModal`, `StationManager`, `GeneralHelpModal`).
 - **`Player.tsx`:** Aloja el contenedor del reproductor y delega en el hook [`useVideoPlayer`](file:///c:/radiofm/src/hooks/useVideoPlayer.ts). Detecta automáticamente si el stream es Audio HTML5, Video HLS (`video.js`), YouTube nocookie o un iframe externo. Permite controlar volumen con wheel del mouse, mute, play/pause y saltar emisoras.
 - **`ChatModal.tsx`:** Modal de chat ultra-completo con soporte para detección de enlaces de YouTube (convirtiéndolos en tarjetas reproducibles en un clic), grabación de audio por micrófono, compresión y subida de archivos adjuntos, notificaciones por audio sintetizado y filtros antispam.
+- El Chat General superpuesto y su visor de imágenes se montan mediante portales en `document.body`; el visor queda por encima del panel y el área de mensajes conserva su propio scroll. Estos overlays especializados no dependen de `PanelShell`.
 - **`StationList.tsx`:** Presenta las tarjetas de emisoras organizadas por categorías o favoritos con soporte de arrastre (`@dnd-kit`) para reordenar la grilla personalizada.
 - **`StationManager.tsx`:** Panel administrativo para agregar, modificar, borrar y sincronizar emisoras locales directamente con la base de datos de Supabase.
 

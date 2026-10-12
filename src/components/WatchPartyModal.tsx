@@ -210,8 +210,8 @@ function WatchPartyModal({ isOpen, onClose, inviteCode, onInviteCancel, onInvite
                             </button>
                             <div className="border-b border-[var(--glass-border)] pb-4">
                                 <p className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--primary-color)]"><Radio aria-hidden="true" size={12} />{watchPartyHelp.title}</p>
-                                <h3 id="watchparty-help-title" className="mt-1 text-base font-semibold tracking-tight text-[var(--text-primary)]">{watchPartyHelp.subtitle}</h3>
-                                <p className="mt-1.5 text-[13px] leading-5 text-[var(--text-secondary)]">{watchPartyHelp.introduction}</p>
+                                <h3 id="watchparty-help-title" className="mt-1 text-base font-semibold tracking-tight text-[var(--text-primary)]"><span className="reading-text">{watchPartyHelp.subtitle}</span></h3>
+                                <p className="mt-1.5 text-[13px] leading-5 text-[var(--text-secondary)]"><span className="reading-text">{watchPartyHelp.introduction}</span></p>
                             </div>
                             <div className="space-y-3">
                                 {watchPartyHelp.sections.map((section, sectionIndex) => {
@@ -221,13 +221,13 @@ function WatchPartyModal({ isOpen, onClose, inviteCode, onInviteCancel, onInvite
                                         <section className="rounded-2xl border border-[var(--glass-border)] bg-[var(--glass-bg)] p-4" key={section.title}>
                                             <div className="flex items-center gap-2.5">
                                                 <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border border-[var(--dark-border)] bg-[var(--glass-bg)] text-[var(--primary-color)]"><SectionIcon aria-hidden="true" size={15} /></span>
-                                                <h4 className="text-sm font-semibold text-[var(--text-primary)]">{section.title}</h4>
+                                                <h4 className="text-sm font-semibold text-[var(--text-primary)]"><span className="reading-text">{section.title}</span></h4>
                                             </div>
                                             <ol className="mt-3 space-y-2.5">
                                                 {section.steps.map((step) => (
                                                     <li className="flex gap-3 text-[13px] leading-5 text-[var(--text-primary)]" key={step.number}>
                                                         <span className="pt-0.5 text-[10px] font-semibold tracking-wide text-[var(--primary-color)]">{String(step.number).padStart(2, '0')}</span>
-                                                        <span>{step.text}</span>
+                                                        <span className="reading-text">{step.text}</span>
                                                     </li>
                                                 ))}
                                             </ol>
@@ -240,13 +240,13 @@ function WatchPartyModal({ isOpen, onClose, inviteCode, onInviteCancel, onInvite
                         <>
                             {error && (
                                 <div className="rounded-xl border border-red-400/20 bg-red-400/[0.08] px-4 py-3 text-sm text-red-200" role="alert">
-                                    {error.code !== 'ROOM_ENDED' && <span className="mr-2 font-semibold">{error.code}</span>}{error.message}
+                                    {error.code !== 'ROOM_ENDED' && <span className="mr-2 font-semibold">{error.code}</span>}<span className="reading-text">{error.message}</span>
                                 </div>
                             )}
 
                             {inviteCode ? (
                         <section className="rounded-2xl border border-white/[0.07] bg-white/[0.025] p-5 text-center">
-                            <p className="text-sm text-white/65">Has abierto una invitación de WatchParty.</p>
+                            <p className="text-sm text-white/65"><span className="reading-text">Has abierto una invitación de WatchParty.</span></p>
                             <p className="mt-4 text-[11px] font-medium uppercase tracking-[0.16em] text-white/40">Código de sala</p>
                             <p className="mt-2 font-mono text-3xl font-semibold tracking-[0.24em] text-white">{inviteCode}</p>
                         </section>
@@ -256,7 +256,7 @@ function WatchPartyModal({ isOpen, onClose, inviteCode, onInviteCancel, onInvite
                                 <div className="flex items-start justify-between gap-3">
                                     <div className="min-w-0">
                                         <p className="text-[11px] font-medium uppercase tracking-[0.16em] text-white/35">Sala</p>
-                                        <h3 className="mt-1 truncate text-lg font-medium text-white/90">{room.name}</h3>
+                                        <h3 className="mt-1 truncate text-lg font-medium text-white/90"><span className="reading-text">{room.name}</span></h3>
                                     </div>
                                     {isHost && (
                                         <span className="shrink-0 rounded-full border border-cyan-200/15 bg-cyan-200/[0.07] px-2.5 py-1 text-[11px] font-medium text-cyan-100/80">
@@ -285,10 +285,10 @@ function WatchPartyModal({ isOpen, onClose, inviteCode, onInviteCancel, onInvite
                                                         QR no disponible
                                                     </div>
                                                 )}
-                                                <p className="text-center text-[11px] text-white/40">Escanear para unirse</p>
+                                                <p className="text-center text-[11px] text-white/40"><span className="reading-text">Escanear para unirse</span></p>
                                             </div>
                                             <div className="flex min-w-0 flex-col items-center text-center sm:items-start sm:text-left">
-                                                <p className="text-sm font-medium text-white/55">Código de sala</p>
+                                                <p className="text-sm font-medium text-white/55"><span className="reading-text">Código de sala</span></p>
                                                 <p className="mt-2 font-mono text-3xl font-semibold tracking-[0.24em] text-white">
                                                     {roomCode ?? room.roomCode}
                                                 </p>
@@ -304,7 +304,7 @@ function WatchPartyModal({ isOpen, onClose, inviteCode, onInviteCancel, onInvite
                                                 {'¿Cómo funciona?'}
                                             </button>
                                         </div>
-                                        {copyError && <p className="mt-2 text-center text-xs text-red-300" role="alert">{copyError}</p>}
+                                        {copyError && <p className="mt-2 text-center text-xs text-red-300" role="alert"><span className="reading-text">{copyError}</span></p>}
                                     </>
                                 ) : (
                                     <div className="mt-4 space-y-3">
@@ -312,10 +312,10 @@ function WatchPartyModal({ isOpen, onClose, inviteCode, onInviteCancel, onInvite
                                             <p className="text-[11px] font-medium uppercase tracking-[0.16em] text-white/35">{'Código'}</p>
                                             <p className="mt-1 font-mono text-lg font-medium tracking-[0.2em] text-white/85">{roomCode ?? room.roomCode}</p>
                                         </div>
-                                        <p className="text-sm text-white/55">{'Anfitrión: '}<span className="text-white/85">{hostName}</span></p>
+                                        <p className="text-sm text-white/55"><span className="reading-text">{'Anfitrión: '}<span className="text-white/85">{hostName}</span></span></p>
                                         {needsSyncPlayback && !isHost && (
                                             <div className="rounded-xl border border-cyan-200/15 bg-cyan-200/[0.06] p-4">
-                                                <p className="text-sm text-white/75">{hostName} está reproduciendo</p>
+                                                <p className="text-sm text-white/75"><span className="reading-text">{hostName} está reproduciendo</span></p>
                                                 <button
                                                     className="btn btn-primary btn-block mt-3"
                                                     onClick={syncPlayback}
@@ -333,7 +333,7 @@ function WatchPartyModal({ isOpen, onClose, inviteCode, onInviteCancel, onInvite
                                 <div className="mb-3 flex items-center justify-between">
                                     <div className="flex items-center gap-2 text-sm font-medium text-white/75">
                                         <Users aria-hidden="true" className="text-white/40" size={16} />
-                                        <h3 id="watchparty-participants">Participantes</h3>
+                                        <h3 id="watchparty-participants"><span className="reading-text">Participantes</span></h3>
                                     </div>
                                     <span className="rounded-full bg-white/[0.06] px-2.5 py-1 text-xs tabular-nums text-white/45">{members.length}</span>
                                 </div>
@@ -344,7 +344,7 @@ function WatchPartyModal({ isOpen, onClose, inviteCode, onInviteCancel, onInvite
                                             <li key={member.socketId} className="flex items-center justify-between rounded-xl px-3 py-2.5 transition hover:bg-white/[0.035]">
                                                 <div className="flex min-w-0 items-center gap-3">
                                                     <span className={'h-2 w-2 shrink-0 rounded-full ' + (isMemberHost ? 'bg-cyan-200' : 'bg-white/25')} />
-                                                    <span className="truncate text-sm text-white/80">{member.userName}</span>
+                                                    <span className="truncate text-sm text-white/80"><span className="reading-text">{member.userName}</span></span>
                                                 </div>
                                                 {isMemberHost && <span className="text-[11px] font-medium text-cyan-100/65">Anfitrión</span>}
                                             </li>
@@ -379,12 +379,12 @@ function WatchPartyModal({ isOpen, onClose, inviteCode, onInviteCancel, onInvite
                             <form className="space-y-4" onSubmit={handleSubmit}>
                                 {activeTab === 'create' ? (
                                     <label className="block space-y-2 text-sm text-[var(--text-secondary)]">
-                                        Nombre de la sala
+                                        <span className="reading-text">Nombre de la sala</span>
                                         <input className={inputClassName} onChange={(event) => setRoomName(event.target.value)} placeholder="Noche de cine" required value={roomName} />
                                     </label>
                                 ) : (
                                     <label className="block space-y-2 text-sm text-[var(--text-secondary)]">
-                                        {'Código de sala'}
+                                        <span className="reading-text">{'Código de sala'}</span>
                                         <input
                                             className={inputClassName + ' text-center uppercase tracking-[0.2em]'}
                                             onChange={(event) => setJoinCode(event.target.value)}

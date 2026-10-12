@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Search, Star, Radio, Menu } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { Star, Radio, Menu, Antenna, Monitor, ChevronDown } from 'lucide-react';
 import { useRadio } from '../context/RadioContext';
 import { Station } from '../types';
 import {
@@ -77,12 +77,12 @@ const StationItem = React.memo<{
                 />
                 <div className="flex-1 min-w-0">
                     <h4 className={`font-semibold text-[13px] truncate flex items-center gap-1.5 leading-tight ${isSelected ? 'text-[var(--primary-color)] font-bold' : ''}`}>
-                        {station.name}
+                        <span className="reading-text min-w-0 truncate">{station.name}</span>
                         {station.iframeUrl && (
                             <span className="text-[8px] bg-[var(--primary-color)]/20 text-[var(--primary-color)] px-1 py-0.5 rounded uppercase font-black tracking-widest flex-shrink-0">If</span>
                         )}
                     </h4>
-                    <p className="text-[11px] text-[var(--text-secondary)] truncate leading-tight">{station.country}</p>
+                    <p className="text-[11px] text-[var(--text-secondary)] truncate leading-tight"><span className="reading-text">{station.country}</span></p>
                 </div>
             </div>
             <div className="flex items-center gap-1.5 flex-shrink-0">
@@ -104,10 +104,81 @@ const StationItem = React.memo<{
     );
 });
 
-export const StationList: React.FC = () => {
+interface StationListProps {
+    filter: string;
+    onFilterChange: (value: string) => void;
+    onSearchHandlerReady: (handler: (query: string) => void) => void;
+    isSearchActive: boolean;
+}
+
+export const StationList: React.FC<StationListProps> = ({ filter, onFilterChange, onSearchHandlerReady, isSearchActive }) => {
     const { stations, currentStation, playStation, favorites, activeTab, setActiveTab, reorderStations, selectedCategory, setSelectedCategory, radioCategories, tvCategories } = useRadio();
-    const [filter, setFilter] = useState('');
     const [activeMobileMenu, setActiveMobileMenu] = useState<'all' | 'tv' | null>(null);
+    const [activeMenu, setActiveMenu] = React.useState<'radios' | 'tv' | null>(null);
+    const [hoverProgressMenu, setHoverProgressMenu] = React.useState<'radios' | 'tv' | null>(null);
+    const closeTimeoutRef = React.useRef<number | null>(null);
+    const autoSelectTimeoutRef = React.useRef<number | null>(null);
+
+    const handleMouseEnter = (menu: 'radios' | 'tv') => {
+        // Limpiar timeouts de cierre pendientes
+        if (closeTimeoutRef.current) {
+            window.clearTimeout(closeTimeoutRef.current);
+            closeTimeoutRef.current = null;
+        }
+
+        // Iniciar indicador visual de progreso
+        setHoverProgressMenu(menu);
+
+        // Programar auto-activación a los 2 segundos (2000ms: Ojo, ahora es a 1s )
+        if (autoSelectTimeoutRef.current) {
+            window.clearTimeout(autoSelectTimeoutRef.current);
+        }
+
+        autoSelectTimeoutRef.current = window.setTimeout(() => {
+            if (menu === 'radios') {
+                setActiveTab('all');
+                setSelectedCategory('Todas');
+            } else if (menu === 'tv') {
+                setActiveTab('tv');
+                setSelectedCategory('Todas');
+            }
+            setActiveMenu(menu);
+            setHoverProgressMenu(null);
+            autoSelectTimeoutRef.current = null;
+        }, 1000);
+    };
+
+    const handleMouseLeave = () => {
+        // Cancelar la auto-activación de 3 segundos si el usuario retira el cursor antes
+        if (autoSelectTimeoutRef.current) {
+            window.clearTimeout(autoSelectTimeoutRef.current);
+            autoSelectTimeoutRef.current = null;
+        }
+        setHoverProgressMenu(null);
+
+        closeTimeoutRef.current = window.setTimeout(() => {
+            setActiveMenu(null);
+        }, 200);
+    };
+
+    useEffect(() => () => {
+        if (closeTimeoutRef.current) window.clearTimeout(closeTimeoutRef.current);
+        if (autoSelectTimeoutRef.current) window.clearTimeout(autoSelectTimeoutRef.current);
+    }, []);
+
+    useEffect(() => {
+        const handleClickOutside = () => {
+            setActiveMenu(null);
+            setHoverProgressMenu(null);
+            if (autoSelectTimeoutRef.current) {
+                window.clearTimeout(autoSelectTimeoutRef.current);
+                autoSelectTimeoutRef.current = null;
+            }
+        };
+        window.addEventListener('click', handleClickOutside);
+        return () => window.removeEventListener('click', handleClickOutside);
+    }, []);
+
     const [ytResults, setYtResults] = useState<any[]>([]);
     const [isSearchingYt, setIsSearchingYt] = useState(false);
     const [showYtResults, setShowYtResults] = useState(false);
@@ -240,6 +311,17 @@ export const StationList: React.FC = () => {
         }
     };
 
+    useEffect(() => {
+        if (isSearchActive) onSearchHandlerReady(searchYouTube);
+    }, [isSearchActive, onSearchHandlerReady]);
+
+    useEffect(() => {
+        if (!filter) {
+            setShowYtResults(false);
+            setYtResults([]);
+        }
+    }, [filter]);
+
     const sensors = useSensors(
         useSensor(PointerSensor, {
             activationConstraint: {
@@ -308,47 +390,151 @@ export const StationList: React.FC = () => {
 
     return (
         <div className="glass flex flex-col rounded-none p-1">
-            <SidebarInfo />
-            <div className="border-t border-white/10 pt-4">
+            <div className="station-list-sticky z-40 bg-[var(--dark-bg)]">
+                <SidebarInfo />
+                <div className="hidden border-t border-white/10 pt-1 lg:block">
+                {/* Navigation Filters moved to StationList */}
+                <div
+                    className="hidden lg:flex w-full items-center justify-between gap-0.5 border border-[var(--dark-border)] bg-[var(--dark-surface)] p-1 flex-shrink-0"
+                >
+                    <div
+                        className="relative"
+                        onClick={(e) => e.stopPropagation()}
+                        onMouseLeave={handleMouseLeave}
+                        onMouseEnter={() => {
+                            if (closeTimeoutRef.current) {
+                                window.clearTimeout(closeTimeoutRef.current);
+                                closeTimeoutRef.current = null;
+                            }
+                        }}
+                    >
+                        <button
+                            onMouseEnter={() => handleMouseEnter('radios')}
+                            onClick={() => {
+                                if (autoSelectTimeoutRef.current) {
+                                    window.clearTimeout(autoSelectTimeoutRef.current);
+                                    autoSelectTimeoutRef.current = null;
+                                }
+                                setHoverProgressMenu(null);
+                                if (activeMenu === 'radios') {
+                                    setActiveMenu(null);
+                                } else {
+                                    setActiveTab('all');
+                                    // If already in 'all', clicking acts as a reset for the filter
+                                    if (activeTab === 'all') setSelectedCategory('Todas');
+                                    setActiveMenu('radios');
+                                }
+                            }}
+                            className={`relative overflow-hidden flex items-center gap-1 px-2 py-1.5 transition-all font-bold text-[10px] uppercase tracking-wider whitespace-nowrap ${activeTab === 'all' ? 'bg-[var(--primary-color)] text-white shadow-[0_0_15px_rgba(139,92,246,0.3)]' : 'text-[var(--text-secondary)] hover:text-white hover:bg-white/5'}`}
+                        >
+                            {/* Barra de progreso de 3 segundos al posar el mouse */}
+                            {hoverProgressMenu === 'radios' && (
+                                <span className="absolute bottom-0 left-0 top-0 bg-white/20 pointer-events-none animate-header-progress" />
+                            )}
+                            <Antenna size={15} className="relative z-10" />
+                            <span className="relative z-10 reading-text">{activeTab === 'all' && selectedCategory !== 'Todas' ? selectedCategory : 'Radios'}</span>
+                            <ChevronDown size={14} className={`relative z-10 transition-transform duration-300 ${activeMenu === 'radios' ? 'rotate-180 text-white/70' : 'text-white/30'}`} />
+                        </button>
 
-                {/* Search */}
-                <div className="relative mb-2">
-                    <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-secondary)]" />
-                    <input
-                        type="text"
-                        placeholder="Emisoras o en YouTube..."
-                        value={filter}
-                        onChange={(e) => {
-                            setFilter(e.target.value);
-                            if (!e.target.value) {
-                                setShowYtResults(false);
-                                setYtResults([]);
+                        {/* Dropdown Menu */}
+                        {activeMenu === 'radios' && (
+                            <div className="absolute top-full left-0 pt-1 min-w-[100px] w-max bg-transparent z-50 animate-in fade-in slide-in-from-top-2 duration-200">
+                                <div className="bg-[var(--dark-surface)] border border-white/10 shadow-2xl py-2">
+                                    {radioCategories.map(cat => (
+                                        <button
+                                            key={cat}
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                setActiveTab('all');
+                                                setSelectedCategory(cat);
+                                                setActiveMenu(null);
+                                            }}
+                                            className={`block w-full text-left px-3 py-2 text-[11px] font-bold uppercase tracking-widest whitespace-nowrap transition-colors hover:bg-white/5 ${selectedCategory === cat && activeTab === 'all' ? 'text-[var(--primary-color)]' : 'text-[var(--text-secondary)] hover:text-white'}`}
+                                        >
+                                            <span className="reading-text">{cat}</span>
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+                    </div>
+
+                    <button
+                        onClick={() => {
+                            setActiveTab('favorites');
+                            setSelectedCategory('Todas');
+                        }}
+                        className={`flex items-center gap-1 px-2 py-1.5 transition-all font-bold text-[10px] uppercase tracking-wider whitespace-nowrap ${activeTab === 'favorites' ? 'bg-[var(--primary-color)] text-white shadow-[0_0_15px_rgba(139,92,246,0.3)]' : 'text-[var(--text-secondary)] hover:text-white hover:bg-white/5'}`}
+                    >
+                        <Star size={15} className={`${activeTab === 'favorites' ? 'fill-[#f59e0b] text-[#f59e0b]' : 'text-[#f59e0b]'}`} />
+                        <span className="reading-text">Favoritos</span>
+                    </button>
+
+                    <div
+                        className="relative"
+                        onClick={(e) => e.stopPropagation()}
+                        onMouseLeave={handleMouseLeave}
+                        onMouseEnter={() => {
+                            if (closeTimeoutRef.current) {
+                                window.clearTimeout(closeTimeoutRef.current);
+                                closeTimeoutRef.current = null;
                             }
                         }}
-                        onKeyDown={(e) => {
-                            if (e.key === 'Enter' && filter.trim()) {
-                                searchYouTube(filter);
-                            }
-                        }}
-                        className="w-full bg-[var(--dark-surface)] border border-[var(--dark-border)] rounded-none py-3 pl-10 pr-24 focus:outline-none focus:border-[var(--primary-color)] transition-colors text-sm"
-                    />
-                    <div className="absolute right-2 top-1/2 -translate-y-1/2 flex gap-1.5">
+                    >
                         <button
-                            onClick={() => searchYouTube(filter)}
-                            className="p-1 px-2.5 bg-red-600 hover:bg-red-700 text-white text-[12px] transition-colors flex items-center justify-center gap-1 active:scale-95 shadow-lg"
-                            title="Buscar en YouTube (Interno)"
+                            onMouseEnter={() => handleMouseEnter('tv')}
+                            onClick={() => {
+                                if (autoSelectTimeoutRef.current) {
+                                    window.clearTimeout(autoSelectTimeoutRef.current);
+                                    autoSelectTimeoutRef.current = null;
+                                }
+                                setHoverProgressMenu(null);
+                                if (activeMenu === 'tv') {
+                                    setActiveMenu(null);
+                                } else {
+                                    setActiveTab('tv');
+                                    // If already in 'tv', clicking acts as a reset for the filter
+                                    if (activeTab === 'tv') setSelectedCategory('Todas');
+                                    setActiveMenu('tv');
+                                }
+                            }}
+                            className={`relative overflow-hidden flex items-center gap-1 px-2 py-1.5 transition-all font-bold text-[10px] uppercase tracking-wider whitespace-nowrap group ${activeTab === 'tv' ? 'bg-[var(--primary-color)] text-white shadow-[0_0_15px_rgba(139,92,246,0.3)]' : 'text-[var(--text-secondary)] hover:text-white hover:bg-white/5'}`}
                         >
-                            YT
+                            {/* Barra de progreso de 3 segundos al posar el mouse */}
+                            {hoverProgressMenu === 'tv' && (
+                                <span className="absolute bottom-0 left-0 top-0 bg-white/20 pointer-events-none animate-header-progress" />
+                            )}
+                            <Monitor size={15} className="relative z-10" />
+                            <span className="relative z-10 reading-text">{activeTab === 'tv' && selectedCategory !== 'Todas' ? selectedCategory : 'TV & YT'}</span>
+                            <ChevronDown size={14} className={`relative z-10 transition-transform duration-300 ${activeMenu === 'tv' ? 'rotate-180 text-white/70' : 'text-white/30'}`} />
+
                         </button>
-                        <button
-                            onClick={() => window.open(`https://www.google.com/search?q=${encodeURIComponent(filter)}`, '_blank')}
-                            className="p-1 px-3.5 bg-blue-600 hover:bg-blue-700 text-white text-[12px] transition-colors active:scale-95 shadow-lg flex items-center justify-center"
-                            title="Buscar en Google"
-                        >
-                            G
-                        </button>
+
+                        {/* Dropdown Menu */}
+                        {activeMenu === 'tv' && (
+                            <div className="absolute top-full left-0 pt-1 min-w-[100px] w-max bg-transparent z-50 animate-in fade-in slide-in-from-top-2 duration-200">
+                                <div className="bg-[var(--dark-surface)] border border-white/10 shadow-2xl py-2">
+                                    {tvCategories.map(cat => (
+                                        <button
+                                            key={cat}
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                setActiveTab('tv');
+                                                setSelectedCategory(cat);
+                                                setActiveMenu(null);
+                                            }}
+                                            className={`block w-full text-left px-3 py-2 text-[11px] font-bold uppercase tracking-widest whitespace-nowrap transition-colors hover:bg-white/5 ${selectedCategory === cat && activeTab === 'tv' ? 'text-[var(--primary-color)]' : 'text-[var(--text-secondary)] hover:text-white'}`}
+                                        >
+                                            <span className="reading-text">{cat}</span>
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
                     </div>
                 </div>
+                </div>
+            </div>
 
                 {/* YouTube Results Overlay */}
                 {showYtResults && (
@@ -363,7 +549,7 @@ export const StationList: React.FC = () => {
                                 onClick={() => {
                                     setShowYtResults(false);
                                     setYtResults([]);
-                                    setFilter(''); // Clear input as requested
+                                    onFilterChange(''); // Clear input as requested
                                 }}
                                 className="text-[10px] opacity-60 hover:opacity-100 uppercase font-bold"
                             >
@@ -372,7 +558,7 @@ export const StationList: React.FC = () => {
                         </div>
                         <div className="max-h-[300px] lg:max-h-[450px] overflow-y-auto scrollbar-thin mobile-panel-content" style={{ maxHeight: 'var(--mobile-panel-max-height, 300px)' }}>
                             {isSearchingYt ? (
-                                <div className="p-4 text-center text-xs opacity-60 animate-pulse">Buscando...</div>
+                                <div className="p-4 text-center text-xs opacity-60 animate-pulse"><span className="reading-text">Buscando...</span></div>
                             ) : ytResults.length > 0 ? (
                                 ytResults.map((video, idx) => {
                                     const vId = video.videoId || video.id;
@@ -406,24 +592,24 @@ export const StationList: React.FC = () => {
                                             </div>
                                             <div className="min-w-0 flex-1">
                                                 <h4 className={`text-xs font-bold truncate leading-snug ${isActiveYt ? 'text-[var(--primary-color)]' : 'text-white/95'}`}>
-                                                     {typeof video.title === 'string' ? video.title : 'Video de YouTube'}
+                                                    <span className="reading-text">{typeof video.title === 'string' ? video.title : 'Video de YouTube'}</span>
                                                 </h4>
                                                 <p className="text-[10px] text-white/50 mt-1 truncate font-medium">
-                                                    {uploader}{byline ? ` • ${byline}` : ''}
+                                                    <span className="reading-text">{uploader}{byline ? ` • ${byline}` : ''}</span>
                                                 </p>
                                             </div>
                                         </div>
                                     );
                                 })
                             ) : (
-                                <div className="p-4 text-center text-xs opacity-60">No se encontraron resultados</div>
+                                <div className="p-4 text-center text-xs opacity-60"><span className="reading-text">No se encontraron resultados</span></div>
                             )}
                         </div>
                     </div>
                 )}
 
                 {/* Tabs - Mobile Only */}
-                <div className="lg:hidden mb-4">
+                <div className="mobile-station-tabs lg:hidden mb-4">
                     <div className="flex gap-1">
                         {/* Radios Tab with Menu */}
                         <div className="relative flex-1">
@@ -520,8 +706,6 @@ export const StationList: React.FC = () => {
                     </div>
                 </div>
 
-            </div >
-
             <div className="flex-1 p-0 overflow-y-auto station-scroll">
                 <div className="station-list-body">
                 {displayStations.length > 0 ? (
@@ -549,17 +733,17 @@ export const StationList: React.FC = () => {
                 ) : null}
                 {displayStations.length === 0 && (
                     <div className="p-8 text-center text-[var(--text-secondary)] bg-white/5 border border-dashed border-white/10">
-                        <p className="text-sm font-medium">Sin resultados locales...</p>
-                        <p className="text-[10px] mt-1 opacity-60 italic">Prueba usando el botón YT para buscar en YouTube</p>
+                        <p className="text-sm font-medium"><span className="reading-text">Sin resultados locales...</span></p>
+                        <p className="text-[10px] mt-1 opacity-60 italic"><span className="reading-text">Prueba usando el botón YT para buscar en YouTube</span></p>
 
                         <div className="mt-4 pt-4 border-t border-white/5 flex flex-col items-center gap-2">
                             <p className="text-[10px] leading-relaxed text-red-400/80">
                                 <span className="font-bold flex items-center justify-center gap-1 mb-1">
-                                    <span className="text-xs">⚠️</span> Video no disponible
+                                    <span className="text-xs">⚠️</span> <span className="reading-text">Video no disponible</span>
                                 </span>
-                                Algunos videos tienen restricciones de derechos de autor (como LatinAutor - UMPG) que bloquean su reproducción en apps externas como esta.
+                                <span className="reading-text">Algunos videos tienen restricciones de derechos de autor (como LatinAutor - UMPG) que bloquean su reproducción en apps externas como esta.</span>
                                 <br />
-                                <span className="opacity-80 italic italic">Nuestra app no los puede mostrar aquí, pero siempre puedes verlos en YouTube.</span>
+                                <span className="reading-text opacity-80 italic italic">Nuestra app no los puede mostrar aquí, pero siempre puedes verlos en YouTube.</span>
                             </p>
                         </div>
                     </div>

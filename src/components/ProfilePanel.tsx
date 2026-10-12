@@ -49,34 +49,34 @@ export default function ProfilePanel({ isOpen, onClose, PanelShellComponent }: P
                 <>
                     <dl className="space-y-3 rounded-lg border border-white/5 bg-black/10 p-4">
                         <div>
-                            <dt className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-secondary)]">Nombre</dt>
-                            <dd className="mt-0.5 text-sm font-semibold">{profile.name}</dd>
+                            <dt className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-secondary)]"><span className="reading-text">Nombre</span></dt>
+                            <dd className="reading-text-profile-value mt-0.5 text-sm font-semibold">{profile.name}</dd>
                         </div>
                         {profile.phone && (
                             <div>
-                                <dt className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-secondary)]">Teléfono</dt>
-                                <dd className="mt-0.5 text-sm">{profile.phone}</dd>
+                                <dt className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-secondary)]"><span className="reading-text">Teléfono</span></dt>
+                                <dd className="reading-text-profile-value mt-0.5 text-sm">{profile.phone}</dd>
                             </div>
                         )}
                     </dl>
                     {isConfirmingProfileDeletion ? (
                         <section aria-describedby="profile-delete-description" aria-labelledby="profile-delete-title" className="mt-4 rounded-lg border border-[var(--danger-color)]/25 bg-[var(--glass-bg)] p-4">
-                            <h3 className="text-sm font-semibold text-[var(--text-primary)]" id="profile-delete-title">¿Eliminar tu perfil?</h3>
-                            <p className="mt-1 text-sm text-[var(--text-secondary)]" id="profile-delete-description">Esta acción no se puede deshacer.</p>
+                            <h3 className="reading-text-profile-confirmation text-sm font-semibold text-[var(--text-primary)]" id="profile-delete-title">¿Eliminar tu perfil?</h3>
+                            <p className="reading-text-profile-confirmation mt-1 text-sm text-[var(--text-secondary)]" id="profile-delete-description">Esta acción no se puede deshacer.</p>
                             <div className="mt-4 flex gap-2">
                                 <button
                                     className="btn btn-secondary min-w-0 flex-1"
                                     onClick={() => setIsConfirmingProfileDeletion(false)}
                                     type="button"
                                 >
-                                    Cancelar
+                                    <span className="reading-text">Cancelar</span>
                                 </button>
                                 <button
                                     className="btn btn-danger min-w-0 flex-1"
                                     onClick={handleClearProfile}
                                     type="button"
                                 >
-                                    Eliminar perfil
+                                    <span className="reading-text">Eliminar perfil</span>
                                 </button>
                             </div>
                         </section>
@@ -87,27 +87,27 @@ export default function ProfilePanel({ isOpen, onClose, PanelShellComponent }: P
                                 onClick={() => setProfileFormMode('edit')}
                                 type="button"
                             >
-                                <Pencil size={15} /> Editar perfil
+                                <Pencil size={15} /> <span className="reading-text">Editar perfil</span>
                             </button>
                             <button
                                 className="btn btn-danger"
                                 onClick={() => setIsConfirmingProfileDeletion(true)}
                                 type="button"
                             >
-                                <Trash2 size={15} /> Borrar datos del dispositivo
+                                <Trash2 size={15} /> <span className="reading-text">Borrar datos del dispositivo</span>
                             </button>
                         </div>
                     )}
                 </>
             ) : (
                 <div>
-                    <p className="text-sm text-[var(--text-secondary)]">No hay un perfil guardado en este dispositivo.</p>
+                    <p className="reading-text-profile-message text-sm text-[var(--text-secondary)]">No hay un perfil guardado en este dispositivo.</p>
                     <button
                         className="btn btn-primary btn-block mt-4"
                         onClick={() => setProfileFormMode('setup')}
                         type="button"
                     >
-                        Crear perfil
+                        <span className="reading-text">Crear perfil</span>
                     </button>
                 </div>
             )}

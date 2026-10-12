@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useLayoutEffect, useRef, useCallback } from 'react';
 import { Play, Pause, SkipBack, SkipForward, Volume2, VolumeX, Star } from 'lucide-react';
 import { useRadio } from '../context/RadioContext';
 import { useWatchParty } from '../context/WatchPartyContext';
@@ -12,6 +12,8 @@ import { getPlayerCurrentTime } from '../utils/playerTimeBridge';
 
 
 export const Player: React.FC = () => {
+    const stickyWrapperRef = useRef<HTMLDivElement>(null);
+    const externalControlsRef = useRef<HTMLDivElement>(null);
     const {
         room: watchPartyRoom,
         isHost,
@@ -81,6 +83,30 @@ export const Player: React.FC = () => {
     useEffect(() => {
         isPlayingRef.current = isPlaying;
     }, [isPlaying]);
+
+    useLayoutEffect(() => {
+        const wrapper = stickyWrapperRef.current;
+        const controls = externalControlsRef.current;
+        if (!wrapper || !controls) return;
+
+        const updateHeight = () => {
+            const wrapperTop = wrapper.getBoundingClientRect().top;
+            const controlsBottom = controls.getBoundingClientRect().bottom;
+            document.documentElement.style.setProperty(
+                '--mobile-player-sticky-height',
+                `${Math.max(0, controlsBottom - wrapperTop)}px`
+            );
+        };
+
+        updateHeight();
+        const observer = new ResizeObserver(updateHeight);
+        observer.observe(wrapper);
+        observer.observe(controls);
+        return () => {
+            observer.disconnect();
+            document.documentElement.style.removeProperty('--mobile-player-sticky-height');
+        };
+    }, [currentStation?.id]);
 
     useEffect(() => {
         if (observedPlaybackRef.current === isPlaying) return;
@@ -399,15 +425,15 @@ export const Player: React.FC = () => {
     if (!currentStation) {
         return (
             <div className="glass p-8 text-center">
-                <h2 className="text-2xl font-bold mb-4">Selecciona una emisora</h2>
-                <p className="text-[var(--text-secondary)]">Elige una emisora de la lista para comenzar.</p>
+                <h2 className="text-2xl font-bold mb-4"><span className="reading-text">Selecciona una emisora</span></h2>
+                <p className="text-[var(--text-secondary)]"><span className="reading-text">Elige una emisora de la lista para comenzar.</span></p>
             </div>
         );
     }
 
 
     return (
-        <div className="player-sticky-wrapper sticky" style={{ zIndex: 100 }}>
+        <div ref={stickyWrapperRef} className="player-sticky-wrapper sticky" style={{ zIndex: 100 }}>
             {/* 1. Main Media Area (Video or Large Logo) */}
             <div
                 className="w-full mx-0 glass bg-[var(--dark-bg)] aspect-video max-h-[215px] md:max-h-[315px] lg:max-h-[2000px] relative group overflow-hidden rounded-none z-50 player-main-media"
@@ -447,7 +473,7 @@ export const Player: React.FC = () => {
                                         className="w-24 h-24 md:w-32 md:h-32 object-contain rounded-full border-4 border-[var(--primary-color)] opacity-80 p-2 bg-white/5 shadow-2xl"
                                         onError={(e) => { (e.target as HTMLImageElement).src = "https://picsum.photos/seed/radio-streaming-pro/150/150.jpg" }}
                                     />
-                                    <p className="mt-3 text-white/90 font-medium text-sm md:text-base tracking-wide drop-shadow-md">Pulsar Play para ver en vivo</p>
+                                    <p className="mt-3 text-white/90 font-medium text-sm md:text-base tracking-wide drop-shadow-md"><span className="reading-text">Pulsar Play para ver en vivo</span></p>
                                 </div>
                             )}
                         </div>
@@ -504,7 +530,7 @@ export const Player: React.FC = () => {
                                                     className="w-24 h-24 md:w-32 md:h-32 object-contain rounded-full border-[4px] md:border-[6px] border-[var(--primary-color)] opacity-60 p-2 bg-white/5"
                                                     onError={(e) => { (e.target as HTMLImageElement).src = "https://picsum.photos/seed/radio-streaming-pro/150/150.jpg" }}
                                                 />
-                                                <p className="mt-3 text-[var(--text-secondary)] text-sm font-medium">Pausado</p>
+                                                <p className="mt-3 text-[var(--text-secondary)] text-sm font-medium"><span className="reading-text">Pausado</span></p>
                                             </div>
                                         )}
                                     </div>
@@ -531,7 +557,7 @@ export const Player: React.FC = () => {
                                                 className="w-32 h-32 md:w-44 md:h-44 object-contain rounded-full border-[6px] md:border-[10px] border-[var(--primary-color)] opacity-60 p-2 md:p-3 bg-white/5"
                                                 onError={(e) => { (e.target as HTMLImageElement).src = "https://picsum.photos/seed/radio-streaming-pro/150/150.jpg" }}
                                             />
-                                            <p className="mt-4 text-[var(--text-secondary)] font-medium">Pausado</p>
+                                            <p className="mt-4 text-[var(--text-secondary)] font-medium"><span className="reading-text">Pausado</span></p>
                                         </div>
                                     )
                                 )
@@ -554,7 +580,7 @@ export const Player: React.FC = () => {
                                                     className="w-24 h-24 md:w-32 md:h-32 object-contain rounded-full border-4 border-[var(--primary-color)] opacity-80 p-2 bg-white/5 shadow-2xl"
                                                     onError={(e) => { (e.target as HTMLImageElement).src = "https://picsum.photos/seed/radio-streaming-pro/150/150.jpg" }}
                                                 />
-                                                <p className="mt-3 text-white/90 font-medium text-sm md:text-base tracking-wide drop-shadow-md">Pulsar Play para ver en vivo</p>
+                                                <p className="mt-3 text-white/90 font-medium text-sm md:text-base tracking-wide drop-shadow-md"><span className="reading-text">Pulsar Play para ver en vivo</span></p>
                                             </div>
                                         )}
                                     </div>
@@ -611,14 +637,14 @@ export const Player: React.FC = () => {
             </div>
 
             {/* 2. Control Bar below video - High z-index to ensure volume slider popover is never hidden behind player */}
-            <div className="block glass p-2 md:p-3 rounded-none border border-white/5 mt-[3px] mb-4 lg:mb-10 relative z-[200]">
+            <div ref={externalControlsRef} className="block glass p-2 md:p-3 rounded-none border border-white/5 mt-[3px] mb-0 lg:mb-10 relative z-[200]">
                 <div className="grid grid-cols-[1fr_auto] md:grid-cols-[1fr_auto_1fr] items-center gap-3 md:gap-6">
                     {/* Station info - Clean 2-line title and country */}
                     <div className="min-w-0 flex flex-col justify-center text-left">
                         <h2 className="text-xs md:text-sm font-bold text-transparent bg-clip-text bg-gradient-to-r from-[var(--primary-color)] to-[var(--accent-color)] line-clamp-1 leading-snug mb-0.5">
-                            {currentStation.name}
+                            <span className="reading-text">{currentStation.name}</span>
                         </h2>
-                        <p className="text-[var(--text-secondary)] text-[10px] md:text-xs truncate opacity-75">{currentStation.country}</p>
+                        <p className="text-[var(--text-secondary)] text-[10px] md:text-xs truncate opacity-75"><span className="reading-text">{currentStation.country}</span></p>
                     </div>
 
                     {/* Player Controls - Centered on desktop, bottom bar handles mobile */}

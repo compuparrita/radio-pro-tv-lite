@@ -147,7 +147,7 @@
   max-width: 34%;
   overflow: hidden;
   color: rgb(103 232 249);
-  font-size: 0.72rem;
+  font-size: calc(0.72rem * var(--reading-text-scale));
   font-weight: 700;
   line-height: 1;
   text-overflow: ellipsis;
@@ -170,7 +170,7 @@
 .room-chat-ticker__text {
   display: inline-block;
   color: rgb(241 245 249);
-  font-size: 0.8rem;
+  font-size: calc(0.8rem * var(--reading-text-scale));
   line-height: 1;
   white-space: nowrap;
   user-select: text;
@@ -208,11 +208,11 @@
 
   .room-chat-ticker__sender {
     max-width: 30%;
-    font-size: 0.68rem;
+    font-size: calc(0.68rem * var(--reading-text-scale));
   }
 
   .room-chat-ticker__text {
-    font-size: 0.76rem;
+    font-size: calc(0.76rem * var(--reading-text-scale));
   }
 
   .room-chat-ticker__drag-handle,

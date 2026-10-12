@@ -19,8 +19,8 @@ Leer primero [`RADIOFM_UI_MEMORY.md`](../../RADIOFM_UI_MEMORY.md). Después, abr
 | Archivo | Contenido | Clasificación |
 |---|---|---|
 | [`01_UI_ARCHITECTURE.md`](01_UI_ARCHITECTURE.md) | PanelHost, PanelShell, navegación de paneles, límites y decisiones cerradas | Estado actual y arquitectura activa |
-| [`02_CHAT_AND_PERSONALIZATION.md`](02_CHAT_AND_PERSONALIZATION.md) | Chat compartido, legibilidad de mensajes y personalización futura | Estado actual + propuestas |
-| [`03_GLOBAL_MENU.md`](03_GLOBAL_MENU.md) | Menú lateral global izquierdo y sus posibles destinos | Visión futura |
+| [`02_CHAT_AND_PERSONALIZATION.md`](02_CHAT_AND_PERSONALIZATION.md) | Chat compartido, carga de historial, scroll/portales e integración con el selector de texto | Estado actual + propuestas |
+| [`03_GLOBAL_MENU.md`](03_GLOBAL_MENU.md) | Menú lateral global izquierdo y preferencias disponibles | Estado actual |
 | [`04_WATCHPARTY_DESKTOP.md`](04_WATCHPARTY_DESKTOP.md) | Cliente/ventana desktop minimalista para presentaciones y contenido compartido | Visión futura |
 | [`05_RADIOFM_SAAS.md`](05_RADIOFM_SAAS.md) | Servicio configurable para emisoras y experiencia de oyentes | Visión estratégica |
 | [`06_ADVERTISING_AND_MONETIZATION.md`](06_ADVERTISING_AND_MONETIZATION.md) | Gestión de anuncios y posible monetización | Visión estratégica |
